@@ -331,7 +331,9 @@ export async function ingestItems(
     // "Automated release for latest v1.18" are not six-and-one pieces of news;
     // they are a machine writing to tags. Refused before the event test,
     // because they classify as releases and would otherwise sail through it.
-    const noise = isBuildNoise(title, item.content || item.summary || '', { url: canonical });
+    const noise = isBuildNoise(title, item.content || item.summary || '', {
+      url: canonical, fromReleaseFeed: source.kind === 'releases',
+    });
     if (noise.noise) {
       drops.record('build_noise');
       rejects.push({

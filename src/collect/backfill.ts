@@ -283,9 +283,24 @@ export async function backfill(
       report.pages++;
       report.seen += result.items.length;
 
+      // `until` BOUNDS WHAT IS STORED, NOT ONLY WHEN TO STOP ASKING.
+      //
+      // The stop test below runs after the page has already been ingested, so
+      // the last page went in whole -- and a page is up to 100 releases. Asking
+      // for history back to 2024-01-01 across eight repositories stored 168 rows
+      // from 2020 to 2023: not harmful in an archive that wants depth, but not
+      // what the flag says, and the overshoot is a different size for every
+      // repository because it depends where the cutoff falls in the page.
+      //
+      // An item with no date is kept: undated is not the same as out of range,
+      // and the ingest path has its own handling for it.
+      const pageItems = opts.until
+        ? result.items.filter((i) => !i.publishedAt || i.publishedAt >= opts.until!)
+        : result.items;
+
       let pageStored = 0;
-      if (result.items.length > 0) {
-        const ingested = await ingestItems(db, source, result.items, {
+      if (pageItems.length > 0) {
+        const ingested = await ingestItems(db, source, pageItems, {
           politeness,
           userAgent,
           collectionMode: 'backfill',

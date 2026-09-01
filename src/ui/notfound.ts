@@ -23,22 +23,22 @@ import { one } from './db.ts';
 import { getConfig } from '../config.ts';
 import { escapeHtml, wrap, pageHead, icon } from './html.ts';
 import {
-  STREAM_ITEMS, EXPLORE_ITEMS, STACK_ITEMS, TOOL_ITEMS, PLATFORM_ITEMS,
-  SYSTEM_ITEMS,
+  STREAM_ITEMS, EXPLORE_ITEMS, REGISTRY_ITEMS, ANALYSE_ITEMS, SYSTEM_ITEMS,
 } from './nav.ts';
 
 /** Everything this server will actually answer on, for the did-you-mean. */
 const KNOWN: { path: string; label: string }[] = [
   ...STREAM_ITEMS.map((i) => ({ path: i.href, label: i.label })),
   ...EXPLORE_ITEMS.map((i) => ({ path: i.href, label: i.label })),
-  ...STACK_ITEMS.map((i) => ({ path: i.href, label: i.label })),
-  // Tools and Platforms are their own sections now; without these the 404
-  // page stopped being able to suggest two of the seven top-level pages.
-  ...TOOL_ITEMS.map((i) => ({ path: i.href, label: i.label })),
-  ...PLATFORM_ITEMS.map((i) => ({ path: i.href, label: i.label })),
+  // All four registry lists, whatever the top bar happens to group them under.
+  // This list is what the 404 page can SUGGEST, so it tracks the pages that
+  // exist rather than the sections that hold them -- the three-tab version of
+  // this file had to be edited every time that grouping moved.
+  ...REGISTRY_ITEMS.map((i) => ({ path: i.href, label: i.label })),
+  ...ANALYSE_ITEMS.map((i) => ({ path: i.href, label: i.label })),
   ...SYSTEM_ITEMS.map((i) => ({ path: i.href, label: i.label })),
+  { path: '/technologies', label: 'By category' },
   { path: '/favourites', label: 'Favourites' },
-  { path: '/trends', label: 'Trends' },
   { path: '/search', label: 'Search' },
   { path: '/', label: 'Overview' },
 ];

@@ -1537,11 +1537,11 @@ export async function renderStory(
     <p style="margin:0 0 var(--s-4)">
       <a href="${escapeHtml(s.url)}" target="_blank" rel="noreferrer"
          style="color:var(--link)">${escapeHtml(truncate(s.url, 110))} ${icon('external', 12)}</a></p>
-    ${s.title !== s.original ? `<p class="dim" style="margin:-8px 0 var(--s-4);font-size:13px">
+    ${s.title !== s.original ? `<p class="dim" style="margin:-8px 0 var(--s-4);font-size:var(--t-13)">
       Original title: ${escapeHtml(s.original)}</p>` : ''}
     ${s.summary
-      ? `<p style="max-width:72ch;font-size:15px;line-height:1.62">${escapeHtml(s.summary)}</p>`
-      : '<p class="muted" style="font-size:13px">No summary yet — summaries are written post-filter, at delivery time.</p>'}
+      ? `<p style="max-width:72ch;font-size:var(--t-15);line-height:1.62">${escapeHtml(s.summary)}</p>`
+      : '<p class="muted" style="font-size:var(--t-13)">No summary yet — summaries are written post-filter, at delivery time.</p>'}
 
     <div class="cards">
       ${stat('Coverage', s.coverage, s.coverage === 1 ? 'outlet' : 'outlets',

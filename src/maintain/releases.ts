@@ -97,13 +97,57 @@ export async function syncTrackedReleases(
   //
   // So: nothing is paused here any more. What was paused for this reason is
   // brought back, once, and the reading list governs only what News shows.
+  //
+  // TWO MECHANISMS PAUSE THESE ROWS AND THEY WRITE TWO DIFFERENT NOTES:
+  //
+  //   'paused: no longer tracked...'                        this function
+  //   'not polled; kept only because a story ... cites it'  scripts/prune-sources.ts
+  //
+  // Only the first was matched. prune-sources reduces `sources` to a hardcoded
+  // core list and pauses everything else a story cites; when it ran it took out
+  // 179 GitHub release feeds -- .NET, Angular, Ansible, Arrow, Beam -- and left
+  // them with a note nothing looks for. Every one had a feed_url and zero
+  // failures, and fetch_log holds no row for any of them: registered, pruned,
+  // and never polled once.
+  //
+  // The resume also sat BELOW the `tracked.length === 0` return, and
+  // `reading.tracked` has never been written -- it is declared in settings.ts,
+  // and app_settings holds only reading.fields and gates.backfillEnabled. So the
+  // job ran four times a day and could not reach its own resume path.
+  //
+  // The predicate is the VOCABULARY rather than a hand-kept list: a feed derived
+  // from stacks.repo_url is wanted for exactly as long as that stack exists. It
+  // matches only the two machine-written notes above, so a source paused by hand
+  // keeps its own note and is left alone -- a job on a six-hour timer must not
+  // undo a person's decision. Curated rows are untouched, and a feed whose stack
+  // has gone stays paused.
+  //
+  // STAGGERED, NOT ALL AT now(). Every one of these is github.com, so bringing
+  // 179 back due at the same instant is one host taking 179 requests in a burst
+  // -- the politeness gate is per host, so they would serialise into a six
+  // minute march against a single origin on every resume. The offset is
+  // hashtext(url) over the poll interval: deterministic, so a second run does
+  // not reshuffle a feed that is already scheduled, and spread, so the archive
+  // stops looking like a scraper.
   const unpaused = await db.query<{ x: number }>(
     `UPDATE sources SET health = 'healthy', consecutive_failures = 0,
-            next_fetch_at = now(),
+            next_fetch_at = now() + make_interval(
+              secs => abs(hashtext(url)) % greatest(poll_interval_seconds, 1)),
+            -- The conditional-GET state is a claim that we already hold what
+            -- this address last served, and for these rows it is false: they
+            -- were fetched once, every item was refused, and nothing was
+            -- stored. Keeping the etag makes the origin answer 304 forever and
+            -- the feed produce nothing while looking perfectly healthy.
+            -- Cleared once, on the way back in, so the current window is read.
+            last_etag = NULL, last_modified = NULL,
             notes = 'derived from stacks.repo_url'
       WHERE kind = 'releases'
         AND health = 'paused'
-        AND notes LIKE 'paused: no longer tracked%'
+        AND curated IS NOT TRUE
+        AND feed_url IS NOT NULL
+        AND (notes LIKE 'paused: no longer tracked%'
+             OR notes = 'not polled; kept only because a story that survives cites it')
+        AND EXISTS (SELECT 1 FROM stacks st WHERE st.repo_url = sources.url)
       RETURNING 1 AS x`);
   report.resumed = unpaused.length;
 
@@ -111,22 +155,11 @@ export async function syncTrackedReleases(
 
   // --- what should be polled and is not --------------------------------------
   //
-  // A row that already exists and was paused by an earlier run comes straight
-  // back rather than being probed again: the feed URL was correct when it was
-  // written and GitHub has not moved the repository.
-  const resumed = await db.query<{ x: number }>(
-    `UPDATE sources SET health = 'healthy', consecutive_failures = 0,
-            next_fetch_at = now(),
-            notes = 'derived from stacks.repo_url; tracked in Settings'
-      WHERE kind = 'releases'
-        AND curated IS NOT TRUE
-        AND health = 'paused'
-        AND EXISTS (
-          SELECT 1 FROM stacks st
-           WHERE st.repo_url = sources.url
-             AND st.slug = ANY($1::text[]))
-      RETURNING 1 AS x`, [tracked]);
-  report.resumed += resumed.length;
+  // The tracked-set resume that used to sit here is gone: it required
+  // `st.slug = ANY(tracked)`, which is a strict subset of the vocabulary-backed
+  // resume above, so it could only ever match rows that had already been
+  // brought back. What remains below is the half that genuinely needs the
+  // tracked list -- probing GitHub for a feed that does not exist yet.
 
   const missing = await db.query<Candidate & { repo_url: string }>(
     `SELECT st.slug, st.name, st.curated, st.repo_url

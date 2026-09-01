@@ -163,9 +163,9 @@ export async function renderField(slug: string): Promise<string> {
       `${total.toLocaleString('en-US')} stories across this field and everything beneath it` +
       (totals?.since ? ` · history from ${escapeHtml(totals.since)}` : ''),
       { crumbs: [...crumbsFor('/field/', 'Fields'), { label: field?.label ?? root.name }] })}
-    <p style="margin:0 0 14px">
+    <p style="margin:0 0 var(--s-4)">
       <a class="btn" href="/field/${encodeURIComponent(slug)}/report">Read the report</a>
-      <span class="muted" style="margin-left:8px;font-size:var(--t-12)">the same stories,
+      <span class="muted" style="margin-left:var(--s-2);font-size:var(--t-12)">the same stories,
         grouped and counted instead of listed</span>
     </p>
 
@@ -186,7 +186,7 @@ export async function renderField(slug: string): Promise<string> {
         + 'deeper are counted in the stories total but not here.')}
     </div>
 
-    <p class="row" style="--row-gap:8px">
+    <p class="row" style="--row-gap:var(--s-2)">
       <a class="btn primary" href="/all?stack=${encodeURIComponent(slug)}">Open in reader</a>
       <a class="btn" href="/all?stack=${encodeURIComponent(slug)}&min=8">Critical only</a>
       <a class="btn" href="/trend/${encodeURIComponent(slug)}">Trend detail</a>

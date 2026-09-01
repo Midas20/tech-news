@@ -17,15 +17,22 @@
 // The five sections answer five different questions, and each owns a different
 // slice of the same archive:
 //
-//   NEWS          what is happening in the fields I follow      filtered by preference
-//   EXPLORE       what is happening at all                      never filtered
-//   STACKS&TOOLS  what should I build on / work with, and where to get it
-//   ANALYSE       what is rising and falling over years
-//   SYSTEM        is the machine healthy
+//   NEWS      what is happening in the fields I follow      filtered by preference
+//   ANALYSE   what is rising and falling over years
+//   EXPLORE   what is happening at all                      never filtered
+//   REGISTRY  what can this archive name, and where do I get it
+//   SYSTEM    is the machine healthy
 //
-// The first two share a renderer and differ only in whether the focus filter
+// News and Explore share a renderer and differ only in whether the focus filter
 // applies. That is the whole distinction, and it is worth being blunt about:
 // Explore is News with the blinkers off.
+//
+// This list has been five, then seven, and is five again. It went to seven when
+// the registry was split into a tab each for stacks, tools and platforms; two of
+// those owned exactly one page, `concept` never got a tab despite being the
+// third peer of `kind`, and Analyse -- the only section reading the data the
+// retention contract keeps forever -- was sixth. A top bar is a claim about what
+// a product is for, and that one was making the wrong claim.
 
 import { STREAMS } from './filters.ts';
 
@@ -56,37 +63,45 @@ export const SECTIONS: NavSection[] = [
     owns: ['/news', '/new', '/story/', '/read/', '/search',
       '/favourites', '/deleted'],
   },
+  // ANALYSE SITS SECOND, AND THAT IS THE POINT OF THE WHOLE PRODUCT.
+  //
+  // The retention contract deletes stories and keeps `stack_month` forever, so
+  // the month-by-month series is the one artefact here that is not reproducible
+  // from anywhere else. It was the sixth of seven tabs, behind three lists of
+  // vocabulary -- the navigation said the archive was a catalogue with a chart
+  // attached, and it is a chart with a catalogue attached.
+  {
+    id: 'analyse', label: 'Analyse', icon: 'trending', home: '/trends',
+    blurb: 'What rose and what fell, month by month, for as far back as it goes.',
+    owns: ['/trends', '/trends/report', '/trend/'],
+  },
   {
     id: 'explore', label: 'Explore', icon: 'layers', home: '/all',
     blurb: 'Everything collected, however you want to enter it.',
     owns: ['/all', '/categories', '/fields', '/field/', '/reports', '/companies', '/company/'],
   },
-  // Three registries, three tabs.
+  // ONE REGISTRY, FOUR LISTS.
   //
-  // They were one section with three entries in its rail, which reads as one
-  // subject with three views of it. They are not: a stack is a dependency you
-  // ship, a tool is something you operate and never ship, and a platform is
-  // where a thing is deployed or sold. Those are three questions asked at three
-  // different moments, and each deserves an address in the top bar.
+  // This was briefly three tabs -- Stacks, Tools, Platforms -- on the argument
+  // that a dependency you ship, a thing you operate and a place you deploy to
+  // are three different questions. They are. They are also three filters over
+  // one renderer: /stacks, /tools and /concepts are `renderRegistry(url, kind)`
+  // called with a different kind, and the tabs cost what tabs cost.
+  //
+  // Two of the three owned a single page each, so two of seven top-level tabs
+  // opened a section whose rail had one entry in it. And `concept` -- the third
+  // peer of `kind` in src/vocab/kinds.ts -- had no tab at all and lived in the
+  // Stacks rail, so the top bar disagreed with the vocabulary about how many
+  // kinds of thing there are.
+  //
+  // The kinds still differ. They differ one rail-click apart, which is the
+  // distance the difference is worth.
   {
-    id: 'stacks', label: 'Stacks', icon: 'table', home: '/stacks',
-    blurb: 'What a product is built from. It ships, and the product stops without it.',
-    owns: ['/stacks', '/concepts', '/technologies', '/technology/'],
-  },
-  {
-    id: 'tools', label: 'Tools', icon: 'wrench', home: '/tools',
-    blurb: 'What a person works with — editors, CLIs, CI, assistants. Never ships.',
-    owns: ['/tools'],
-  },
-  {
-    id: 'platforms', label: 'Platforms', icon: 'building', home: '/platforms',
-    blurb: 'Where a thing is deployed, sold or paid for. Every row carries a real address.',
-    owns: ['/platforms', '/platform/'],
-  },
-  {
-    id: 'analyse', label: 'Analyse', icon: 'trending', home: '/trends',
-    blurb: 'What rose and what fell, month by month, for as far back as it goes.',
-    owns: ['/trends', '/trend/'],
+    id: 'registry', label: 'Registry', icon: 'table', home: '/stacks',
+    blurb: 'Everything the archive can name: what ships, what you work with, '
+      + 'what you cannot install, and where it all runs.',
+    owns: ['/stacks', '/tools', '/concepts', '/technologies', '/technology/',
+      '/platforms', '/platform/'],
   },
   {
     id: 'system', label: 'System', icon: 'pulse', home: '/sources',
@@ -138,7 +153,7 @@ export function crumbsFor(path: string, label: string): { label: string; href?: 
   if (label === section.label) return trail;
   // A detail page passes the LIST it came from, which is a real destination and
   // gets a link; a list page passes its own name, which does not.
-  const item = [...STACK_ITEMS, ...TOOL_ITEMS, ...PLATFORM_ITEMS, ...EXPLORE_ITEMS, ...SYSTEM_ITEMS]
+  const item = [...REGISTRY_ITEMS, ...EXPLORE_ITEMS, ...SYSTEM_ITEMS, ...ANALYSE_ITEMS]
     .find((i) => i.label === label);
   trail.push(item ? { label, href: item.href } : { label });
   return trail;
@@ -167,7 +182,14 @@ export const STREAM_ITEMS: NavItem[] = STREAMS.map((s) => ({
 export const EXPLORE_ITEMS: NavItem[] = [
   { href: '/all', label: 'Everything', icon: 'stream',
     blurb: 'Every story collected, in one river, with no field filter applied.' },
-  { href: '/categories', label: 'By category', icon: 'grid',
+  // Named 'Categories', not 'By category'. The registry's /technologies entry
+  // had that name too, and crumbsFor() resolves a label to the first item
+  // carrying it -- so one of the two was going to link to the other's page. The
+  // pages are not alike: this one counts STORIES by category and links into the
+  // reader, /technologies lists the VOCABULARY. This is also the name the page
+  // already passes to crumbsFor(), so the breadcrumb now links instead of
+  // rendering as dead text.
+  { href: '/categories', label: 'Categories', icon: 'grid',
     blurb: 'Technology, company, platform or field — every count a link into the reader.' },
   { href: '/fields', label: 'Fields', icon: 'layers', match: ['/field/'],
     blurb: 'One page per domain, from the roots of the taxonomy.' },
@@ -181,27 +203,47 @@ export const EXPLORE_ITEMS: NavItem[] = [
     blurb: 'What a vendor announced, kept apart from what was written about it.' },
 ];
 
-// One vocabulary, three lists. The split is by what a thing IS to you -- a
-// dependency you ship, a tool you operate, or an idea you cannot install --
-// which is the distinction `category` was never able to carry.
-export const STACK_ITEMS: NavItem[] = [
+// The analysis rail. These were three literals inside renderRail(); they are
+// here with the others so crumbsFor() can name them and notfound.ts can suggest
+// them, which is the whole reason the other four lists live in this file.
+//
+// Two of the three point outside the section on purpose. A field river and a
+// field report are Explore's pages, but "how much of this is there, over time"
+// is an analysis question no matter which renderer answers it.
+export const ANALYSE_ITEMS: NavItem[] = [
+  // First, because it is the only page here that answers the question rather
+  // than handing over the numbers and letting the reader do the comparison,
+  // the normalisation and the corroboration themselves.
+  { href: '/trends/report', label: 'Movement report', icon: 'book',
+    blurb: 'What moved, the stories that say so, and what to watch.' },
+  { href: '/trends', label: 'Technology trends', icon: 'trending',
+    blurb: 'What rose and what fell, month by month, for as far back as it goes.' },
+  { href: '/fields', label: 'Volume by field', icon: 'layers',
+    blurb: 'How much each domain produced, as a series rather than a list.' },
+  { href: '/reports', label: 'Field reports', icon: 'book',
+    blurb: 'What happened in a field, counted and grouped by technology.' },
+];
+
+// One vocabulary, four lists. The split is by what a thing IS to you -- a
+// dependency you ship, a tool you operate, an idea you cannot install, or a
+// place you deploy to -- which is the distinction `category` was never able to
+// carry. Three of the four are one renderer with a different `kind`; the fourth
+// reads a different table and belongs here anyway, because the question it
+// answers is the same question: what can this archive name?
+//
+// These were three separate lists feeding three separate tabs. The rail is
+// where a difference this size is supposed to live.
+export const REGISTRY_ITEMS: NavItem[] = [
   { href: '/stacks', label: 'Stacks', icon: 'table',
     blurb: 'What a product is built from. It ships, and the product stops without it.' },
+  { href: '/tools', label: 'Tools', icon: 'wrench',
+    blurb: 'What a person works with — editors, CLIs, CI, assistants. Never ships.' },
   { href: '/concepts', label: 'Concepts', icon: 'layers',
     blurb: 'Practices and fields. Nothing to install.' },
-  { href: '/technologies', label: 'By category', icon: 'grid', match: ['/technology/'],
-    blurb: 'The vocabulary grouped into nineteen categories.' },
-];
-
-/** The Tools tab owns one page; its rail is the categories within it. */
-export const TOOL_ITEMS: NavItem[] = [
-  { href: '/tools', label: 'All tools', icon: 'wrench',
-    blurb: 'What a person works with — editors, CLIs, CI, assistants. Never ships.' },
-];
-
-export const PLATFORM_ITEMS: NavItem[] = [
-  { href: '/platforms', label: 'All platforms', icon: 'building', match: ['/platform/'],
+  { href: '/platforms', label: 'Platforms', icon: 'building', match: ['/platform/'],
     blurb: 'Where a thing is deployed, sold or paid for. Every row carries a real address.' },
+  { href: '/technologies', label: 'By category', icon: 'grid', match: ['/technology/'],
+    blurb: 'The whole vocabulary grouped into nineteen categories, across every kind.' },
 ];
 
 export const SYSTEM_ITEMS: NavItem[] = [

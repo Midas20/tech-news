@@ -69,7 +69,7 @@ export async function renderCompanies(url: URL): Promise<string> {
   const body = rows.map((r) => `<tr>
       <td><a href="/company/${encodeURIComponent(r.slug)}" style="font-weight:600">${escapeHtml(r.name)}</a>
         ${r.ticker ? `<span class="chip">${escapeHtml(r.ticker)}</span>` : ''}
-        <div class="muted" style="font-size:11px">${escapeHtml(r.category)}${
+        <div class="muted" style="font-size:var(--t-11)">${escapeHtml(r.category)}${
           r.country ? ` · ${escapeHtml(r.country)}` : ''}</div></td>
       <td class="num">${Number(r.total).toLocaleString('en-US')}</td>
       <td class="num">${Number(r.announcements).toLocaleString('en-US')}</td>

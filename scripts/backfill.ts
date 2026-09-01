@@ -126,8 +126,15 @@ if (provider === 'hn') {
       console.log(`  ${t.repo.padEnd(40)} no seeded source, skipped`);
       continue;
     }
+    // `--until` was accepted on the command line, documented at the top of this
+    // file, and then only ever passed to the Hacker News walk. Asking for
+    // release history back to a date and getting "as many pages as you said"
+    // instead is a silent difference: with per_page=100 one page reaches years
+    // back for a busy repository and a fortnight for a quiet one, so the same
+    // command produced a different horizon per repo.
     const report = await backfill(db, 'github_releases', t.repo, source, {
       maxPages: pages, politeness, userAgent: config.fetch.userAgent,
+      ...(until ? { until } : {}),
     });
     stored += report.stored;
     console.log(

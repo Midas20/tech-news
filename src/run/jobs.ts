@@ -62,6 +62,7 @@ import {
   classifySources, summariseClassify,
 } from '../maintain/classify.ts';
 import { evaluateSources, summariseEvaluate } from '../maintain/evaluate.ts';
+import { saveDailyReport, summariseReport } from '../ui/movement.ts';
 import { applyStoredSettings } from '../db/repos/settings.ts';
 import { getConfig } from '../config.ts';
 import type { LlmContext } from '../llm/router.ts';
@@ -233,6 +234,23 @@ export function buildJobs(opts: JobOptions = {}): Job[] {
       },
     },
 
+    {
+      name: 'report',
+      what: 'Write the day’s movement report: what moved, on what evidence.',
+      // After rollup and retain, so the day it describes is settled, and after
+      // tag so the stories it counts carry their vocabulary. The page still
+      // renders live -- this is the archive keeping its own record, which is the
+      // half that survives the stories being pruned.
+      everySeconds: 24 * 3600,
+      atHour: 7,
+      leaseSeconds: 1800,
+      async run({ worker }) {
+        const query = <T>(sql: string, params: unknown[] = []) =>
+          worker.query<T>(sql, params);
+        const ctx: LlmContext = { db: worker, env: process.env as Record<string, string> };
+        return summariseReport(await saveDailyReport(query, 90, new Date(), ctx));
+      },
+    },
     {
       name: 'rollup',
       what: 'Reduce every settled month to the analysis that outlives its stories.',

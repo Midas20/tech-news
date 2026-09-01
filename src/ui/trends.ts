@@ -569,7 +569,7 @@ export async function renderTrend(slug: string): Promise<string> {
     ${stack.description ? `<p class="note">${escapeHtml(stack.description)}</p>` : ''}
     ${referencePanel(ref)}
     ${docsPanel(resources)}
-    ${!stack.docs_url ? `<p class="muted" style="font-size:11px">No docs URL recorded. Blank is deliberate:
+    ${!stack.docs_url ? `<p class="muted" style="font-size:var(--t-11)">No docs URL recorded. Blank is deliberate:
       a plausible wrong URL in a permanent record is worse than a gap.</p>` : ''}
 
     <div class="cards">

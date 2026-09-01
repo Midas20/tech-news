@@ -23,8 +23,8 @@ import { FIELDS, fieldCounts } from './fields.ts';
 import { topCompanies } from './companies.ts';
 import { CATEGORIES } from './stacks.ts';
 import {
-  SECTIONS, sectionFor, isOn, EXPLORE_ITEMS, STACK_ITEMS,
-  TOOL_ITEMS, PLATFORM_ITEMS, SYSTEM_ITEMS, ADMIN_ITEMS,
+  SECTIONS, sectionFor, isOn, EXPLORE_ITEMS, REGISTRY_ITEMS,
+  ANALYSE_ITEMS, SYSTEM_ITEMS, ADMIN_ITEMS,
   type NavItem,
 } from './nav.ts';
 import { GROUPS } from '../settings.ts';
@@ -151,6 +151,7 @@ function toItem(
  */
 export async function renderRail(
   state: RailState, adminExtra = '', prefs?: ReadingPrefs,
+  role: 'admin' | 'user' | null = null,
 ): Promise<string> {
   const c = await railCounts();
   const section = sectionFor(state.path);
@@ -186,31 +187,32 @@ export async function renderRail(
     ].join('');
   }
 
-  // The three registries each own a tab now, so each gets its own rail: the
-  // categories inside that registry rather than a menu of the other two.
-  if (section.id === 'tools' || section.id === 'platforms') {
-    const items = section.id === 'tools' ? TOOL_ITEMS : PLATFORM_ITEMS;
-    const key = section.id === 'tools' ? 'tools' : 'platforms';
+  // One registry, one rail. The four lists sit together with their counts, and
+  // the categories hang underneath -- the same shape Explore uses for fields and
+  // companies, so the two sections that browse a vocabulary browse it the same
+  // way.
+  //
+  // The category rows point at /technology/<id>, which spans all three `kind`s.
+  // Narrowing to the categories WITHIN one list is what that list's own facet
+  // panel is for; a rail that changed meaning depending on which of four pages
+  // you were on was the reason the three-tab version needed two rails.
+  if (section.id === 'registry') {
+    const COUNT_KEY: Record<string, keyof RailCounts> = {
+      '/stacks': 'stacks', '/tools': 'tools',
+      '/concepts': 'concepts', '/platforms': 'platforms',
+    };
     return [
-      railGroup(section.label, items.map((i) => toItem(state, i, c[key] as number, key))),
-      railGroup('By category', CATEGORIES.map((cat) => ({
-        href: `${section.home}?categories=${encodeURIComponent(cat.id)}`,
-        label: cat.label,
-        sub: true,
-      }))),
-    ].join('');
-  }
-
-  if (section.id === 'stacks') {
-    return [
-      railGroup('Registry', STACK_ITEMS.map((i) => {
-        const key = i.href === '/stacks' ? 'stacks'
-          : i.href === '/tools' ? 'tools'
-            : i.href === '/concepts' ? 'concepts'
-              : i.href === '/platforms' ? 'platforms' : undefined;
+      railGroup('Registry', REGISTRY_ITEMS.map((i) => {
+        const key = COUNT_KEY[i.href];
+        // The catalogue spans every kind, so its badge is the sum of the three
+        // that share the `stacks` table. Platforms are a different table and a
+        // different question, and are deliberately not added in.
+        if (i.href === '/technologies') {
+          return toItem(state, i, c.stacks + c.tools + c.concepts);
+        }
         return toItem(state, i, key ? (c[key] as number) : undefined, key);
       })),
-      railGroup('By category', CATEGORIES.map((cat) => ({
+      railGroup('Categories', CATEGORIES.map((cat) => ({
         href: `/technology/${cat.id}`,
         label: cat.label,
         sub: true,
@@ -220,14 +222,15 @@ export async function renderRail(
   }
 
   if (section.id === 'analyse') {
-    return railGroup('Analyse', [
-      { href: '/trends', label: 'Technology trends', icon: 'trending', active: state.path === '/trends' },
-      { href: '/fields', label: 'Volume by field', icon: 'layers' },
-      // The catalogue browses the whole vocabulary by category, across all
-      // three registries, so its badge counts all three.
-      { href: '/technologies', label: 'Technology catalogue', icon: 'tag',
-        count: c.stacks + c.tools + c.concepts },
-    ]);
+    // The movement report is administrators only -- it names what the archive
+    // cannot support as readily as what it can, and the operational coverage
+    // figures it prints are about the instrument rather than the news. A rail
+    // entry a reader cannot open is worse than no entry, so it is removed here
+    // as well as refused at the route: one decision, enforced in both places.
+    const items = role === 'admin'
+      ? ANALYSE_ITEMS
+      : ANALYSE_ITEMS.filter((i) => i.href !== '/trends/report');
+    return railGroup('Analyse', items.map((i) => toItem(state, i)));
   }
 
   if (section.id === 'system') {

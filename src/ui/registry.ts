@@ -717,7 +717,7 @@ function addForm(kind: Kind): string {
       new to have been written about — has to be named by a person. Adding it here makes it
       searchable, filterable and taggable immediately, and the archive is re-examined for it.</p>
     <form method="post" action="/stacks" class="setgrid" style="padding:var(--s-3)">
-      <div class="row" style="--row-gap:8px">
+      <div class="row" style="--row-gap:var(--s-2)">
         <input class="txt" type="text" name="name" placeholder="Name, e.g. GoHighLevel" required>
         <input class="txt" type="text" name="aliases" placeholder="other spellings, comma separated, e.g. GHL">
         <select name="kind" title="Does it ship with the product, or do you operate it?">
@@ -769,7 +769,7 @@ function growth(
         <a class="row" href="${KIND_PATH[kindOf.get(a.slug) ?? 'concept']}?sq=${
           encodeURIComponent(a.slug)}">
           <span class="t">${escapeHtml(a.name)}
-            <span class="muted" style="font-size:11px">${escapeHtml(category(a.category).label.toLowerCase())}
+            <span class="muted" style="font-size:var(--t-11)">${escapeHtml(category(a.category).label.toLowerCase())}
               · ${a.origin === 'github_release'
                 ? 'published a release'
                 : a.origin === 'repo_link' ? 'linked from a story' : 'named in headlines'}</span></span>
@@ -1309,7 +1309,7 @@ function completenessPanel(c: Record<string, string>): string {
     const pct = Math.round((have / total) * 100);
     return `<div class="row">
       <span class="t">${escapeHtml(fld.label)}
-        <span class="muted" style="font-size:11px">${escapeHtml(fld.note)}</span></span>
+        <span class="muted" style="font-size:var(--t-11)">${escapeHtml(fld.note)}</span></span>
       <span class="bar"><i style="width:${pct}%"></i></span>
       <span class="n">${have.toLocaleString('en-US')} <small>${pct}%</small></span>
     </div>`;

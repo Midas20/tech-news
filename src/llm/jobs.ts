@@ -246,6 +246,79 @@ export const JOBS: Record<string, JobSpec> = {
     },
   },
 
+  // THE REPORT IS WRITTEN, NOT ASSEMBLED.
+  //
+  // /field/<slug>/report already counts and groups: "1,039 stories, 129
+  // launches, 219 releases". That is a digest, and a digest still leaves the
+  // reader to work out what happened. What this writes is the paragraph a
+  // person would write having read the same evidence, which is the only
+  // artefact here that is genuinely new rather than a re-arrangement of rows.
+  //
+  // EVERY CLAIM IS BOUND TO A NUMBER IT WAS GIVEN. The prompt supplies measured
+  // movements and real headlines and forbids anything else, because a model
+  // asked to write about technology trends will happily supply the industry
+  // consensus from its training data. That would be a plausible report about
+  // last year written in the archive's voice, and indistinguishable from a real
+  // one to the person reading it.
+  //
+  // Claude first: this is the one output here that a person reads as prose, and
+  // a weaker model hedging its way through it costs more trust than the tokens
+  // save.
+  //
+  // The chain is long anyway, because a briefing nobody can generate is worth
+  // less than a plainer one somebody can. On this installation
+  // ANTHROPIC_API_KEY is unset and the Gemini free tier answers 429 to a prompt
+  // this size, so without the tail the archive would simply never write a
+  // report. The stored row and the page both name the model that wrote them --
+  // the degradation is disclosed rather than smoothed over, which is the only
+  // thing that makes a fallback chain honest for prose a person will quote.
+  movement_report: {
+    chain: ['claude', 'gemini-flash', 'gemini-flash-lite', 'cerebras', 'groq'],
+    promptVersion: 'v1',
+    maxTokens: 3000,
+    system: [
+      'You are writing a short intelligence briefing for engineers, from measured',
+      'evidence supplied by a technology news archive.',
+      '',
+      'RULES, in order of importance:',
+      '1. Use ONLY the movements and headlines given. Never introduce a technology,',
+      '   company, product, version or event that is not in the input. You have no',
+      '   knowledge of what happened outside this data.',
+      '2. Every claim must be traceable to a supplied number. Say "share of coverage',
+      '   roughly doubled" when the ratio says so, not "adoption is accelerating",',
+      '   which the data cannot support.',
+      '3. Distinguish corroborated movement from first-party noise. A movement',
+      '   carried only by the channel of the vendor itself is activity, not evidence',
+      '   that anyone adopted anything, and must be described that way.',
+      '4. Releases are routine. A rise made of version traffic is a project shipping;',
+      '   a rise made of launches, changes and market moves is a signal.',
+      '5. If the evidence is thin, say so. "Too little to call" is a valid finding,',
+      '   and a better one than a confident sentence with nothing under it.',
+      '',
+      'STYLE: plain declarative English, British spelling, no marketing register,',
+      'no bullet lists inside paragraphs, no hedging padding. Three to five short',
+      'paragraphs. Do not open with a scene-setting clause about a fast-moving',
+      'landscape or similar. Name things.',
+      '',
+      'Return JSON only:',
+      '{"headline":"...","summary":"...","body":"...","watch":["..."]}',
+      'headline: under 90 characters, naming the actual subject.',
+      'summary: one sentence, under 220 characters.',
+      'body: the briefing, paragraphs separated by a blank line.',
+      'watch: 2 to 4 short lines on what to watch and why, each tied to evidence.',
+    ].join('\n'),
+    schema: {
+      type: 'object',
+      required: ['headline', 'summary', 'body', 'watch'],
+      properties: {
+        headline: { type: 'string', maxLength: 200 },
+        summary: { type: 'string', maxLength: 400 },
+        body: { type: 'string', maxLength: 6000 },
+        watch: { type: 'array', items: { type: 'string', maxLength: 300 } },
+      },
+    },
+  },
+
   // This line is what makes users trust the filter, so it never goes to a
   // triage tier.
   relevance_reason: {

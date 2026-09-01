@@ -1264,6 +1264,451 @@ Three consequences worth stating:
   release in Explore. The rail entry reads `Releases · none tracked` rather than
   a bare zero.
 
+## The release feeds were registered, never polled, and pruned for it
+
+Measured on 2026-09-01: **331 sources, 150 healthy, 181 paused.** Every paused
+row carried one note — `not polled; kept only because a story that survives
+cites it` — written in exactly one place, `scripts/prune-sources.ts`, which
+reduces `sources` to a hardcoded core list. What it took out was **179 GitHub
+`*/releases.atom` feeds**: .NET, Angular, Ansible, Arrow, Beam, Alpine, Actix,
+AT Protocol, Ant Design and 170 more. All 179 had a `feed_url`, none had a
+single `consecutive_failure`, and `fetch_log` held no row for any of them.
+
+They were registered, pruned, and never polled once.
+
+### Three independent reasons, each sufficient on its own
+
+**1. The resume looked for a note nothing writes.** `syncTrackedReleases` is the
+only thing that un-pauses a release feed, and it matched `notes LIKE 'paused: no
+longer tracked%'`. Zero of the 181 rows carry that note.
+
+**2. The resume sat below a gate that can never open.** It ran after `if
+(tracked.length === 0) return report`, and `tracked` comes from the
+`app_settings` key `reading.tracked` — which has never been written. The key is
+declared in `src/settings.ts` and `app_settings` holds two rows: `reading.fields`
+and `gates.backfillEnabled`. So a job on a six-hour timer had been running since
+deploy and was structurally incapable of reaching its own resume path.
+
+That gate was also the wrong idea. *Releases you track* is a **display** filter —
+it decides what News shows. Using it to decide what is **fetched** means a
+technology you stopped reading about stops being collected, and the archive has
+no record of it when you look again. Collection is now governed by the
+vocabulary: a feed derived from `stacks.repo_url` is polled for exactly as long
+as that stack exists. The tracked list still governs the reader, and only the
+reader.
+
+**3. And when they did run, every item was refused.** This is the one that
+matters. `isBuildNoise` refused any `github.com/<owner>/<repo>/releases/tag/<v>`
+URL on sight, before reading title or body — and that is the canonical address of
+**every entry in every releases.atom feed**. The rule refused the channel.
+
+Measured over 100 entries from ten repositories:
+
+| | |
+|---|---|
+| refused by the tag-page rule | 100 of 100 |
+| the finer rules refuse anyway | 22 |
+| **refused only by the tag-page rule** | **78** |
+
+The 22 are the case the rule was reaching for — `v8.2.2` with 41 characters of
+notes, a machine writing to tags. The 78 carry between 123 and 1,430 characters
+of release notes and are the signal this archive exists to hold.
+
+**The rule now asks who is linking, not what is linked.** A bot posting a tag
+page to an aggregator is still refused on sight. A release feed's own entries are
+read, and the prerelease, bare-version, templated and machine-title rules still
+refuse the noise among them — verified in `tests/release-feed-noise.test.ts`.
+
+### Two smaller things found on the way back in
+
+**The conditional-GET state was lying.** The 179 rows held an `etag` from the one
+fetch they did get, whose every item was then refused. The etag claims we already
+hold what the address served; we held nothing. GitHub answered `304` forever and
+the feeds produced nothing while reporting perfect health. The resume clears
+`last_etag` and `last_modified` once, on the way back in.
+
+**179 feeds coming back due at `now()` is one host taking a burst.** Every one is
+github.com, and the politeness gate is per host, so they would serialise into a
+six-minute march against a single origin on every resume. `next_fetch_at` is
+offset by `hashtext(url) % poll_interval_seconds` — deterministic, so a second
+run does not reshuffle a feed already scheduled.
+
+### Verified, not reasoned about
+
+One bounded cycle over six resumed feeds: **220 items seen, 18 stored**, every
+one classified `release` — Angular 22.1.2 through 22.2.0-next.4, four LangChain
+packages. Before the change the same cycle stored zero and logged
+`build_noise: 10`.
+
+`sources` now reads **204 healthy release feeds and 125 healthy news**, against
+25 and 125 before.
+
+One row needed fixing by hand: *Terraform releases* stored its `url` as
+`.../terraform/releases` where every other row stores the bare repository URL, so
+it matched no stack and would have stayed paused alone.
+
+### What this does not fix
+
+**Market moves are still 0.9% of the archive** — 126 rows, 74 of them from a
+single source. That is the other half of what this system is for, and it is a
+source-list problem rather than a code one.
+
+**The archive is six days old.** First collection 2026-08-26, 14,788 live rows.
+The month-by-month series that outlives the stories has nothing in it yet, and
+the only cure is running.
+
+**89% of fetch work is re-processing what is already stored.** Over seven days:
+2,449,573 items seen, 29,198 kept — 1.2%. Of what was dropped, 1,482,376 were
+`duplicate` and 704,078 `already_archived`. Only 40.6% of fetches return 304, and
+86 of 150 healthy sources had an etag at all. That is a real cost and it is
+untouched here.
+
+## Turning it back on, and what that was worth
+
+The repair above is inert until the process running the scheduler is restarted:
+Node loads a module once, and both the noise rule and the resume live in
+modules. For a while after the fix the live scheduler was still the old
+revision, and it was working through the resumed feeds at ten items each and
+storing none of them — Remix, Trivy, Prisma, OpenTofu, Vue.js, uv, Storybook,
+Ollama, every one `seen=10 kept=0 build_noise=10`. Deployed code that is not
+running is a habit; running code that is not deployed from is how the same
+mistake gets made twice.
+
+After the restart, one cycle: **34 sources due, 258 stored.** In the first
+seventy minutes: **4,146 stories from 73 sources** — 2,254 changes, 1,213
+releases, 423 launches, 11 market. Thirty-eight of the 179 resumed feeds had
+produced by then; the rest were still spread across their six-hour offsets.
+
+The old scheduler had also re-stamped `last_etag` on the feeds it polled while
+discarding their contents, so they would have answered `304` forever with
+nothing stored. Cleared on the 177 that had produced nothing.
+
+### One bad row stopped sixty-two good ones
+
+`npm run seed:primary -- --apply` ended `rolled back, nothing changed`. Sixty-one
+of its sixty-three channels were fine.
+
+`sources` has **two** unique indexes — `url`, and `feed_url` where it is not null
+— and the upsert only knows about the first. Two seeds carried a `feedHint`
+already held by a row at a slightly different address:
+
+```
+Elastic blog        seed url  https://www.elastic.co/blog/
+                    held by   https://www.elastic.co/blog      (no trailing slash)
+Terraform releases  seed url  https://github.com/hashicorp/terraform/releases
+                    held by   https://github.com/hashicorp/terraform
+```
+
+Both raise on the second index, and one `BEGIN … COMMIT` around the whole loop
+turned two address mismatches into sixty-three lost sources. It is now a
+savepoint per row: what collides is named and skipped, the rest go in. **61
+written, 2 skipped.**
+
+The second collision was self-inflicted, and worth recording as such: the
+Terraform row had been normalised to the bare repository URL an hour earlier so
+the vocabulary-backed resume would match it, which is the convention every other
+derived feed follows and the opposite of the one `seeds/primary.ts` uses for that
+entry. Two conventions for the same address in one table is the actual defect;
+the savepoint only stops it being fatal.
+
+### Where the registry stands
+
+| | before | after |
+|---|---|---|
+| news | 127 | 132 |
+| releases | 204 | 220 |
+| paused | 181 | **0** |
+| **healthy** | **150** | **352** |
+
+The last paused row, *Vercel Blog*, was a first-party vendor blog whose feed
+resolves; it had been pruned for the same reason as the release feeds.
+
+`seed:money`, `seed:ai` and `seed:breadth` were run and added nothing — their
+candidates are already seeded or failed the audition. Those are dry-run by
+default and print a measured projection before they will write anything.
+
+## Filling in January 2024 onwards
+
+A releases.atom feed carries the last ten entries. The API pages a hundred at a
+time through the whole history, and `npm run backfill -- --provider
+github_releases` already knew how to walk it — it had simply never been pointed
+at the registry. `backfill_provider` was NULL on all 353 sources, so `--all`
+selected nothing.
+
+**182 repositories, 13,945 releases stored**, bounded to 2024-01-01.
+
+| month | before | after |
+|---|---|---|
+| 2024-01 | ~130 | 432 |
+| 2024-06 | 152 | 455 |
+| 2024-12 | 228 | 547 |
+| 2025-06 | 382 | 754 |
+| 2026-01 | 555 | 982 |
+
+Every month from January 2024 now carries between 410 and 3,911 stories against
+130 to 230 before. The live archive went from 22,471 to **35,505**, of which
+30,476 are 2024 or later.
+
+### `--until` stopped the walk without bounding what it stored
+
+The flag is documented at the top of `scripts/backfill.ts` and was only ever
+passed to the Hacker News provider; the release branch took `maxPages` alone. So
+asking for history back to a date got a page count instead, and with
+`per_page=100` one page reaches years back for a busy repository and a fortnight
+for a quiet one — the same command produced a different horizon per repository.
+
+Passing it through was half the fix. The other half: the stop test runs *after*
+the page has been ingested, so the final page went in whole. A bounded run over
+eight repositories asking for 2024-01-01 stored 168 rows from 2020 to 2023 — not
+harmful in an archive that wants depth, but not what the flag says, and the
+overshoot is a different size every time because it depends where the cutoff
+falls inside the page. `until` now filters the page before it is ingested. An
+item with no date is kept: undated is not out of range.
+
+## A source pointed at a whole site, and 800 documentation pages became news
+
+`Qdrant blog` had `url = qdrant.tech/blog/` and
+`feed_url = qdrant.tech/index.xml` — the site-wide feed. It carried
+`/documentation/` and `/course/` pages, which have no publication date, so they
+were stamped **2001-01-01**: 320 rows of "Quickstart", "Installing
+Dependencies", "Configure Clusters" sitting in a 2001 bucket in a technology
+trend series.
+
+`qdrant.tech/blog/index.xml` exists, returns 200, and carries 165 entries all
+under `/blog/`. The source now points at it. 785 non-blog rows are dismissed,
+and **no live story is dated before 2010 any more**.
+
+### Dismissal did not reach the analysis
+
+This is the part worth keeping. `stories` carries a `forbid_delete` trigger, so
+dismissal is the operator's only lever for taking a bad row out — and
+`rollup.ts` filtered on `superseded_by` alone. All six of its selections ignored
+`dismissed_at`.
+
+So dismissing those 785 rows would have removed them from the reader and left
+every one of them counted in `stack_month`, `month_totals` and the pair counts.
+Those outlive the stories by design, which means the correction could never have
+caught up with them: the analysis is not re-derivable once the rows are gone.
+
+All six selections now exclude dismissed rows. A story somebody took out is out
+of the series too.
+
+## Search had one order and no way to change it
+
+`/news` and `/all` carry a Sort control with six orderings. `/search` hardcoded
+`ORDER BY rank DESC` in both its query paths and rendered no control at all, so
+a phrase matching 5,212 stories offered exactly one view of them. `?sort=` in
+the address was read by nothing — worse than refusing it, because the URL looks
+like it worked.
+
+The orderings are the reader's, imported rather than redefined: `SORTS` and
+`SORT_LABELS` from `filters.ts`, plus `relevance` on the front as the default.
+Six names meaning six different things depending on which page you are on is the
+failure this avoids, and a test asserts the shared ones are worded identically.
+
+**Relevance is dropped from the ORDER BY when another ordering is chosen**,
+rather than kept as a tiebreak. `rank` is a float distinct for almost every row,
+so a tiebreak would have made "newest first" mean "newest first, unless two
+stories share a second" — which is to say, rank order with a different label.
+
+The value reaches an `ORDER BY` by interpolation, so `searchSort()` is an
+allowlist and the tests treat it as the security boundary it is.
+
+Verified against the running server on one query:
+
+| ordering | first result |
+|---|---|
+| Best match | Cloudflare changelog — AI Gateway, Workers AI |
+| Newest first | Tech.eu — Cambridge spinout launches AI model |
+| Importance | Anyscale — CVE-2025-62593 and the CISA KEV listing |
+| Most covered | Pinecone — One Year In (6 outlets) |
+
+### Dismissed stories were still in the results
+
+The three search queries filtered on `superseded_by` alone. The reader excludes
+dismissed rows, `rollup` now does too — search did not, so the 785 Qdrant
+documentation pages taken out an hour earlier were still returnable, and the
+result count disagreed with the list it was counting. All three now exclude them.
+
+## The movement report: a finding, its evidence, and what to do
+
+`/trends` is a table. "Rust, 412" is not a finding — the reader still has to do
+the comparison, the normalisation and the corroboration in their head before it
+means anything. `/trends/report` does those three things and states the result as
+a sentence, with the rows it was computed from underneath it.
+
+Four sections, in the order a reader needs them: **the finding**, **the
+evidence**, **what to watch**, and **what this cannot tell you**. The
+recommendation is last on purpose — it is the only part that is an opinion, and
+the only route to it runs past the evidence it was drawn from.
+
+### The measurement that would have made it lie
+
+Measured on 2026-09-01: the last 90 days hold 8,195 stories from 325 active
+sources; the prior 90 hold 4,205 from 213. The archive itself roughly doubled —
+179 release feeds were resumed, 61 first-party channels seeded, and a backfill
+walked GitHub release history to January 2024.
+
+A verdict built on raw counts would have reported the whole vocabulary as growing
+about 2×, and it would have been measuring this repository's commit history
+rather than the industry. That is the failure mode of every "trending" panel that
+counts documents.
+
+**So the comparison is on share of the window, not volume.** If collection doubles
+uniformly, every share is unchanged and every verdict is "steady" — which is the
+correct answer. A technology moves here only when it moved relative to everything
+else the archive saw in the same period. The coverage ratios are printed on the
+page regardless, because a reader is entitled to know how much the instrument
+changed under the measurement.
+
+### A ratio needs a baseline, and the archive keeps growing one
+
+The first run put **AT Protocol at 254×** — 495 stories against 1. That is not a
+technology arriving, it is a feed arriving: AT Protocol was one of the 179
+resumed the same morning. `MIN_PREV` sends anything with a thin prior window to a
+**Newly covered** list that is named rather than ranked. It is a real fact about
+the archive, stated as one, and it keeps this repository's own repairs out of the
+findings.
+
+### Corroboration outranks speed
+
+A vendor is authoritative about what it shipped and worthless as evidence that
+anyone wanted it, so `sources.source_type` is graded through
+`vocab/intel.ts` — the `independent` flag — and:
+
+- nothing is recommended without at least one independent source,
+- ranking is by independent source count first and movement second,
+- anything growing on first-party sources alone gets its own section headed
+  *Moving, but only its own people are saying so*.
+
+The recommendation also says which kind of movement it is: 30 releases and 2
+events is a project shipping, not a market moving, and the sentence admits it
+rather than implying adoption.
+
+### What it refuses to say
+
+Of 940 technologies with any activity, 250 got a verdict. **674 are below the
+floor** — under 8 stories in the window or under 20 across both — because a ratio
+built on three stories is arithmetic, not evidence. The page prints that count
+rather than quietly reporting on the 250 as though they were everything.
+
+### It is written once a day, and kept
+
+The page renders live, because somebody looking now should see now. That is not
+enough on its own: the verdicts move as collection moves, so what the archive
+said about Rust last Tuesday was unrecoverable by Wednesday. For an instrument
+whose entire subject is the passage of time, the analysis is supposed to be the
+durable half.
+
+So a `report` job runs daily at 07:00 — after rollup, retain and tag, so the day
+it describes is settled and the stories it counts carry their vocabulary — and
+writes to `daily_reports`. One row per `(day, window)`: the window is part of the
+identity, because a 30-day and a 365-day report on the same morning are two
+different statements. Re-running a day corrects that row rather than appending a
+second opinion, and `forbid_delete` applies, because a report is analysis and
+analysis outlives the stories underneath it.
+
+The payload is `jsonb` carrying a `generator` version. The shape of a finding is
+the thing most likely to change here — a new band, a new corroboration measure —
+and a table of columns would need a migration per idea and would still lose the
+old shape on the way. Versioning it means an old row stays readable as what it
+was rather than being reinterpreted as what today's code would have written.
+
+### The title names the subject and the day
+
+"Movement report" on two hundred rows is a filename. A report is *about*
+something — a technology, a tool, a platform, a company, or the money — and about
+a date, so the title carries both:
+
+```
+Software, Testing and AI Agents — 1 September 2026
+Market moves: NVIDIA, AWS and Microsoft — 14 September 2026
+```
+
+The subject is chosen the way the recommendations are: **corroboration first**.
+Naming whatever moved fastest would put a vendor's own publishing schedule in the
+headline, which is the mistake the rest of this feature exists to avoid. When
+nothing has independent backing the movers are still named, followed by
+`(uncorroborated)` — the report says what it has rather than going quiet.
+`Market moves:` leads when the window's funding, acquisition and consolidation
+events outweigh its launches and changes, because that is a different kind of day
+and the title should say so before it says any name.
+
+### One report, every kind of subject
+
+A report that can name a stack but not a company describes half of what this
+archive collects: 14,713 stories carry a company tag. `stories.stacks`,
+`stories.companies` and `stories.platforms` are structurally identical — a
+`text[]` of slugs against a table with a slug and a name — so one query shape
+covers all three rather than three hand-written ones that would drift. Technology,
+company and platform movements land in the same report, ranked against each other,
+which is what makes it one report about the archive instead of three about
+its columns.
+
+### Administrators only
+
+`/trends/report` is refused to readers by the same rule `/admin` uses: a signed-in
+administrator is the authorisation, and the token stays for headless access. It
+names what the archive cannot support as readily as what it can, and the coverage
+ratios it prints are facts about the instrument rather than about the news.
+
+The rail entry is removed for readers **and** the route refuses them. A rail that
+hides a link is a menu, not a permission.
+
+### The report is written, not assembled
+
+`/field/<slug>/report` counts and groups: *1,039 stories, 129 launches, 219
+releases*. That is a digest, and a digest still leaves the reader to work out
+what happened. The briefing is the paragraph a person would write having read the
+same evidence — the only artefact here that is genuinely new rather than a
+re-arrangement of rows.
+
+The measured movements become an **evidence packet**: share changes, story counts
+for both windows, source counts split by independence, the event mix, and the
+real headlines behind everything the report is allowed to name. The model gets
+numbers, not prose, so there is nothing to copy and every sentence has to be
+derived.
+
+**Every claim is bound to a number it was given.** The prompt forbids naming any
+technology, company, product, version or event that is not in the input, because
+a model asked to write about technology trends will happily supply the industry
+consensus from its training data — a plausible report about last year, written in
+the archive's voice, and indistinguishable from a real one to the person reading
+it. The rules also force the distinctions the rest of this feature exists to
+make: corroborated movement against first-party noise, a rise made of version
+traffic against one made of launches and market moves, and "too little to call"
+as a valid finding.
+
+It shows. From the first real run, unprompted:
+
+> Independent corroboration across these gains remains minimal; most subjects
+> show very few independent sources relative to their total story counts,
+> indicating high volumes of first-party vendor activity.
+
+> Subjects such as Redis and AT Protocol are newly covered with no prior baseline
+> and cannot be counted as growth within the archive.
+
+### Written once a day, not once a view
+
+Generating on view would cost a model call per refresh and, worse, would give two
+people looking at the same archive two different briefings. A report that changes
+when you reload is not a report. The `report` job writes one daily and the page
+reads it; the measured sections underneath are computed live, because those are
+counts and counts should be current.
+
+### The chain is long, and the page says which model wrote it
+
+Claude first: this is the one output a person reads as prose. It is not Claude
+only. On this installation `ANTHROPIC_API_KEY` is unset and the Gemini free tier
+answers 429 to a prompt this size, so a short chain would mean the archive never
+writes a report at all — worse than a plainer one.
+
+The stored row and the page both name the model. Disclosure is what makes a
+fallback chain honest for prose somebody may quote: the first briefing generated
+here says *written by gemini-flash-lite* on its face. When no model is reachable
+the page keeps the measured findings and says no briefing has been written, and
+the job logs `[measured only, no model]`.
+
 ## The market is the second thing this is for
 
 The project's purpose, stated 2026-08-28: **"finding new stacks and market via
@@ -3680,9 +4125,14 @@ JavaScript is how the two quietly come to disagree.
 
 ## Three registries, three tabs
 
+> **Superseded.** The three tabs became one *Registry* section with four lists in
+> its rail. The distinction below is real and is still what the four lists are
+> for; what was wrong was spending three of seven top-level tabs on it. See *The
+> top bar was making the wrong claim*.
+
 A stack is a dependency you ship. A tool is something you operate and never
 ship. A platform is where a thing is deployed or sold. Those are three questions
-asked at three different moments, so each has a tab: **Stacks**, **Tools**,
+asked at three different moments, so each had a tab: **Stacks**, **Tools**,
 **Platforms**.
 
 Every registry row now carries its **lineage** — `Programming Languages ›
@@ -3852,20 +4302,19 @@ rather than a filter. It narrows what is already rendered, and a ticked option i
 never hidden — filtering away a selection and then submitting the form would
 silently drop it.
 
-Seven sections in the top bar — **News · Explore · Stacks · Tools · Platforms ·
-Analyse · System** — and the rail shows only the current section's pages.
-Repeating all seven everywhere would be the same mistake in a different place.
-*Stacks* earned its own section when the vocabulary passed 1,600 entries: a
-registry that size is a destination, not a sub-page of somewhere else, and it
-later split into three when a stack, a tool and a platform turned out to be
-answers to three different questions.
+Five sections in the top bar — **News · Analyse · Explore · Registry ·
+System** — and the rail shows only the current section's pages. Repeating all
+five everywhere would be the same mistake in a different place.
+
+This count has been five, then seven, and is five again; see *The top bar was
+making the wrong claim* below for why the middle number was wrong.
 
 **The top bar is the same grid as the page under it.** The brand holds the rail's
 column open, so the section menu starts exactly where the content column starts:
 its left border and the rail's right border are one continuous vertical line
 rather than two edges a few pixels apart. The brand is `--rail-w` less the bar's
 own padding and the flex gap that follows it, so the two move together if the
-rail is ever re-sized. Below 920px there is no rail to line up with and the brand
+rail is ever re-sized. Below 900px there is no rail to line up with and the brand
 takes what it needs. The menu itself no longer shrinks — a clipped destination is
 worse than a shorter search field, so the search is what gives up width first.
 
@@ -4023,6 +4472,124 @@ sort, plus three operational panels: the ingest funnel, source health (including
 tenant isolation.
 
 ---
+
+## The top bar was making the wrong claim
+
+Seven sections, and the shape of them said this was a catalogue with a chart
+attached. It is a chart with a catalogue attached: the retention contract deletes
+stories and keeps `stack_month` forever, so the month-by-month series is the one
+artefact here that cannot be rebuilt from anything else. **Analyse** was sixth of
+seven, behind three lists of vocabulary.
+
+Those three were **Stacks**, **Tools** and **Platforms** — and `/stacks`,
+`/tools` and `/concepts` are one function, `renderRegistry(url, kind)`, called
+with a different kind. Two of the three sections owned exactly one page each, so
+two of seven tabs opened a section whose rail had one entry in it. Meanwhile
+`concept` — the third peer of `kind` in `src/vocab/kinds.ts` — had no tab at all
+and lived in the Stacks rail, so the top bar disagreed with the vocabulary about
+how many kinds of thing exist.
+
+**Now five: News · Analyse · Explore · Registry · System.** Analyse moves to
+second. The four registry lists — Stacks, Tools, Concepts, Platforms — sit
+together in one rail with their counts, and the nineteen categories hang beneath
+them, which is the shape Explore already used for fields and companies. The kinds
+still differ; they differ one rail-click apart, which is the distance the
+difference is worth.
+
+Two entries were also both called **By category**, `/categories` under Explore
+and `/technologies` under Stacks. `crumbsFor()` resolves a label to the first
+item carrying it, so one of the two was always going to link to the other's page.
+Explore's is now *Categories*, which is the name that page already passed, so its
+breadcrumb links instead of rendering as dead text. A test asserts no two
+destinations share a name, because that failure is silent by construction.
+
+### On a phone there was no navigation at all
+
+The rail is `display:none` below 900px and the section tabs below 720px. Nothing
+replaced either. The page shell emits exactly two navigation surfaces and there
+was no third, so every screen narrower than a small tablet rendered a wordmark, a
+search box, a theme switch — and no way to reach any other page except by
+searching for it or finding a link in the body. The rail is where Fields,
+Companies, Categories, the registry lists and every filter group live, so a
+tablet between 720px and 900px lost those too.
+
+It is a **checkbox**, not a `<details>`, and not script. It has to work with
+scripting off like the theme control and the filter links do, and the same
+element has to be a disclosure on a phone and plain always-visible markup on a
+desktop — which `<details>` cannot be, because its content is hidden by the user
+agent in a way author CSS cannot reliably reopen across browsers. The input sits
+before both `.top` and `.shell` so `:checked ~` reaches the rail and the tabs
+without either of them moving in the DOM.
+
+Below 900px the rail becomes a fixed sheet under the bar rather than a column
+beside the content; below 720px the tabs ride at the top of that same sheet in a
+strip of a fixed height, because the sheet has to clear them and a wrapping row
+has no height anyone can write down.
+
+The icon-only tabs between 720px and 1120px now **clip** their label rather than
+`display:none` it. With the span out of the box tree the anchor's accessible name
+fell back to the `title` attribute, and a tooltip is not a label.
+
+### Thirteen breakpoints were not a decision
+
+560, 640, 700, 720, 760, 820, 860, 900, 920, 1120, 1180, 2100. Nobody chose
+thirteen — each was the width at which one component looked wrong when somebody
+happened to drag a window. The page re-flowed in a staircase, and things that
+belong together came apart at different widths: 900 shrank the search box while
+920 hid the rail and re-flowed the brand that lines up with it.
+
+**Four tiers now**, and a test fails on a fifth:
+
+| | |
+|---|---|
+| 1120 | the section tabs drop their labels and become icons |
+| 900 | the rail stops being a column and becomes a sheet |
+| 720 | the tabs join the sheet; one column everywhere |
+| 560 | the smallest phones: lists give up their side-by-side rows |
+
+`min-width:2100px` is not a tier. It is a ceiling for ultrawide displays and the
+only rule in the stylesheet that grows rather than collapses.
+
+### Two rules wearing one name
+
+`.fieldgrid` was **defined twice**, 650 lines apart, with different track sizing:
+168px columns at the top of the file, 232px columns and a bottom margin near the
+bottom. Three pages use the class. The later rule wins, so the sign-up field
+picker — a grid of small checkboxes — was being laid out on the field-*card* grid
+and carrying a margin nobody asked for. Two grids, two names: `.pickgrid` and
+`.fieldgrid`.
+
+The **checkbox was implemented twice**, differently. A real `<input>` in the facet
+panel and a drawn `<span>` in the rail, which has to be drawn because a checkbox
+cannot be a link and every rail row is a shareable address. Same control, same two
+states, and they had drifted to different box sizes and different tick geometry —
+and the copy carried the only hardcoded colour in 1,600 lines of CSS, `#fff`
+where the original said `var(--brand-ink)`. One rule, two selectors.
+
+Six more selectors were each declared in two separate places rather than one:
+`.exmonth`, `.btn`, `.stacklist.reg`, `.stackrec .mini`, `.setrow textarea`,
+`.searchbox input`. None of them conflict today. That is how `.fieldgrid`
+started.
+
+### The scale, applied where it was being bypassed
+
+`theme.ts` opens by saying a fixed type scale, a fixed spacing scale, and nothing
+per-page. It was mostly true — exactly one hardcoded colour in the whole file.
+The exceptions were in `style=` attributes across the page modules: `font-size:
+11px` inline eight times when `--t-11` exists, and margins written as 10px, 12px,
+14px, 18px, 22px and 1rem — a second spacing scale of six values living beside
+the real one of seven. All of them are on the scale now, and the handful of
+one-off gaps between blocks use four named steps (`.mt-2` … `.mt-5`) rather than
+an inline pixel each.
+
+Note that `font-size:11px` was not `--t-11`. The scale carries a `--t-scale`
+multiplier of 1.12, so those elements were rendering at 11px where the step is
+12.32px — off the scale and a little too small, which is exactly the drift a
+scale exists to prevent.
+
+**Not changed:** `--n-5`, `--n-6` and `--t-19` are defined and unused. They are
+steps of a complete ramp and a complete type scale, and a scale with holes in it
+is worse than a scale with unused steps.
 
 ## Reviewing news by category
 

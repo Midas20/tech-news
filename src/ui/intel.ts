@@ -134,11 +134,11 @@ export async function renderIntel(url: URL): Promise<string> {
       : `<i title="${escapeHtml(r.prior_reason ?? 'prior')}">${r.authority_score}</i>`;
     return `<tr>
       <td><a href="/all?source=${encodeURIComponent(r.name)}" style="font-weight:600">${escapeHtml(r.name)}</a>
-        <div class="muted" style="font-size:11px">${escapeHtml(truncate(r.url, 58))}</div></td>
+        <div class="muted" style="font-size:var(--t-11)">${escapeHtml(truncate(r.url, 58))}</div></td>
       <td>${label
         ? `<span class="chip">${escapeHtml(label)}</span>`
         : '<span class="chip warn" title="not derivable from the record">unclassified</span>'}
-        ${r.status !== 'APPROVED' ? `<div class="muted" style="font-size:11px">${escapeHtml(r.status.toLowerCase())}</div>` : ''}</td>
+        ${r.status !== 'APPROVED' ? `<div class="muted" style="font-size:var(--t-11)">${escapeHtml(r.status.toLowerCase())}</div>` : ''}</td>
       <td class="num" style="font-weight:600">${num(r.overall_score)}</td>
       <td class="num">${authority}</td>
       <td class="num">${num(r.signal_density, '%')}</td>
@@ -164,7 +164,7 @@ export async function renderIntel(url: URL): Promise<string> {
       ${stat('approved', t.approved, 'in the working set')}
     </div>
 
-    <p class="note" style="margin:12px 0">
+    <p class="note" style="margin:var(--s-3) 0">
       <b>Independent sources are what confirmation needs.</b>
       A registry made of first parties can report what was announced and cannot
       corroborate any of it: two vendors are never two confirmations.
@@ -178,8 +178,8 @@ export async function renderIntel(url: URL): Promise<string> {
         <th class="num">target</th><th>gap</th></tr></thead>
       <tbody>${gaps}</tbody></table></div>
 
-    <h2 style="margin-top:18px">By source</h2>
-    <div class="pills" style="margin-bottom:12px">${tabs}</div>
+    <h2 style="margin-top:var(--s-4)">By source</h2>
+    <div class="pills" style="margin-bottom:var(--s-3)">${tabs}</div>
 
     ${rows.length === 0 ? '<div class="empty">No sources match.</div>' : `<div class="scroll"><table>
       <thead><tr><th>source</th><th>type</th><th class="num">score</th>

@@ -190,7 +190,7 @@ export async function renderCatalogue(url: URL): Promise<string> {
     ${searchBar(search, sort, '/technologies')}
     ${rows.length === 0 ? empty('Nothing in the vocabulary matches that.')
       : `<div class="stacklist">${rows.map(stackRow).join('')}</div>`}
-    ${!search ? `<p class="note" style="margin-top:10px">Showing the 60 most active.
+    ${!search ? `<p class="note" style="margin-top:var(--s-2)">Showing the 60 most active.
       Open a category above for its full list.</p>` : ''}
   `);
 }
@@ -245,7 +245,7 @@ export async function renderCategory(id: string, url: URL): Promise<string> {
     ${rows.length === 0 ? empty('Nothing in this category matches.')
       : `<div class="stacklist" style="--cat:${cat.color}">${rows.map(stackRow).join('')}</div>`}
 
-    ${quiet.length && !search ? `<p class="note" style="margin-top:12px">
+    ${quiet.length && !search ? `<p class="note" style="margin-top:var(--s-3)">
       ${quiet.length} of these have never appeared in a story. That is a coverage gap,
       not an error: the vocabulary is curated ahead of collection on purpose, so a
       technology is recognised the first time it is mentioned rather than the first
@@ -254,7 +254,7 @@ export async function renderCategory(id: string, url: URL): Promise<string> {
 }
 
 function searchBar(search: string, sort: string, action: string): string {
-  return `<form method="get" action="${action}" class="row" style="margin:0 0 12px;--row-gap:7px">
+  return `<form method="get" action="${action}" class="row" style="margin:0 0 var(--s-3);--row-gap:var(--s-2)">
     <input class="txt" type="search" name="sq" value="${escapeHtml(search)}"
       placeholder="name, slug or alias…">
     <label for="cat-sort">Sort</label>

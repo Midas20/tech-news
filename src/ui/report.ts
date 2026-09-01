@@ -260,7 +260,7 @@ export async function renderFieldReport(slug: string, days: number): Promise<str
       { crumbs: [...crumbsFor('/reports', 'Reports'), { label }] })}
 
     <form method="get" action="/field/${encodeURIComponent(slug)}/report"
-      class="row" style="--row-gap:7px;margin:0 0 14px">
+      class="row" style="--row-gap:var(--s-2);margin:0 0 var(--s-4)">
       <label for="rep-days">Period</label>
       <select id="rep-days" name="days" onchange="this.form.submit()">
         ${[7, 30, 90, 180, 365].map((d) =>
@@ -399,7 +399,7 @@ export async function renderReports(days: number): Promise<string> {
       + 'report is a count, and every count links to the stories behind it.',
       { crumbs: crumbsFor('/reports', 'Reports') })}
 
-    <form method="get" action="/reports" class="row" style="--row-gap:7px;margin:0 0 14px">
+    <form method="get" action="/reports" class="row" style="--row-gap:var(--s-2);margin:0 0 var(--s-4)">
       <label for="rep-days">Period</label>
       <select id="rep-days" name="days" onchange="this.form.submit()">
         ${[7, 30, 90, 180, 365].map((d) =>

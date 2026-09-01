@@ -28,6 +28,7 @@ import { renderNotFound } from './notfound.ts';
 import { q } from './db.ts';
 import { renderOverview } from './overview.ts';
 import { renderTrends, renderTrend } from './trends.ts';
+import { renderMovementReport, reportWindow } from './movement.ts';
 import { renderRail, statusBadge, topNav, railCounts } from './rail.ts';
 import { renderSources } from './sources.ts';
 import { renderIntel } from './intel.ts';
@@ -734,7 +735,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
     // reported more unread stories than the page held.
     const prefs = await currentPrefs();
     const [rail, status] = await Promise.all([
-      renderRail(state, adminExtra, prefs), statusBadge(),
+      renderRail(state, adminExtra, prefs, role), statusBadge(),
     ]);
     // `railOverride` exists for the reader: its rail is counts under the query
     // it just ran, so only it can build one that agrees with the list beside it.
@@ -900,6 +901,25 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
     if (path.startsWith('/company/')) {
       const slug = decodeURIComponent(path.slice('/company/'.length));
       return render(slug, await renderCompany(slug, url));
+    }
+    // Before '/trends' would not matter here (exact match), but the report is
+    // the reason the section exists, so it reads first.
+    if (path === '/trends/report') {
+      // Administrators only, by the same rule /admin uses: a signed-in admin IS
+      // the authorisation, and the token stays for headless access. The refusal
+      // is here rather than only in the rail, because a rail that hides a link
+      // is a menu and not a permission.
+      const refused = adminRefusal(req, url, role);
+      if (refused) {
+        return send(req, res, 403, 'text/html; charset=utf-8', page({
+          title: 'Movement report',
+          rail: railGroup('', [{ href: '/trends', label: '← Technology trends' }]),
+          body: wrap(`${pageHead('Administrators only')}
+            <p class="muted">${escapeHtml(refused)}</p>`),
+        }), { 'cache-control': 'no-store' });
+      }
+      return render('Movement report',
+        await renderMovementReport(reportWindow(url.searchParams.get('days'))));
     }
     if (path === '/trends') return render('Trends', await renderTrends());
     if (path.startsWith('/trend/')) {

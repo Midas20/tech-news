@@ -128,11 +128,34 @@ export function isTagPage(url: string): boolean {
  * which fired so a bad rule can be found and removed rather than guessed at.
  */
 export function isBuildNoise(
-  title: string, body = '', opts: { words?: number; url?: string } = {},
+  title: string, body = '',
+  opts: { words?: number; url?: string; fromReleaseFeed?: boolean } = {},
 ): NoiseVerdict {
   // The address first, because it is the only rule that does not depend on
   // wording. See isTagPage.
-  if (opts.url && isTagPage(opts.url)) return { noise: true, why: 'tag_page' };
+  //
+  // THE TAG-PAGE RULE IS ABOUT WHO IS LINKING, NOT WHAT IS LINKED.
+  //
+  // A github.com/<owner>/<repo>/releases/tag/<v> URL arriving from an aggregator
+  // is a machine-written tag somebody's bot posted, and refusing it on sight is
+  // right. That same URL is also the canonical address of EVERY entry in every
+  // releases.atom feed -- so applied to a release feed the rule refuses the
+  // channel wholesale, which is what it did: 179 registered GitHub release feeds
+  // fetched successfully, stored nothing, and were then pruned for producing
+  // nothing.
+  //
+  // Measured over 100 entries from ten repositories: the blanket rule refused
+  // 100 of 100. The rules below refuse 22 of those on their own -- the bare
+  // "v8.2.2" with 41 characters of notes, which is the machine-writing-to-tags
+  // case this was written for. The other 78 are releases carrying 123 to 1,430
+  // characters of notes, and they are the signal the archive exists to hold.
+  //
+  // So the rule now asks who is speaking. The finer rules keep the noise out
+  // either way, and a tag page cited by anything that is not a release feed is
+  // refused exactly as before.
+  if (!opts.fromReleaseFeed && opts.url && isTagPage(opts.url)) {
+    return { noise: true, why: 'tag_page' };
+  }
 
   const t = (title ?? '').trim();
   if (!t) return { noise: true, why: 'no_content' };

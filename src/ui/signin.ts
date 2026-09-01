@@ -113,18 +113,18 @@ export function renderMe(account: Account, saved = false): string {
       ? 'As an administrator you can also reach every other surface.'
       : 'This is the setting that is yours; the rest of the archive is read-only to you.'}</p>
     <form method="post" action="/me/fields">
-      <div class="fieldgrid">${boxes}</div>
-      <button class="btn primary" type="submit" style="margin-top:12px">Save fields</button>
+      <div class="pickgrid">${boxes}</div>
+      <button class="btn primary mt-3" type="submit">Save fields</button>
     </form>
 
-    <h2 style="margin-top:22px">Theme</h2>
+    <h2 class="mt-5">Theme</h2>
     <form method="post" action="/me/theme" class="row">
       ${(['auto', 'dark', 'light'] as const).map((t) => `
         <button class="btn${account.theme === t ? ' primary' : ''}" type="submit"
           name="theme" value="${t}">${t}</button>`).join('')}
     </form>
 
-    <h2 style="margin-top:22px">Session</h2>
+    <h2 style="margin-top:var(--s-5)">Session</h2>
     <form method="post" action="/logout">
       <button class="btn" type="submit">Sign out</button>
     </form>

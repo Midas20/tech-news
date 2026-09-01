@@ -220,7 +220,7 @@ export async function renderPlatforms(url: URL): Promise<string> {
           + 'registry but the technology press has not written about them.' })}
     </div>
 
-    <form method="get" action="/platforms" class="row" style="--row-gap:7px;margin:0 0 12px">
+    <form method="get" action="/platforms" class="row" style="--row-gap:var(--s-2);margin:0 0 var(--s-3)">
       ${channel ? `<input type="hidden" name="channel" value="${escapeHtml(channel)}">` : ''}
       <input class="txt" type="search" name="sq" value="${escapeHtml(search)}"
         placeholder="${channel

@@ -40,7 +40,7 @@ export function referencePanel(ref: ReferenceRow | null): string {
     return ref?.note
       // Why there is nothing, rather than a blank that looks like a bug. An
       // unconfirmed match is a deliberate refusal, not a gap waiting to fill.
-      ? `<p class="muted" style="font-size:12px">No background recorded:
+      ? `<p class="muted" style="font-size:var(--t-12)">No background recorded:
           ${escapeHtml(ref.note)}.</p>`
       : '';
   }

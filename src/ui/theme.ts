@@ -174,6 +174,28 @@ export const CSS = `
   --top-h:52px;
 }
 
+/* ---------- breakpoints ----------
+   FOUR TIERS, AND NOTHING BETWEEN THEM.
+
+     1120   the section tabs drop their labels and become icons
+      900   the rail stops being a column and becomes a sheet
+      720   the tabs join the sheet; one column everywhere
+      560   the smallest phones: lists give up their side-by-side rows
+
+   There were thirteen: 560, 640, 700, 720, 760, 820, 860, 900, 920, 1120, 1180
+   and 2100. Nobody chose thirteen -- each was the width at which one component
+   looked wrong when somebody happened to drag a window, so the page re-flowed
+   in a staircase and things that belong together came apart at different
+   widths. 900 and 920 hid the rail and re-flowed the brand that lines up with
+   it; 640, 700 and 720 were three names for "a phone".
+
+   A media query is not per-component CSS, and these are not free: each one is a
+   width at which the whole page has to be checked. Snap to a tier, or argue for
+   a fifth one. Do not add a fourteenth silently.
+
+   (min-width:2100px is not a tier. It is a ceiling for ultrawide displays, and
+   the only rule in this file that grows rather than collapses.) */
+
 /* Light is a considered second mode rather than an inversion, so the palette is
    written once and applied three ways: to whoever asks the operating system, and
    to whoever chose a side explicitly in /settings. An explicit choice must beat
@@ -198,6 +220,17 @@ a:hover{text-decoration:none}
 ::selection{background:color-mix(in srgb,var(--brand) 28%,transparent)}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .muted{color:var(--ink-3)}
+
+/* The one concession to utilities, and the reason it exists.
+   A handful of one-off gaps between blocks were written as inline style=
+   attributes in raw pixels -- 10px, 12px, 14px, 18px, 22px, 1rem -- which is a
+   per-page spacing scale of six values living beside the real one of seven.
+   These four names cover every case that was there. Anything that needs a fifth
+   probably needs a class of its own instead. */
+.mt-2{margin-top:var(--s-2)}
+.mt-3{margin-top:var(--s-3)}
+.mt-4{margin-top:var(--s-4)}
+.mt-5{margin-top:var(--s-5)}
 /* Two utilities the scheduler table needed and nothing else had: one step down
    in size, and the colour that means "this is the thing that is wrong". Next to
    .muted because they are the same kind of thing -- emphasis, never meaning. */
@@ -216,7 +249,7 @@ a:hover{text-decoration:none}
   border-bottom:1px solid var(--line);
 }
 
-/* Primary navigation: sections, not filters. Four destinations, always in the
+/* Primary navigation: sections, not filters. Five destinations, always in the
    same place, so the rail underneath is free to be about ONE of them. */
 .nav{display:flex;align-items:center;gap:2px;padding:2px;flex:none;
   background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-2)}
@@ -228,8 +261,34 @@ a:hover{text-decoration:none}
 .nav a:hover{color:var(--ink)}
 .nav a.on{background:var(--raised);color:var(--ink);box-shadow:var(--shadow)}
 .nav a.on .ico{color:var(--brand);opacity:1}
-@media(max-width:1120px){.nav a span{display:none}.nav a{padding:0 9px}}
-@media(max-width:760px){.nav{display:none}}
+/* Narrow: the tabs go to icons only. The label is CLIPPED rather than
+   display:none, so it is still the anchor's accessible name -- with the span
+   removed from the box tree the name fell back to the title attribute, and a
+   tooltip is not a label. */
+@media(max-width:1120px){
+  .nav a span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+  .nav a{padding:0 9px}
+}
+
+/* ---------- the menu, on a screen too narrow for the rail ----------
+   Below 900px the rail is a sheet you open, and below 720px the tabs join it.
+   Before this they were simply hidden and nothing replaced them, so a phone had
+   no navigation at all -- see the note on the toggle in html.ts.
+
+   Everything here hangs off :checked on an input that sits before both .top and
+   .shell, which is what lets one control reach two elements that are in
+   different parts of the document without either of them moving. */
+.navtoggle{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.navbtn{
+  display:none;align-items:center;justify-content:center;flex:none;
+  width:32px;height:32px;border-radius:var(--r-2);
+  color:var(--ink-3);background:var(--surface);border:1px solid var(--line);
+  cursor:pointer;transition:color .12s,background .12s,border-color .12s;
+}
+.navbtn:hover{color:var(--ink);background:var(--surface-2);border-color:var(--line-strong)}
+.navtoggle:focus-visible + .top .navbtn{outline:2px solid var(--brand);outline-offset:2px}
+.navtoggle:checked ~ .top .navbtn{
+  color:var(--ink);background:var(--raised);border-color:var(--line-strong)}
 /* The brand holds the rail's column open, so the nav starts exactly where the
    content column starts: the nav's left border and the rail's right border are
    the same vertical line, and the top bar stops being a separate grid from the
@@ -238,7 +297,7 @@ a:hover{text-decoration:none}
 .brand{display:flex;align-items:center;gap:9px;white-space:nowrap;
   flex:none;width:calc(var(--rail-w) - var(--s-4) - var(--s-3))}
 /* No rail below means nothing to line up with; the brand takes what it needs. */
-@media(max-width:920px){.brand{width:auto;padding-right:var(--s-2)}}
+@media(max-width:900px){.brand{width:auto;padding-right:var(--s-2)}}
 .brand .logo rect{fill:var(--ink-3)}
 .brand .logo rect:last-of-type{fill:var(--ink)}
 .brand .logo .pulse{fill:var(--brand)}
@@ -302,7 +361,12 @@ a:hover{text-decoration:none}
   padding:9px 11px;font-size:var(--t-13);margin-bottom:10px}
 .signin-hint{font-size:var(--t-11);color:var(--ink-4);margin-top:5px}
 .signin-alt{margin:16px 0 0;font-size:var(--t-12);color:var(--ink-4);text-align:center}
-.fieldgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:8px}
+/* THE FIELD PICKER, which is not the field CARD grid.
+   Both were called .fieldgrid, 650 lines apart, and the later one -- 232px
+   tracks with a bottom margin, built for /fields and /reports -- won. So the
+   sign-up picker, a grid of small checkboxes, was laid out on the card grid and
+   carried a margin nobody asked it for. Two grids, two names. */
+.pickgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:var(--s-2)}
 .fieldpick{display:flex;align-items:center;gap:8px;padding:9px 11px;border:1px solid var(--line);
   border-radius:9px;font-size:var(--t-13);cursor:pointer}
 .fieldpick:hover{border-color:var(--line-strong)}
@@ -316,14 +380,45 @@ a:hover{text-decoration:none}
   background:var(--surface);border:1px solid var(--line);transition:color .12s,border-color .12s;
 }
 .themetoggle button:hover{color:var(--ink);border-color:var(--line-strong)}
-@media(max-width:640px){.topright .live span,.topright .live{display:none}}
+@media(max-width:720px){.topright .live span,.topright .live{display:none}}
 .live{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
 .live i{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent)}
 .live.stale i{background:var(--warn);box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 18%,transparent)}
 .live.down i{background:var(--critical);box-shadow:0 0 0 3px color-mix(in srgb,var(--critical) 18%,transparent)}
 
 .shell{display:grid;grid-template-columns:var(--rail-w) minmax(0,1fr);align-items:start}
-@media(max-width:920px){.shell{grid-template-columns:1fr}.rail{display:none}}
+
+/* The rail stops being a column and becomes a sheet. Fixed rather than sticky so
+   a long menu scrolls itself instead of the page under it, and z-index below
+   .suggest (60) so the search results still come out on top of it. */
+@media(max-width:900px){
+  .navbtn{display:inline-flex}
+  .shell{grid-template-columns:1fr}
+  .rail{
+    display:none;
+    position:fixed;left:0;right:0;top:var(--top-h);bottom:0;z-index:45;
+    height:auto;padding:var(--s-3) 0 var(--s-7);
+    background:var(--bg);border-right:0;
+  }
+  .navtoggle:checked ~ .shell .rail{display:block}
+}
+
+/* Narrower still: the tabs are gone from the bar, so they ride at the top of the
+   same sheet. A fixed strip height, because the sheet below has to clear it and
+   a wrapping row has no height anyone can write down. The tabs scroll sideways
+   inside it rather than wrapping. */
+@media(max-width:720px){
+  .nav{display:none}
+  .navtoggle:checked ~ .top .nav{
+    display:flex;align-items:center;gap:var(--s-1);
+    position:fixed;top:var(--top-h);left:0;right:0;height:44px;z-index:47;
+    padding:0 var(--s-3);overflow-x:auto;
+    background:var(--surface);border-bottom:1px solid var(--line);
+  }
+  .navtoggle:checked ~ .top .nav a span{
+    position:static;width:auto;height:auto;overflow:visible;clip-path:none}
+  .navtoggle:checked ~ .shell .rail{padding-top:calc(44px + var(--s-3))}
+}
 
 /* ---------- credits ---------- */
 .credits{
@@ -510,7 +605,7 @@ ol.rel li.here > span:nth-child(2){color:var(--ink);font-weight:600}
   background:hsl(var(--hue,220) 70% 60%)}
 .fchip .cn{color:var(--ink-4);font:500 var(--t-11)/1 var(--mono);font-variant-numeric:tabular-nums}
 .fchip.on .cn{color:var(--ink-3)}
-@media(max-width:760px){.chiprow{flex-direction:column;gap:4px}.crlab{width:auto}}
+@media(max-width:720px){.chiprow{flex-direction:column;gap:4px}.crlab{width:auto}}
 
 /* Searchable select. The native control stays in the DOM and stays the thing
    that submits; it is hidden only once the input beside it exists, so a page
@@ -636,12 +731,19 @@ select:hover,.btn:hover{border-color:var(--line-strong)}
 }
 .fopt:hover{background:var(--surface-2);color:var(--ink)}
 .fopt.on{color:var(--ink);font-weight:500}
-.fopt input{
+/* ONE CHECKBOX, DRAWN ONCE.
+   There were two of these. A real <input> in the facet panel, and a <span> in
+   the rail -- which has to be drawn rather than input, because a checkbox
+   cannot be a link and every rail row is a shareable address. Same control,
+   same two states, and they had drifted to different box sizes, different tick
+   geometry, and one of them was the only hardcoded colour in the stylesheet.
+   The tick is the same mark either way, so it is one rule with two selectors. */
+.fopt input,.group.checks .box{
   appearance:none;width:14px;height:14px;flex:none;border:1px solid var(--line-strong);
   border-radius:3px;background:var(--bg);cursor:pointer;position:relative;
 }
-.fopt input:checked{background:var(--brand);border-color:var(--brand)}
-.fopt input:checked::after{
+.fopt input:checked,.group.checks a.on .box{background:var(--brand);border-color:var(--brand)}
+.fopt input:checked::after,.group.checks a.on .box::after{
   content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;
   border:solid var(--brand-ink);border-width:0 2px 2px 0;transform:rotate(42deg);
 }
@@ -901,17 +1003,8 @@ dl.reffacts dd{margin:0;font-size:var(--t-13);color:var(--ink-2)}
    need a form and a submit, and every row would stop being a shareable address
    for the selection it produces. The link also works with JavaScript off. */
 .group.checks a,.group.checks .off{padding-left:6px}
-.group.checks .box{
-  flex:none;width:13px;height:13px;margin-right:1px;
-  border:1px solid var(--line-strong);border-radius:3px;background:var(--bg);
-  position:relative;transition:border-color .12s,background .12s;
-}
+.group.checks .box{margin-right:1px}
 .group.checks a:hover .box{border-color:var(--ink-4)}
-.group.checks a.on .box{background:var(--brand);border-color:var(--brand)}
-.group.checks a.on .box::after{
-  content:"";position:absolute;left:3.5px;top:0.5px;width:3px;height:7px;
-  border:solid #fff;border-width:0 2px 2px 0;transform:rotate(42deg);
-}
 
 /* The group's everything row: Anything, All fields, All companies.
    It has no box because it is not one of the options -- it is the state of
@@ -1221,7 +1314,7 @@ a.kpi:hover{border-color:var(--line-strong)}
 .stackrow .lnk a:focus-visible{outline:2px solid var(--link);outline-offset:2px}
 /* A row is a link target, so say so before the pointer arrives. */
 .stackrow:hover .lnk a:last-child{color:var(--link);border-color:var(--link)}
-@media(max-width:860px){
+@media(max-width:900px){
   .stackrow{grid-template-columns:minmax(0,1fr) 80px}
   .stackrow .cw{display:none}
   /* Not hidden -- moved. On a phone the actions get their own full-width line
@@ -1259,7 +1352,7 @@ a.kpi:hover{border-color:var(--line-strong)}
 .rep-more a{font-size:var(--t-12);color:var(--ink-3)}
 .rep-more a:hover{color:var(--link)}
 .rep-money{margin-bottom:18px}
-@media(max-width:640px){.rep-list li{gap:6px}.rep-src{width:100%}}
+@media(max-width:720px){.rep-list li{gap:6px}.rep-src{width:100%}}
 .catlabel{
   display:inline-flex;align-items:center;gap:6px;height:18px;padding:0 7px;border-radius:var(--r-full);
   font:500 var(--t-10)/1 var(--mono);letter-spacing:.02em;
@@ -1416,7 +1509,7 @@ a.hc.on{color:var(--ink)}
 .stackrec .lnk a:last-child{color:var(--ink-2);border-color:var(--line)}
 .stackrec .lnk a:hover{color:var(--link);border-color:var(--link);background:var(--surface-2)}
 .stackrec .lnk a:focus-visible{outline:2px solid var(--link);outline-offset:2px}
-@media(max-width:1180px){
+@media(max-width:1120px){
   /* Narrow: keep the name, the address and the two story counts. Taxonomy,
      aliases and links are what the expanded record is for.
 
@@ -1456,7 +1549,7 @@ a.res .by{font:400 var(--t-10)/1 var(--mono);color:var(--ink-4)}
 a.res .by.warn{color:var(--warn)}
 dl.rec dd.acts{display:flex;gap:6px;flex-wrap:wrap}
 dl.rec dd.acts a{color:var(--ink-2)}
-@media(max-width:700px){dl.rec{grid-template-columns:1fr;padding-left:var(--s-3)}}
+@media(max-width:720px){dl.rec{grid-template-columns:1fr;padding-left:var(--s-3)}}
 
 .queue{display:flex;flex-direction:column;gap:2px}
 .qrow{
@@ -1515,7 +1608,7 @@ dl.rec dd.acts a{color:var(--ink-2)}
   border-color:color-mix(in srgb,var(--brand) 40%,transparent);
 }
 .picker .pchip[hidden]{display:none}
-@media(max-width:820px){.setrow{grid-template-columns:1fr}}
+@media(max-width:900px){.setrow{grid-template-columns:1fr}}
 .origin{
   display:inline-flex;align-items:center;height:16px;padding:0 6px;border-radius:var(--r-full);
   font:500 var(--t-9)/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;
@@ -1586,6 +1679,61 @@ ul.reasons a{color:var(--link)}
 .btn{background:var(--surface-2)}
 .btn:hover{background:var(--raised);border-color:var(--line-strong)}
 .qacts .btn:not(.primary){background:var(--surface-2)}
+
+/* ---------- the movement report ----------
+   A verdict is a word, not a colour, so the badge carries the word and colour
+   only reinforces it. Growth and decline are the one place in this interface
+   where two hues are information rather than decoration -- everything else is
+   greyscale with one accent. --ok and --critical are reused rather than given
+   new values, because a third green would be a third meaning of green. */
+.mv{display:inline-flex;align-items:center;padding:2px 7px;border-radius:var(--r-full);
+  font:600 var(--t-10)/1.4 var(--mono);letter-spacing:.03em;white-space:nowrap;
+  border:1px solid var(--line-strong);color:var(--ink-3)}
+.mv-surging{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent);
+  background:color-mix(in srgb,var(--ok) 12%,transparent)}
+.mv-growing{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 30%,transparent)}
+.mv-steady{color:var(--ink-4)}
+.mv-fading{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 30%,transparent)}
+.mv-collapsing{color:var(--critical);border-color:color-mix(in srgb,var(--critical) 40%,transparent);
+  background:color-mix(in srgb,var(--critical) 10%,transparent)}
+.mv-unbaselined{color:var(--ink-4);border-style:dashed}
+/* Recommendation strength is the same badge shape carrying a different word. */
+.mv-strong{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent)}
+.mv-moderate{color:var(--warn)}
+.mv-weak{color:var(--ink-4)}
+.mv-warn{color:var(--warn)}
+
+.mv-body{margin:0 0 var(--s-3);font:400 var(--t-14)/1.7 var(--serif);color:var(--ink-2);max-width:74ch}
+.mv-lede{margin:0 0 var(--s-4);font:400 var(--t-15)/1.6 var(--serif);color:var(--ink-2);
+  max-width:74ch}
+.mv-h{margin:var(--s-5) 0 var(--s-2);font:600 var(--t-13)/1.2 var(--sans);
+  letter-spacing:.02em;color:var(--ink-3)}
+h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
+  border-bottom:1px solid var(--line);font:600 var(--t-17)/1.2 var(--serif);color:var(--ink)}
+
+/* The table scrolls inside itself rather than pushing the page sideways: six
+   columns of numbers do not fit a phone and never will. */
+.mvt{width:100%;border-collapse:collapse;margin:0 0 var(--s-4);display:block;overflow-x:auto}
+.mvt th{text-align:left;padding:var(--s-2) var(--s-3);border-bottom:1px solid var(--line-strong);
+  font:600 var(--t-10)/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-4);white-space:nowrap}
+.mvt td{padding:var(--s-2) var(--s-3);border-bottom:1px solid var(--line);
+  font-size:var(--t-13);vertical-align:top}
+.mvt td.num,.mvt th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mvt td .muted{margin-left:6px;font-size:var(--t-11)}
+
+.mv-ev{margin:0 0 var(--s-4);padding-left:var(--s-3);border-left:2px solid var(--line)}
+.mv-ev h4{margin:0 0 var(--s-1);display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-2);
+  font:600 var(--t-13)/1.3 var(--sans)}
+.mv-ev ul{margin:0;padding-left:var(--s-4);list-style:disc}
+.mv-ev li{margin:3px 0;font-size:var(--t-13);line-height:1.5}
+.mv-ev li .muted{display:block;font-size:var(--t-11)}
+
+.mv-rec{margin:0 0 var(--s-4);padding-left:var(--s-4)}
+.mv-rec li{margin:0 0 var(--s-3);font-size:var(--t-14)}
+.mv-rec li p{margin:2px 0 0;font-size:var(--t-13);color:var(--ink-3);max-width:74ch}
+.mv-list{margin:0 0 var(--s-4);padding-left:var(--s-4)}
+.mv-list li{margin:0 0 var(--s-2);font-size:var(--t-13);line-height:1.6;max-width:80ch}
 
 /* ---------- the reading page ----------
    A measured column and nothing beside it. The old modal capped the article at

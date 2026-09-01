@@ -61,7 +61,27 @@ export function page(opts: PageOpts): string {
 <link rel="stylesheet" href="${FONTS_HREF}">
 <link rel="stylesheet" href="${ASSET_URLS.css}">
 </head><body${opts.liveRail ? ' data-live-rail' : ''}>
+<!-- THE MENU TOGGLE, AND WHY IT IS A CHECKBOX.
+     Below 900px the rail is hidden and below 720px the section tabs are too, so
+     for a while the phone layout had no navigation at all: the header kept the
+     wordmark, search and the theme switch, and every other destination in the
+     product became unreachable except by searching for it or finding a link in
+     the body. The rail is where Fields, Companies, Categories, the registry
+     lists and every filter group live, so a tablet lost those as well.
+
+     A checkbox because it has to work with scripting off, like the theme
+     control and the filter links do. A details element would read better, but its
+     content is hidden by the UA in a way author CSS cannot reliably reopen
+     across browsers, and this element has to be BOTH a disclosure on a phone
+     and plain always-visible markup on a desktop.
+
+     It sits before the header so both the bar and the shell are later
+     siblings, which is what lets one :checked selector reach the nav and the
+     rail without either of them moving in the DOM. -->
+<input type="checkbox" id="navtoggle" class="navtoggle"
+       aria-label="Show navigation">
 <header class="top">
+  <label for="navtoggle" class="navbtn" title="Navigation">${icon('queue', 16)}</label>
   <a class="brand" href="/">${LOGO_SVG}<b>NewsTrack</b></a>
   ${opts.nav ?? ''}
   <div class="topright">

@@ -22,6 +22,7 @@ import {
   escapeHtml, wrap, pageHead, empty, relativeTime, sparkline, truncate, icon, table,
 } from './html.ts';
 import { crumbsFor } from './nav.ts';
+import { SORTS, SORT_LABELS } from './filters.ts';
 
 export interface EntityHit {
   kind: 'stack' | 'company' | 'source' | 'platform';
@@ -161,8 +162,41 @@ const DOC = `coalesce(s.title_en, s.title_original) || ' ' || coalesce(s.summary
  */
 export type MatchMode = 'all' | 'any' | 'literal';
 
+/**
+ * ORDERING THE RESULTS.
+ *
+ * The list was `ORDER BY rank DESC` with no way to say otherwise, and there was
+ * no control on the page -- so a search for a broad phrase returned 5,212
+ * stories best-match-first and that was the only view of them available.
+ *
+ * `relevance` stays the default, because it is the only ordering that uses what
+ * the reader typed. The rest are the reader's own sorts, reused rather than
+ * redefined: the same six names mean the same six things on /news, /all and
+ * here, and SORT_LABELS is the single place they are worded.
+ *
+ * Relevance is dropped from the ORDER BY entirely when another sort is chosen
+ * rather than kept as a tiebreak. A tiebreak on a float that is distinct for
+ * almost every row does nothing except make "newest first" mean "newest first,
+ * unless two stories share a second".
+ */
+export const SEARCH_SORTS: Record<string, string> = {
+  relevance: 'rank DESC, coalesce(s.published_at, s.collected_at) DESC',
+  ...SORTS,
+};
+
+export const SEARCH_SORT_LABELS: Record<string, string> = {
+  relevance: 'Best match',
+  ...SORT_LABELS,
+};
+
+export function searchSort(raw: string | null): string {
+  return raw && Object.hasOwn(SEARCH_SORTS, raw) ? raw : 'relevance';
+}
+
 /** Every word (the default), then any word, then the string as written. */
-async function runQuery(term: string, limit: number, mode: 'all' | 'any'): Promise<TextHit[]> {
+async function runQuery(
+  term: string, limit: number, mode: 'all' | 'any', sort = 'relevance',
+): Promise<TextHit[]> {
   // Widening is done on the PARSED query rather than by re-splitting the input,
   // so quoted phrases survive it: "breaking change" stays one phrase, and only
   // the joins between top-level terms become ORs.
@@ -181,9 +215,10 @@ async function runQuery(term: string, limit: number, mode: 'all' | 'any'): Promi
                                 / 2592000.0)))::float AS rank
        FROM stories s JOIN sources src ON src.id = s.source_id, qy
       WHERE s.superseded_by IS NULL
+        AND s.dismissed_at IS NULL
         AND (s.lang = 'en' OR s.title_en IS NOT NULL)
         AND to_tsvector('english', ${DOC}) @@ qy.tsq
-      ORDER BY rank DESC, coalesce(s.published_at, s.collected_at) DESC
+      ORDER BY ${SEARCH_SORTS[sort] ?? SEARCH_SORTS.relevance}
       LIMIT ${limit}`,
     [term],
   );
@@ -197,6 +232,7 @@ async function countQuery(term: string, mode: 'all' | 'any'): Promise<number> {
     `WITH qy AS (SELECT ${tsq} AS tsq)
      SELECT count(*)::text AS n FROM stories s, qy
       WHERE s.superseded_by IS NULL
+        AND s.dismissed_at IS NULL
         AND (s.lang = 'en' OR s.title_en IS NOT NULL)
         AND to_tsvector('english',
               coalesce(s.title_en, s.title_original) || ' ' || coalesce(s.summary_en, '')) @@ qy.tsq`,
@@ -216,9 +252,9 @@ async function countQuery(term: string, mode: 'all' | 'any'): Promise<number> {
  * for any of these words" and "12 results" mean very different things.
  */
 async function searchText(
-  term: string, limit: number,
+  term: string, limit: number, sort = 'relevance',
 ): Promise<{ rows: TextHit[]; total: number; mode: MatchMode }> {
-  const all = await runQuery(term, limit, 'all');
+  const all = await runQuery(term, limit, 'all', sort);
   if (all.length > 0) {
     return { rows: all, total: await countQuery(term, 'all'), mode: 'all' };
   }
@@ -226,7 +262,7 @@ async function searchText(
   // More than one word, and no document has them all. Ask for any of them
   // rather than shrugging -- ts_rank still floats the documents with the most.
   if (/\s/.test(term.trim())) {
-    const any = await runQuery(term, limit, 'any');
+    const any = await runQuery(term, limit, 'any', sort);
     if (any.length > 0) {
       return { rows: any, total: await countQuery(term, 'any'), mode: 'any' };
     }
@@ -243,10 +279,11 @@ async function searchText(
             similarity(coalesce(s.title_en, s.title_original), $1)::float AS rank
        FROM stories s JOIN sources src ON src.id = s.source_id
       WHERE s.superseded_by IS NULL
+        AND s.dismissed_at IS NULL
         AND (s.lang = 'en' OR s.title_en IS NOT NULL)
         AND (coalesce(s.title_en, s.title_original) ILIKE '%' || $1 || '%'
              OR s.canonical_url ILIKE '%' || $1 || '%')
-      ORDER BY rank DESC, coalesce(s.published_at, s.collected_at) DESC
+      ORDER BY ${SEARCH_SORTS[sort] ?? SEARCH_SORTS.relevance}
       LIMIT ${limit}`,
     [term],
   );
@@ -282,9 +319,10 @@ export async function renderSearch(url: URL): Promise<string> {
 
   if (!term) return renderEmptyState();
 
+  const sort = searchSort(url.searchParams.get('sort'));
   const [entities, text] = await Promise.all([
     resolveEntities(term),
-    searchText(term, 25),
+    searchText(term, 25, sort),
   ]);
   const best = entities[0];
 
@@ -292,16 +330,34 @@ export async function renderSearch(url: URL): Promise<string> {
 
   const entityBlock = best ? await renderEntity(best, entities) : '';
 
+  // The control carries `q` as a hidden field, so choosing a sort re-runs the
+  // same search rather than dropping the reader on an empty page. It submits on
+  // change like every other select in this interface -- there is no Apply
+  // button anywhere else and one here would be the odd control out.
+  const sortControl = `<form method="get" action="/search" class="row" style="--row-gap:var(--s-2)">
+      <input type="hidden" name="q" value="${escapeHtml(term)}">
+      <label for="f-sort">Sort</label>
+      <select id="f-sort" name="sort" onchange="this.form.submit()">
+        ${Object.entries(SEARCH_SORT_LABELS).map(([value, label]) =>
+          `<option value="${escapeHtml(value)}"${
+            sort === value ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+      </select>
+    </form>`;
+
   const textList = text.rows.length === 0 ? '' : `
     <h2 class="sec">${best ? 'Mentions in text' : 'Text matches'}</h2>
+    ${sortControl}
     <p class="note">${
       text.mode === 'literal'
         ? `Nothing matched those words, so these are titles containing “${escapeHtml(term)}” as written.`
         : text.mode === 'any'
           ? `Nothing mentions all of those words. ${text.total.toLocaleString('en-US')}
-             ${text.total === 1 ? 'story mentions' : 'stories mention'} at least one, most first.`
+             ${text.total === 1 ? 'story mentions' : 'stories mention'} at least one, ${
+               sort === 'relevance' ? 'most first'
+                 : escapeHtml((SEARCH_SORT_LABELS[sort] ?? '').toLowerCase())}.`
           : `${text.total.toLocaleString('en-US')} ${text.total === 1 ? 'story mentions' : 'stories mention'}
-             “${escapeHtml(term)}”, best match first.`}
+             “${escapeHtml(term)}”, ${sort === 'relevance' ? 'best match first'
+               : escapeHtml((SEARCH_SORT_LABELS[sort] ?? '').toLowerCase())}.`}
       <a href="/all?q=${encodeURIComponent(term)}" style="color:var(--link)">Open all in the reader →</a></p>
     ${text.rows.map((r) => storyLine(r, term)).join('')}`;
 
@@ -400,7 +456,7 @@ async function renderEntity(best: EntityHit, all: EntityHit[]): Promise<string> 
     : '';
 
   if (best.kind === 'company') {
-    return `<p class="row" style="--row-gap:8px">
+    return `<p class="row" style="--row-gap:var(--s-2)">
         <a class="btn primary" href="${escapeHtml(best.href)}">Open ${escapeHtml(best.name)}</a>
         <a class="btn" href="${escapeHtml(best.href)}?view=announcements">Announcements only</a>
       </p>
@@ -410,7 +466,7 @@ async function renderEntity(best: EntityHit, all: EntityHit[]): Promise<string> 
   }
 
   if (best.kind === 'source') {
-    return `<p class="row" style="--row-gap:8px">
+    return `<p class="row" style="--row-gap:var(--s-2)">
         <a class="btn primary" href="${escapeHtml(best.href)}">Read ${escapeHtml(best.name)}</a>
         <a class="btn" href="/sources?sq=${encodeURIComponent(best.name)}">Source health</a>
       </p>${otherChips}`;
@@ -420,7 +476,7 @@ async function renderEntity(best: EntityHit, all: EntityHit[]): Promise<string> 
     // A company or a platform: both have a page of their own. This used to
     // announce that "story-level indexing arrives with Phase 7" and offer
     // nothing -- a promise where a link belonged.
-    return `<p class="row" style="--row-gap:8px">
+    return `<p class="row" style="--row-gap:var(--s-2)">
         <a class="btn primary" href="${escapeHtml(best.href)}">Open ${escapeHtml(best.name)}</a>
       </p>${otherChips}`;
   }
@@ -471,10 +527,10 @@ async function renderEntity(best: EntityHit, all: EntityHit[]): Promise<string> 
         series.some((n) => n > 0) ? sparkline(series, { width: 130, height: 30 })
           : '<span class="muted">no activity</span>'}</div>
     </div>
-    <p class="row" style="--row-gap:8px">
+    <p class="row" style="--row-gap:var(--s-2)">
       <a class="btn primary" href="/all?stack=${encodeURIComponent(best.slug)}">Open in reader</a>
       <a class="btn" href="/trend/${encodeURIComponent(best.slug)}">Full trend page</a>
-      ${related.length ? `<span class="muted" style="margin-left:6px">appears with</span> ${
+      ${related.length ? `<span class="muted" style="margin-left:var(--s-2)">appears with</span> ${
         related.map((r) => `<a class="chip" href="/search?q=${encodeURIComponent(r.slug)}">${
           escapeHtml(r.slug)}</a>`).join(' ')}` : ''}
     </p>

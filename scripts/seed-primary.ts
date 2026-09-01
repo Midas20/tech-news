@@ -60,26 +60,45 @@ if (!apply) {
 }
 
 let n = 0;
+const skipped: string[] = [];
 await db.query('BEGIN');
 try {
   let index = 0;
   for (const s of PRIMARY_SOURCES) {
-    const res = await db.query(
-      `INSERT INTO sources (name, url, feed_url, feed_kind, kind, roles, lang, country,
-                            trust_weight, weight_content, never_canonical, fields,
-                            poll_interval_seconds, politeness_seconds, shard, curated, notes)
-       VALUES ($1,$2,$3,$4,$5::source_kind,$6::source_role[],$7,$8,$9,$10,false,$11,$12,2,$13,true,$14)
-       ON CONFLICT (url) DO UPDATE SET
-         name = EXCLUDED.name, feed_url = EXCLUDED.feed_url, kind = EXCLUDED.kind,
-         roles = EXCLUDED.roles, trust_weight = EXCLUDED.trust_weight,
-         poll_interval_seconds = EXCLUDED.poll_interval_seconds,
-         health = 'healthy', consecutive_failures = 0, next_fetch_at = now(),
-         curated = true, notes = EXCLUDED.notes
-       RETURNING id`,
-      [s.name, s.url, s.feedHint ?? null, s.feedKind ?? 'rss', s.kind, s.roles,
-        s.lang ?? 'en', s.country ?? null, s.trust ?? 1.0, s.weightContent ?? 0.9,
-        s.fields ?? [], s.pollSeconds ?? 3600, shardFor(s, index++), s.notes ?? null]);
-    n += res.rowCount ?? 0;
+    // ONE BAD ROW MUST NOT DISCARD THE OTHER SIXTY-TWO.
+    //
+    // `sources` has two unique indexes -- url, and feed_url where it is not
+    // null -- and this statement only knows about the first. A seed whose
+    // feedHint is already held by a row at a slightly different address (a
+    // trailing slash: elastic.co/blog vs elastic.co/blog/) raises on the second
+    // index, and inside one transaction that took every other source down with
+    // it: the whole run ended "rolled back, nothing changed".
+    //
+    // A savepoint per row makes the failure local. What collides is reported and
+    // skipped, and the rest go in.
+    await db.query('SAVEPOINT one_source');
+    try {
+      const res = await db.query(
+        `INSERT INTO sources (name, url, feed_url, feed_kind, kind, roles, lang, country,
+                              trust_weight, weight_content, never_canonical, fields,
+                              poll_interval_seconds, politeness_seconds, shard, curated, notes)
+         VALUES ($1,$2,$3,$4,$5::source_kind,$6::source_role[],$7,$8,$9,$10,false,$11,$12,2,$13,true,$14)
+         ON CONFLICT (url) DO UPDATE SET
+           name = EXCLUDED.name, feed_url = EXCLUDED.feed_url, kind = EXCLUDED.kind,
+           roles = EXCLUDED.roles, trust_weight = EXCLUDED.trust_weight,
+           poll_interval_seconds = EXCLUDED.poll_interval_seconds,
+           health = 'healthy', consecutive_failures = 0, next_fetch_at = now(),
+           curated = true, notes = EXCLUDED.notes
+         RETURNING id`,
+        [s.name, s.url, s.feedHint ?? null, s.feedKind ?? 'rss', s.kind, s.roles,
+          s.lang ?? 'en', s.country ?? null, s.trust ?? 1.0, s.weightContent ?? 0.9,
+          s.fields ?? [], s.pollSeconds ?? 3600, shardFor(s, index++), s.notes ?? null]);
+      n += res.rowCount ?? 0;
+      await db.query('RELEASE SAVEPOINT one_source');
+    } catch (err) {
+      await db.query('ROLLBACK TO SAVEPOINT one_source');
+      skipped.push(`${s.name}: ${(err as Error).message.slice(0, 90)}`);
+    }
   }
   await db.query('COMMIT');
 } catch (err) {
@@ -94,6 +113,11 @@ const { rows: after } = await db.query<{ kind: string; n: string }>(
 console.log('');
 console.log(`done: ${n} rows written`);
 for (const r of after) console.log(`  ${r.kind.padEnd(10)} ${r.n}`);
+if (skipped.length) {
+  console.log('');
+  console.log(`${skipped.length} skipped, the rest went in:`);
+  for (const s of skipped) console.log(`  ${s}`);
+}
 console.log('');
 console.log('`npm run sync:releases` adds the per-project release feeds derived from the registry.');
 await done();

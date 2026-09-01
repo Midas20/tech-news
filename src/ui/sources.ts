@@ -83,7 +83,7 @@ export async function renderSources(url: URL): Promise<string> {
       : r.health === 'degraded' ? 'warn' : 'accent';
     return `<tr>
       <td><a href="/all?source=${encodeURIComponent(r.name)}" style="font-weight:600">${escapeHtml(r.name)}</a>
-        <div class="muted" style="font-size:11px">${escapeHtml(truncate(r.feed_url ?? r.url, 64))}</div></td>
+        <div class="muted" style="font-size:var(--t-11)">${escapeHtml(truncate(r.feed_url ?? r.url, 64))}</div></td>
       <td class="mono ${healthClass}">${escapeHtml(r.health)}${
         r.failures > 0 ? ` <span class="muted">×${r.failures}</span>` : ''}</td>
       <td>${r.roles.map((x) => `<span class="chip">${escapeHtml(x.toLowerCase())}</span>`).join(' ')}</td>
@@ -91,7 +91,7 @@ export async function renderSources(url: URL): Promise<string> {
       <td class="num">${r.stories.toLocaleString('en-US')}</td>
       <td class="mono">${r.latest ? escapeHtml(relativeTime(r.latest)) : '<span class="muted">never</span>'}</td>
       <td class="mono">${Math.round(r.interval_s / 60)}m</td>
-      <td class="muted" style="font-size:11px">${escapeHtml(truncate(r.last_error ?? '', 70))}</td>
+      <td class="muted" style="font-size:var(--t-11)">${escapeHtml(truncate(r.last_error ?? '', 70))}</td>
     </tr>`;
   }).join('');
 
@@ -104,14 +104,14 @@ export async function renderSources(url: URL): Promise<string> {
       ${counts.map((c) => stat(c.health, Number(c.n).toLocaleString('en-US'), 'sources')).join('')}
     </div>
 
-    <form method="get" action="/sources" class="row" style="margin-bottom:10px">
+    <form method="get" action="/sources" class="row" style="margin-bottom:var(--s-2)">
       ${filter ? `<input type="hidden" name="health" value="${escapeHtml(filter)}">` : ''}
       <input class="txt" type="search" name="sq" value="${escapeHtml(search)}"
         placeholder="filter by name…">
       <button class="btn primary" type="submit">Filter</button>
     </form>
 
-    <div class="pills" style="margin-bottom:12px">${tabs}
+    <div class="pills" style="margin-bottom:var(--s-3)">${tabs}
       <a class="pill" href="/sources/intel" title="what the registry is made of">Intelligence &rarr;</a></div>
 
     ${rows.length === 0 ? '<div class="empty">No sources match.</div>' : `<div class="scroll"><table>

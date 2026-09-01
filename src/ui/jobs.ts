@@ -183,7 +183,7 @@ export async function renderJobs(): Promise<string> {
       <tbody>${body}</tbody>
     </table></div>
 
-    <p class="muted small" style="margin-top:1rem">
+    <p class="muted small" style="margin-top:var(--s-4)">
       Times are relative to now. A job that fails backs off — the delay doubles per
       consecutive failure to a ceiling of sixteen intervals — and a job that is claimed by a
       runner that then dies is taken again once its lease expires.

@@ -43,6 +43,19 @@ export interface RollupOptions {
 
 export class RollupRefused extends Error {}
 
+// A DISMISSED STORY IS OUT OF THE ANALYSIS, NOT JUST OUT OF THE READER.
+//
+// These queries filtered on superseded_by alone, so dismissing a row hid it
+// from the reader and left it counted in stack_month, month_totals and the
+// pair counts -- and those outlive the story by design, so the correction could
+// never catch up with them.
+//
+// It matters because dismissal is the only way to take a bad row out: stories
+// carries a forbid_delete trigger, so the operator's one lever was writing to a
+// column the analysis ignored. Qdrant's source was pointed at the site-wide
+// feed rather than the blog and put 320 undated /documentation/ pages into a
+// 2001-01 bucket; removing them from the reader left all 320 in the series.
+
 /** The month still filling up. Kept for callers that report on it. */
 export async function currentMonth(db: Db): Promise<string> {
   const [row] = await db.query<{ m: string }>(
@@ -157,7 +170,8 @@ export async function rollMonth(db: Db, month: string): Promise<MonthReport> {
             count(*) FILTER (WHERE src.kind = 'research')
        FROM stories s JOIN sources src ON src.id = s.source_id
       WHERE date_trunc('month', s.published_at) = $1::date
-        AND s.superseded_by IS NULL`, p);
+        AND s.superseded_by IS NULL
+          AND s.dismissed_at IS NULL`, p);
 
   // --- one row per technology --------------------------------------------
   await db.query(`DELETE FROM stack_month WHERE month = $1::date`, p);
@@ -170,6 +184,7 @@ export async function rollMonth(db: Db, month: string): Promise<MonthReport> {
          JOIN unnest(s.stacks) AS k(slug) ON true
         WHERE date_trunc('month', s.published_at) = $1::date
           AND s.superseded_by IS NULL
+          AND s.dismissed_at IS NULL
      ), agg AS (
        SELECT slug,
               count(*)::int AS stories,
@@ -212,6 +227,7 @@ export async function rollMonth(db: Db, month: string): Promise<MonthReport> {
        FROM stories s, unnest(s.stacks) a(slug), unnest(s.stacks) b(slug)
       WHERE date_trunc('month', s.published_at) = $1::date
         AND s.superseded_by IS NULL
+          AND s.dismissed_at IS NULL
         AND a.slug < b.slug
       GROUP BY 1, 2, 3
       -- Below three co-mentions in a month is noise, and keeping it would make
@@ -227,6 +243,7 @@ export async function rollMonth(db: Db, month: string): Promise<MonthReport> {
        FROM stories s
       WHERE date_trunc('month', s.published_at) = $1::date
         AND s.superseded_by IS NULL
+          AND s.dismissed_at IS NULL
       GROUP BY 2`, p);
 
   // --- companies and platforms, same shape --------------------------------
@@ -241,6 +258,7 @@ export async function rollMonth(db: Db, month: string): Promise<MonthReport> {
          CROSS JOIN month_totals t
         WHERE date_trunc('month', s.published_at) = $1::date
           AND s.superseded_by IS NULL
+          AND s.dismissed_at IS NULL
           AND t.month = $1::date
         GROUP BY e.slug, t.stories`, p);
   }
@@ -265,6 +283,7 @@ export async function rollMonth(db: Db, month: string): Promise<MonthReport> {
          JOIN unnest(s.stacks) AS k(slug) ON true
         WHERE date_trunc('month', s.published_at) = $1::date
           AND s.superseded_by IS NULL
+          AND s.dismissed_at IS NULL
      )
      INSERT INTO stack_month_exemplar
             (month, slug, rank, title, url, source_name, published_at, coverage, importance)
