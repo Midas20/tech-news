@@ -1,0 +1,56 @@
+# The reader, as a Worker. Separate from wrangler.toml on purpose.
+#
+# `newstrack-poller` and `newstrack-site` are two Workers with two different
+# jobs and two different risk profiles: the poller writes to the database on a
+# schedule and serves nothing, the site serves everything and writes nothing.
+# One config file with two environments would let a `wrangler deploy` typed in
+# the wrong directory publish the wrong one.
+#
+#   npm run deploy         the poller   (wrangler.toml)
+#   npm run deploy:site    the reader   (this file)
+#
+# NO TRIGGERS HERE, EVER. This Worker has no `scheduled` handler; it exists to
+# answer requests. The collection schedule lives in `job_runs` and is worked by
+# the durable scheduler -- see the long note in wrangler.toml about what
+# happened when two schedulers of different vintages shared one database.
+
+name = "newstrack-site"
+account_id = "f7c1dcf7dcff3bacc6897cf3646a2418"
+main = "src/workers/site.ts"
+compatibility_date = "2025-08-01"
+# node:crypto and node:zlib, both of which src/ui/assets.ts calls at import
+# time to hash and pre-compress the stylesheet and script.
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+USER_AGENT = "NewsTrack/0.1 (+https://example.invalid/about)"
+
+# THE MOST IMPORTANT LINE IN THIS FILE.
+#
+# Both protections added when the reader was first bound to a public address are
+# derived from HOST:
+#
+#   PUBLIC = HOST is not loopback  ->  /admin requires ADMIN_TOKEN, and without
+#            one is not served at all. /admin runs on the database OWNER
+#            connection, which bypasses row-level security by design.
+#
+#   the write guard  ->  every mutating route (/dismiss, /settings, /stacks,
+#            /favourite, /read-state, /read-all and the two /api twins) is
+#            accepted only from the machine the server runs on. A Worker has no
+#            socket and therefore is never loopback, so all of them are refused.
+#
+# Unset, HOST defaults to 127.0.0.1, PUBLIC becomes false, and the admin surface
+# opens to the internet on the owner connection. src/workers/site.ts refuses to
+# serve at all rather than trust that this line is still here.
+HOST = "0.0.0.0"
+
+# Secrets, set with `wrangler secret put -c wrangler.site.toml`, never committed:
+#
+#   DATABASE_APP_URL   the NOBYPASSRLS app role. The reader's connection, and
+#                      the one that should be used for everything on this
+#                      Worker. Falls back to DATABASE_URL if unset, which is a
+#                      worse default -- set it.
+#   DATABASE_URL       fallback for the reader.
+#   ADMIN_TOKEN        without it /admin serves nothing here. That is the
+#                      correct failure mode, so it is safe to deploy first and
+#                      decide about admin afterwards.

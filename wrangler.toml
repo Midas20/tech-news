@@ -1,0 +1,57 @@
+name = "newstrack-poller"
+account_id = "f7c1dcf7dcff3bacc6897cf3646a2418"
+main = "src/workers/cron.ts"
+compatibility_date = "2025-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+# NO TRIGGERS, DELIBERATELY.
+#
+# These three crons ran the whole pipeline from a Worker, and the durable
+# scheduler in `job_runs` (see src/run/scheduler.ts) replaced them: the schedule
+# lives in a table, a job is claimed with one UPDATE, and a restart resumes
+# instead of stranding the work. The Worker was superseded and never switched
+# off, which is a different thing from being retired.
+#
+# What that cost: the deployment of 2026-08-25 kept firing `*/20` against the
+# same database for two days, running a copy of the pipeline that predates the
+# same-source dedup exclusion and the `superseded_at` column. It re-merged the
+# Google Cloud release notes on every tick -- 71 same-source merges in one cycle,
+# 530 live stories down to 459 -- while the fixed code in this repository sat
+# beside it producing zero. Two schedulers of different vintages on one database,
+# and the older one won every twenty minutes.
+#
+# The triggers were cleared with `wrangler triggers deploy`, which updates the
+# schedule of the CURRENT deployment without uploading code. For six days after
+# that the Worker still held its 2026-08-25 revision and simply never fired.
+#
+# THAT HALF IS NOW FIXED. Deployed 2026-08-31: the live Worker is this revision,
+# and `src/workers/cron.ts` carries the `schedulerIsRunning()` guard that makes
+# tick and process stand down whenever a long-running scheduler has touched
+# `job_runs` in the last ten minutes. Verified against the deployed URL rather
+# than reasoned about -- an authenticated `?task=tick` answered
+# `{"skipped":"a long-running scheduler is active against this database"}` and
+# collected nothing.
+#
+# `crons` stays empty. The guard makes a second scheduler safe; it does not make
+# it useful, and the host that runs the durable scheduler is now the one serving
+# the reader. Arming a trigger is a separate decision from deploying the code,
+# and it is the decision that caused the incident above.
+#
+# NOTE: `maintenance` is deliberately NOT behind the guard -- it creates
+# partitions and retunes intervals, which is safe to run twice and is the one
+# thing worth keeping if a cron is ever restored.
+#
+# Deploying code that is not running is a habit. Leaving code running that is not
+# deployed from was the failure this file recorded for six days.
+[triggers]
+crons = []
+
+[vars]
+USER_AGENT = "NewsTrack/0.1 (+https://example.invalid/about)"
+# "1" for the Phase 1 observation week: collect, store, and run nothing
+# downstream. Set to "0" here because classification and scoring have already
+# been run and inspected against real collected data.
+COLLECT_ONLY = "0"
+
+# Secrets are set with `wrangler secret put`, never committed:
+#   DATABASE_URL ANTHROPIC_API_KEY GROQ_API_KEY CEREBRAS_API_KEY GEMINI_API_KEY

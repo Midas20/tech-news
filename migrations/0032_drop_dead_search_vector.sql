@@ -1,0 +1,29 @@
+-- 0032: remove the search vector nothing searches.
+--
+-- 0005 gave stories a generated `search_vector` column with a GIN index over it.
+-- 0020 then added `stories_fts_idx`, an EXPRESSION index over
+-- to_tsvector('english', title || summary), and said why in its own comment: a
+-- generated column on a partitioned table has to be added to every partition and
+-- to every partition created afterwards.
+--
+-- What 0020 did not do was remove the column it had just superseded. So every
+-- story has carried two full-text representations of the same text ever since,
+-- and `search_vector` is referenced by exactly nothing -- src/ui/search.ts
+-- queries the expression, and no other caller mentions the column at all.
+--
+-- Measured on 75,757 stories: 280 bytes of column plus a 17 MB index, about 500
+-- bytes a story, 12% of the archive's entire per-story cost. On a historical
+-- archive of a few million rows that is gigabytes to store a duplicate of an
+-- index that is already there.
+--
+-- This is a deletion, so: the column is GENERATED ALWAYS, meaning it holds no
+-- information that is not derivable from title_en, title_original and
+-- summary_en, all of which stay. Nothing is lost that cannot be recomputed, and
+-- the search behaviour is untouched because the index that serves search is the
+-- other one.
+
+-- CASCADE, and it is worth being explicit about what cascades: the only
+-- dependants are the GIN index on the parent and its six attached per-partition
+-- indexes, all of which index this column and nothing else. Checked with
+-- pg_depend before writing this line rather than assumed.
+ALTER TABLE stories DROP COLUMN IF EXISTS search_vector CASCADE;

@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types", "node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
+}

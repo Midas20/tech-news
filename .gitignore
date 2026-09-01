@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.local
+.dev.vars
+dist/
+.wrangler/
+*.log
+
+# Local run logs and throwaway diagnostic scripts.
+.run/
+
+# Working artefacts from one-off screening runs.
+screened.json
+.tmp/

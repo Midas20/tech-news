@@ -1,0 +1,22 @@
+-- 0062: the partitions have to reach as far back as the window does.
+--
+-- `stories` is partitioned by month, and a missing partition does not degrade
+-- an insert -- it fails it outright. `ensure_partitions(months_back, ahead)`
+-- keeps a rolling set of them, and both callers passed a literal 1.
+--
+-- That was a promise the archive could not keep the moment the window widened.
+-- Opening RETENTION_KEEP_MONTHS to 4 to collect May through August 2026 found
+-- it: the oldest partition was stories_2026_06, nothing would ever have created
+-- stories_2026_05, and every May story would have failed to land with an error
+-- nobody was watching for. The same shape as 0060 -- two places that have to
+-- agree about the window, only one of which was told when it changed.
+--
+-- Both callers now pass keepMonths. This migration is the one-time catch-up for
+-- the months the old value never created.
+--
+-- 4 is written literally here for the same reason 0060 writes 2: the setting
+-- lives in the environment, a migration cannot read it, and creating a
+-- partition that turns out to be unnecessary costs an empty table. Being wrong
+-- in the other direction costs collected news.
+
+SELECT ensure_partitions(4, 3);
