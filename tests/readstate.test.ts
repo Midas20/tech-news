@@ -16,28 +16,43 @@ import { readFileSync } from 'node:fs';
 import { buildWhere, parseFilters } from '../src/ui/filters.ts';
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8');
-const where = (qs = '') => buildWhere(parseFilters(new URL(`http://x/all${qs}`))).sql;
+// Read state belongs to an account since 0070, so the builder needs one.
+const ACCOUNT = '11111111-2222-3333-4444-555555555555';
+const where = (qs = '') =>
+  buildWhere(parseFilters(new URL(`http://x/all${qs}`)), ACCOUNT).sql;
 
 describe('a read story', () => {
   it('is still shown, by default, in place', () => {
     // The whole point. Dismissal has a clause here; reading must not.
-    expect(where()).not.toContain('read_at');
+    expect(where()).not.toContain('story_reads');
   });
 
   it('is still shown under every other filter', () => {
     for (const qs of ['?stack=rust', '?field=security', '?about=tool', '?sort=oldest']) {
-      expect(where(qs), `${qs} must not hide read stories`).not.toContain('read_at');
+      expect(where(qs), `${qs} must not hide read stories`).not.toContain('story_reads');
     }
   });
 
   it('is hidden only when the reader asks for unread', () => {
-    expect(where('?unread=1')).toContain('s.read_at IS NULL');
+    // And it is THIS reader's unread, not the installation's. Before 0070 the
+    // clause was `s.read_at IS NULL` against a single global timestamp, so one
+    // person opening an article marked it read for everybody.
+    expect(where('?unread=1')).toContain('story_reads');
+    expect(where('?unread=1')).toContain('NOT EXISTS');
+    expect(where('?unread=1')).toContain('r.account_id');
+  });
+
+  it('drops the filter rather than guessing when nobody is signed in', () => {
+    // Showing everything is wrong in a way somebody notices. Showing another
+    // account's unread list is wrong in a way nobody does.
+    const anon = buildWhere(parseFilters(new URL('http://x/all?unread=1'))).sql;
+    expect(anon).not.toContain('story_reads');
   });
 
   it('is not hidden by any other value of the parameter', () => {
     // `unread=0`, `unread=yes`, `unread=` are all "no". One spelling means on.
     for (const qs of ['?unread=0', '?unread=', '?unread=true', '?unread=yes']) {
-      expect(where(qs), `${qs} should not filter`).not.toContain('read_at');
+      expect(where(qs), `${qs} should not filter`).not.toContain('story_reads');
     }
   });
 
@@ -63,13 +78,25 @@ describe('the read mark itself', () => {
   const src = read('../src/ui/readstate.ts');
 
   it('keeps the moment it was first read', () => {
-    // coalesce, not now(): re-opening something must not rewrite when it was
-    // read, which is the only thing the column records.
-    expect(src).toContain('coalesce(read_at, now())');
+    // The rule is unchanged and the mechanism is not. It used to be
+    // `coalesce(read_at, now())` on a column; it is now ON CONFLICT DO NOTHING
+    // on a row, which preserves the first read for the same reason: re-opening
+    // something must not rewrite when it was read.
+    expect(src).toContain('ON CONFLICT DO NOTHING');
+    expect(src).not.toContain('UPDATE stories SET read_at');
   });
 
   it('can be undone', () => {
-    expect(src).toContain('read_at = NULL');
+    expect(src).toMatch(/DELETE FROM story_reads[\s\S]{0,120}account_id/);
+  });
+
+  it('never writes read state without knowing whose it is', () => {
+    // The defect this replaced: one timestamp per story meant opening an
+    // article marked it read for every account that would ever exist. An
+    // account argument that could be omitted would bring that straight back.
+    for (const fn of ['readState', 'setRead', 'markRead', 'unreadCount', 'markAllRead']) {
+      expect(src, `${fn} must take an account`).toContain(`function ${fn}(accountId`);
+    }
   });
 
   it('checks the id before it writes', () => {
@@ -103,6 +130,6 @@ describe('opening an article', () => {
   it('marks it read on the way to rendering it', () => {
     // A button you must press after reading is a button nobody presses. The
     // cost is a state change on a GET, which the manual toggle undoes.
-    expect(read('../src/ui/read.ts')).toContain('markRead(id)');
+    expect(read('../src/ui/read.ts')).toContain('markRead(accountId, id)');
   });
 });

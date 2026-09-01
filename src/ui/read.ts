@@ -108,7 +108,9 @@ function backLink(referer: string | null): { href: string; label: string } {
   return { href: t.href, label: t.phrase };
 }
 
-export async function renderRead(id: string, referer: string | null = null): Promise<string> {
+export async function renderRead(
+  accountId: string, id: string, referer: string | null = null,
+): Promise<string> {
   const article = await readArticle(id);
 
   if (!article) {
@@ -127,7 +129,8 @@ export async function renderRead(id: string, referer: string | null = null): Pro
   // a button you must press after reading is a button nobody presses -- and
   // the manual toggle on every row is the way back when a prefetch or a misclick
   // gets it wrong. See src/ui/readstate.ts.
-  const [fav, gone] = await Promise.all([favouriteOne(id), dismissState(id), markRead(id)]);
+  const [fav, gone] = await Promise.all([
+    favouriteOne(accountId, id), dismissState(id), markRead(accountId, id)]);
   const stored = await one<{ source: string; collected: string; coverage: number }>(
     `SELECT src.name AS source, s.collected_at::text AS collected,
             s.coverage_count AS coverage

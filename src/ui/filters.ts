@@ -491,7 +491,18 @@ export const SORT_LABELS: Record<string, string> = {
  * Sets are matched with = ANY(...), which is the difference that makes
  * multi-select real: two technologies means both, not the last one clicked.
  */
-export function buildWhere(f: Filters): { sql: string; params: unknown[] } {
+/**
+ * `accountId` is what makes "unread" mean anything.
+ *
+ * Read state moved out of `stories.read_at` -- one timestamp for the whole
+ * installation -- into `story_reads`, a row per account (0070). Without the
+ * account this filter cannot be built, so it is a required argument rather
+ * than an optional one: a default would silently answer somebody else's
+ * question.
+ */
+export function buildWhere(
+  f: Filters, accountId?: string,
+): { sql: string; params: unknown[] } {
   // `coalesce(is_tech, true)` and not `is_tech IS NOT FALSE` for the same
   // reason either way: NULL means nobody has judged this story, and unjudged is
   // not the same as rejected. Almost the whole archive is NULL -- the
@@ -509,12 +520,20 @@ export function buildWhere(f: Filters): { sql: string; params: unknown[] } {
   const clauses = [
     's.superseded_by IS NULL', 'coalesce(s.is_tech, true)', 's.dismissed_at IS NULL'];
 
-  // What has not been opened. Not a default: a reader arriving at a filtered
-  // page expects the filter they chose, not one the site chose for them.
-  if (f.unread) clauses.push('s.read_at IS NULL');
-
   const params: unknown[] = [];
   const p = (v: unknown) => `$${params.push(v)}`;
+
+  // What THIS ACCOUNT has not opened. Not a default: a reader arriving at a
+  // filtered page expects the filter they chose, not one the site chose.
+  //
+  // With no account the filter is dropped rather than guessed. Showing
+  // everything is wrong in a visible way; showing another account's unread
+  // list is wrong in a way nobody would notice.
+  if (f.unread && accountId) {
+    clauses.push(`NOT EXISTS (SELECT 1 FROM story_reads r
+                               WHERE r.account_id = ${p(accountId)}::uuid
+                                 AND r.story_id = s.id)`);
+  }
 
   // Events by default; articles only when asked for.
   //

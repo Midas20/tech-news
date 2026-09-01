@@ -6950,6 +6950,78 @@ Only two of thirty-four changed, which is worth stating plainly: most platforms
 map to a leaf stack with no children, so the widening is correct rather than
 dramatic.
 
+---
+
+# A favourite belongs to somebody
+
+Reported by clicking the star and being told:
+
+> That changes something everybody sees, and this account is a reader.
+
+The refusal was accurate. The design behind it was wrong.
+
+## The authorisation rule was right about the schema
+
+`favourites` had one column that mattered — `story_id` — and `PRIMARY KEY
+(story_id)`. There was **one favourites list for the whole installation**.
+`stories.read_at` was the same shape: one timestamp per story, so opening an
+article marked it read for everybody who would ever sign in.
+
+Both were correct when the reader ran on 127.0.0.1 and there was one person.
+They stopped being correct the moment accounts existed, and the permission
+check was the thing that noticed — it had to call a personal act "shared
+state", because in the schema it genuinely was.
+
+**So the fix was not to relax the permission.** Letting a reader write those
+would have produced a worse bug than the refusal: two people sharing one
+favourites list, each wondering why articles they never saved kept appearing.
+
+## What 0070 changed
+
+`favourites` gained an owner and `PRIMARY KEY (account_id, story_id)`. Read
+state moved out of `stories.read_at` into `story_reads` — a row per account per
+story, absent meaning unread, so the common case costs nothing to store.
+
+Existing rows were **claimed, not deleted**: the one favourite and seventy read
+marks from the single-user era belong to the seeded administrator, because that
+is who made them. A favourite is a deliberate act and losing one silently is
+worse than attributing it to the operator who made it.
+
+Every function that touches either now takes the account **first, and not
+optionally**. An omitted argument would silently mean "somebody", and the whole
+point is that there is no such reader.
+
+## What stays global, deliberately
+
+`dismissed_at`. Dismissing is *moderation* — it removes something from every
+reader because it should not have been collected, which is what happened to
+eleven Daring Fireball links that were somebody else's page. That is shared
+state, it stays admin-only, and it is a different act from "I have read this".
+
+Retention is unchanged and still correct: the exemption asks whether **any**
+account favourited a story, which now spans accounts rather than assuming one.
+
+## Two bugs the change introduced, and how they showed
+
+**The type checker found the call sites; SQL had to be found by hand.** Adding a
+required parameter turned every caller into a compile error — twelve of them,
+across the reader, the rail and the routes. What it could not see was raw SQL:
+`buildWhere` still emitted `s.read_at IS NULL` against a column nothing writes
+any more, and it would have silently shown every story as unread forever.
+
+**Pushing the account onto the shared parameter array broke every query that
+shared it.** The row query needed the account for its read flag, so it went onto
+`params` — which the count and eight facet queries also use, and none of them
+reference it. Postgres refuses a bind supplying more parameters than the
+statement uses:
+
+```
+bind message supplies 2 parameters, but prepared statement "" requires 1
+```
+
+The row query worked perfectly while the page around it returned 500. It has
+its own array now.
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.

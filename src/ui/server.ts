@@ -515,7 +515,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
         res.writeHead(400, { 'content-type': 'text/plain' });
         return void res.end('not a story id');
       }
-      await setFavourite(id, keep);
+      await setFavourite(account!.id, id, keep);
       const back = body.get('return') ?? '/favourites';
       const to = back.startsWith('/') && !back.startsWith('//') ? back : '/favourites';
       res.writeHead(303, { location: to });
@@ -531,7 +531,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
         res.writeHead(400, { 'content-type': 'text/plain' });
         return void res.end('not a story id');
       }
-      await setRead(id, body.get('read') === '1');
+      await setRead(account!.id, id, body.get('read') === '1');
       const back = body.get('return') ?? '/all';
       const to = back.startsWith('/') && !back.startsWith('//') ? back : '/all';
       res.writeHead(303, { location: to });
@@ -542,7 +542,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
     // reader wants after a week away.
     if (req.method === 'POST' && path === '/read-all') {
       const body = await readBody(req);
-      await markAllRead();
+      await markAllRead(account!.id);
       const back = body.get('return') ?? '/news';
       const to = back.startsWith('/') && !back.startsWith('//') ? back : '/news';
       res.writeHead(303, { location: to });
@@ -591,7 +591,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
         res.writeHead(400, { 'content-type': 'application/json' });
         return void res.end(JSON.stringify({ problem: 'Not a story id.' }));
       }
-      const state = await setFavourite(id, body.get('keep') === '1');
+      const state = await setFavourite(account!.id, id, body.get('keep') === '1');
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
       return void res.end(JSON.stringify({ state }));
     }
@@ -640,7 +640,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
         return void res.end(JSON.stringify({ problem: 'Not a list path.' }));
       }
       const prefs = await currentPrefs();
-      const html = await renderNewsRail(listUrl, prefs);
+      const html = await renderNewsRail(account!.id, listUrl, prefs);
       res.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'no-store',
@@ -794,7 +794,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
 
     // The four streams, each its own page rather than a value of one filter.
     if (isStreamPath(path)) {
-      const page = await renderReader(url, prefs);
+      const page = await renderReader(account!.id, url, prefs);
       lastList = path + url.search;
       return render(path.slice(1), page.body, 200, page.rail);
     }
@@ -808,7 +808,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
     const from = typeof req.headers.referer === 'string' ? req.headers.referer : null;
     const keepRail = async () => {
       const origin = listOrigin(from);
-      return renderNewsRail(origin, prefs);
+      return renderNewsRail(account!.id, origin, prefs);
     };
 
     // The shelf. Everything on it is exempt from retention.
@@ -818,7 +818,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
     }
 
     if (path === '/favourites') {
-      return render('Favourites', await renderFavourites(url), 200, await keepRail());
+      return render('Favourites', await renderFavourites(account!.id, url), 200, await keepRail());
     }
 
     if (path === '/search') {
@@ -834,7 +834,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
       // The referer picks the wording of the back link and which list's rail
       // stays up. It is matched against a fixed list of paths rather than
       // echoed, in both cases.
-      const [body, rail] = await Promise.all([renderRead(id, from), keepRail()]);
+      const [body, rail] = await Promise.all([renderRead(account!.id, id, from), keepRail()]);
       return render('Reading', body, 200, rail);
     }
 
@@ -848,7 +848,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
       const [held] = await q<{ n: string }>(
         'SELECT count(*)::text AS n FROM stories WHERE id = $1::uuid', [id]);
       if (Number(held?.n ?? 0) === 0) return missing({ path, story: true });
-      const [body, rail] = await Promise.all([renderStory(id, from), keepRail()]);
+      const [body, rail] = await Promise.all([renderStory(account!.id, id, from), keepRail()]);
       return render('Story', body, 200, rail);
     }
 

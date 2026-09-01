@@ -269,14 +269,29 @@ export function isPublicPath(path: string): boolean {
  * WHAT A COMMON USER MAY CHANGE: their own two preferences and nothing else.
  *
  * Asked for as "for common user, only set his focus fields, and admin can
- * access to all features". Everything else that writes -- the global settings
- * page, vocabulary decisions, dismissing stories from the shared archive -- is
- * an operator action against state everybody sees, so it is admin-only.
+ * access to all features" -- read strictly, and the star proved it too strict:
+ * saving an article is not a feature of the installation, it is the reader
+ * keeping their own note.
+ *
+ * What stays admin-only is what genuinely changes the archive for everybody:
+ * the settings page, vocabulary decisions, and DISMISSING a story -- which is
+ * moderation, and is how eleven linkblog items were removed from everyone's
+ * reader at once.
  *
  * Reading is not restricted by role. A common user sees the archive; they just
  * cannot change it for everyone else.
  */
-const SELF_SERVICE = new Set(['/me/fields', '/me/theme']);
+const SELF_SERVICE = new Set([
+  '/me/fields', '/me/theme',
+  // READING IS PERSONAL, and it took a 403 on the star to notice.
+  //
+  // These were classified as shared state, which was accurate about the
+  // SCHEMA and wrong about the act: `favourites` had PRIMARY KEY (story_id)
+  // and `stories.read_at` was one timestamp, so a reader saving an article
+  // really would have saved it for everybody. Migration 0070 gave both an
+  // owner, and with an owner they are nobody else's business.
+  '/favourite', '/api/favourite', '/read-state', '/read-all',
+]);
 
 export function mayWrite(role: Role | null, path: string): boolean {
   if (!role) return false;

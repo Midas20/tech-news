@@ -372,7 +372,7 @@ function newsRail(
  * Narrowed to the reader's fields when they have any, through stack_closure --
  * a new Kubernetes operator is not news to somebody following Frontend.
  */
-async function newStacksFor(f: Filters, limit = 12): Promise<NewStack[]> {
+async function newStacksFor(accountId: string, f: Filters, limit = 12): Promise<NewStack[]> {
   // Counted under the page's own selection, less the one key this group
   // toggles. The number used to come from stack_totals -- a lifetime total over
   // the whole archive -- while every other number in the rail was "how many
@@ -387,7 +387,7 @@ async function newStacksFor(f: Filters, limit = 12): Promise<NewStack[]> {
   // count is what you get having clicked, from wherever you are. Selections
   // union, so with something already chosen the real answer is only ever
   // larger.
-  const { sql: where, params } = buildWhere({ ...f, stack: [] });
+  const { sql: where, params } = buildWhere({ ...f, stack: [] }, accountId);
   return q<NewStack>(
     `WITH sel AS MATERIALIZED (
        SELECT st FROM stories s JOIN sources src ON src.id = s.source_id,
@@ -430,21 +430,31 @@ const FRESH_WITHIN: { value: string; label: string }[] = [
 ];
 
 /** The counts the rail needs, and nothing the list needs. */
-async function railParts(f: Filters, search: URLSearchParams): Promise<RailParts> {
-  const { sql: where, params } = buildWhere(f);
+async function railParts(accountId: string, f: Filters, search: URLSearchParams): Promise<RailParts> {
+  const { sql: where, params } = buildWhere(f, accountId);
+  // The read flag needs the account too, and it is a SELECT rather than a
+  // WHERE -- so it needs its OWN parameter list.
+  //
+  // Pushing onto `params` looked tidier and broke every other query that
+  // shares the array: Postgres refuses a bind that supplies more parameters
+  // than the statement uses, so the count and the facets started failing with
+  // "supplies 2 parameters, but prepared statement requires 1" while the row
+  // query worked perfectly.
+  const rowParams = [...params, accountId];
+  const accParam = rowParams.length;
   const { sql: whereNoKind, params: paramsNoKind } =
-    buildWhere({ ...f, kind2: EVENT_KINDS.map((k) => k.value) });
+    buildWhere({ ...f, kind2: EVENT_KINDS.map((k) => k.value) }, accountId);
   // Fields are counted with the FIELD filter lifted, for the same reason the
   // event classes are counted with the event filter lifted. Counted under the
   // current selection, "Security 253" next to a chosen AI & ML means "in both" --
   // while the link next to it means "in either", because fields union like every
   // other menu in this rail. A number describing one operation beside a link
   // performing another is the menu lying about where it goes.
-  const { sql: whereNoField, params: paramsNoField } = buildWhere({ ...f, field: [] });
-  const { sql: whereNoCategory, params: paramsNoCategory } = buildWhere({ ...f, category: [] });
+  const { sql: whereNoField, params: paramsNoField } = buildWhere({ ...f, field: [] }, accountId);
+  const { sql: whereNoCategory, params: paramsNoCategory } = buildWhere({ ...f, category: [] }, accountId);
   // And About, for the same reason: "Tools 12" beside a chosen Stacks would
   // mean "in both", which is not what the link next to it does.
-  const { sql: whereNoAbout, params: paramsNoAbout } = buildWhere({ ...f, about: '' });
+  const { sql: whereNoAbout, params: paramsNoAbout } = buildWhere({ ...f, about: '' }, accountId);
   // And the money lens, counted with itself lifted, for the third time and the
   // same reason: a number beside a link has to be what the link gives you.
   const { sql: whereNoMoney, params: paramsNoMoney } = buildWhere({ ...f, money: [] });
@@ -518,7 +528,7 @@ async function railParts(f: Filters, search: URLSearchParams): Promise<RailParts
         `count(*) FILTER (WHERE ${moneySql(m.value, 'coalesce(s.title_en, s.title_original)')})::text AS "${m.value}"`).join(', ')}
          FROM stories s JOIN sources src ON src.id = s.source_id ${whereNoMoney}`,
       paramsNoMoney),
-    newStacksFor(f),
+    newStacksFor(accountId, f),
   ]);
 
   return {
@@ -552,7 +562,7 @@ const RAIL_TTL_MS = 20_000;
  * stops being a menu that only works on one page.
  */
 export async function renderNewsRail(
-  listUrl: URL, prefs: ReadingPrefs = READING_DEFAULTS,
+  accountId: string, listUrl: URL, prefs: ReadingPrefs = READING_DEFAULTS,
 ): Promise<string> {
   const f = parseFilters(listUrl, prefs);
 
@@ -561,7 +571,7 @@ export async function renderNewsRail(
   if (hit && Date.now() - hit.at < RAIL_TTL_MS) return hit.html;
 
   const html = newsRail(
-    f, await railParts(f, listUrl.searchParams), await railCounts(),
+    f, await railParts(accountId, f, listUrl.searchParams), await railCounts(),
     f.base === '/all' ? 'explore' : 'news');
 
   // Bounded, because the key contains a query string and a query string is
@@ -572,7 +582,7 @@ export async function renderNewsRail(
 }
 
 export async function renderReader(
-  url: URL, prefs: ReadingPrefs = READING_DEFAULTS,
+  accountId: string, url: URL, prefs: ReadingPrefs = READING_DEFAULTS,
 ): Promise<ReaderPage> {
   const f = parseFilters(url, prefs);
   const stream = streamFor(f.base);
@@ -583,7 +593,17 @@ export async function renderReader(
   // both pages is what made every page look the same and none of them look
   // like the answer to a question.
   const mode: 'news' | 'explore' = f.base === '/all' ? 'explore' : 'news';
-  const { sql: where, params } = buildWhere(f);
+  const { sql: where, params } = buildWhere(f, accountId);
+  // The read flag needs the account too, and it is a SELECT rather than a
+  // WHERE -- so it needs its OWN parameter list.
+  //
+  // Pushing onto `params` looked tidier and broke every other query that
+  // shares the array: Postgres refuses a bind that supplies more parameters
+  // than the statement uses, so the count and the facets started failing with
+  // "supplies 2 parameters, but prepared statement requires 1" while the row
+  // query worked perfectly.
+  const rowParams = [...params, accountId];
+  const accParam = rowParams.length;
   const order = SORTS[f.sort] ?? SORTS.newest;
   const PAGE = f.pageSize;
 
@@ -605,13 +625,13 @@ export async function renderReader(
   // onto one connection and cost more page time than the defect costs
   // correctness.
   const { sql: whereNoKind, params: paramsNoKind } =
-    buildWhere({ ...f, kind2: EVENT_KINDS.map((k) => k.value) });
+    buildWhere({ ...f, kind2: EVENT_KINDS.map((k) => k.value) }, accountId);
   // See railParts: a field count has to be the count you get by clicking it.
-  const { sql: whereNoField, params: paramsNoField } = buildWhere({ ...f, field: [] });
-  const { sql: whereNoCategory, params: paramsNoCategory } = buildWhere({ ...f, category: [] });
+  const { sql: whereNoField, params: paramsNoField } = buildWhere({ ...f, field: [] }, accountId);
+  const { sql: whereNoCategory, params: paramsNoCategory } = buildWhere({ ...f, category: [] }, accountId);
   // And About, for the same reason: "Tools 12" beside a chosen Stacks would
   // mean "in both", which is not what the link next to it does.
-  const { sql: whereNoAbout, params: paramsNoAbout } = buildWhere({ ...f, about: '' });
+  const { sql: whereNoAbout, params: paramsNoAbout } = buildWhere({ ...f, about: '' }, accountId);
   // And the money lens, counted with itself lifted, for the third time and the
   // same reason: a number beside a link has to be what the link gives you.
   const { sql: whereNoMoney, params: paramsNoMoney } = buildWhere({ ...f, money: [] });
@@ -629,9 +649,10 @@ export async function renderReader(
               (s.published_at IS NOT NULL) AS dated,
               s.stacks,
               s.is_prerelease AS prerelease, src.kind::text AS source_kind,
-              (s.read_at IS NOT NULL) AS read
+              EXISTS (SELECT 1 FROM story_reads r
+                       WHERE r.account_id = $${accParam}::uuid AND r.story_id = s.id) AS read
          FROM stories s JOIN sources src ON src.id = s.source_id
-         ${where} ORDER BY ${order} LIMIT ${PAGE} OFFSET ${f.offset}`, params),
+         ${where} ORDER BY ${order} LIMIT ${PAGE} OFFSET ${f.offset}`, rowParams),
     one<{ n: string }>(
       `SELECT count(*)::text AS n FROM stories s JOIN sources src ON src.id = s.source_id ${where}`,
       params),
@@ -713,7 +734,7 @@ export async function renderReader(
          FROM stories s JOIN sources src ON src.id = s.source_id ${whereNoMoney}`,
       paramsNoMoney),
     // Only News shows these, so only News pays for the query.
-    mode === 'news' ? newStacksFor(f) : Promise.resolve([] as NewStack[]),
+    mode === 'news' ? newStacksFor(accountId, f) : Promise.resolve([] as NewStack[]),
     f.field.length
       ? one<{ n: string }>(
           `SELECT count(*)::text AS n FROM stories s
@@ -744,7 +765,7 @@ export async function renderReader(
 
   // Favourite state for exactly the rows on this page, in one query. Same shape
   // as the coverage curves below and for the same reason.
-  const favs = await favouriteState(rows.map((r) => r.id));
+  const favs = await favouriteState(accountId, rows.map((r) => r.id));
 
   // Coverage curves for exactly the rows on this page: one query, not forty.
   const curves = new Map<string, number[]>();
@@ -1301,6 +1322,7 @@ function pagination(f: Filters, shown: number, total: number): string {
 }
 
 export async function renderStory(
+  accountId: string,
   id: string,
   referer: string | null = null,
 ): Promise<string> {
@@ -1477,7 +1499,7 @@ export async function renderStory(
     `<a class="chip" href="/trend/${encodeURIComponent(st)}">${escapeHtml(st)}</a>`).join(' ');
 
   // Whether this one is exempt from retention, and the control that changes it.
-  const fav = await favouriteOne(s.id);
+  const fav = await favouriteOne(accountId, s.id);
 
   const meta = [
     `<a href="${escapeHtml(s.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(s.source)}</a>`,

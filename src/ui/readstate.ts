@@ -27,59 +27,75 @@ export type ReadState = 'unread' | 'read';
 
 const ID = /^[0-9a-f-]{36}$/i;
 
-export async function readState(id: string): Promise<ReadState> {
-  if (!ID.test(id)) return 'unread';
+/**
+ * READ STATE BELONGS TO AN ACCOUNT.
+ *
+ * This used to be `stories.read_at` -- one timestamp per story, so opening an
+ * article marked it read for everybody who would ever sign in. It was written
+ * when the reader ran on loopback and there was one person, and 0070 moved it
+ * to `story_reads`, a row per account per story.
+ *
+ * Every function here now takes the account first. That is deliberately not
+ * optional: an omitted argument would silently mean "somebody", and the whole
+ * point is that there is no such reader.
+ */
+export async function readState(accountId: string, id: string): Promise<ReadState> {
+  if (!ID.test(id) || !ID.test(accountId)) return 'unread';
   const row = await one<{ at: string | null }>(
-    `SELECT read_at::text AS at FROM stories WHERE id = $1::uuid`, [id]);
+    `SELECT read_at::text AS at FROM story_reads
+      WHERE account_id = $1::uuid AND story_id = $2::uuid`, [accountId, id]);
   return row?.at ? 'read' : 'unread';
 }
 
 /**
- * Mark one story read or unread. Returns the state it ended in.
- *
- * Two statements rather than one with the assignment interpolated: SQL built by
- * string concatenation is the habit that eventually concatenates something that
- * came from a request, and these are two different operations anyway.
+ * Mark one story read or unread, for one account. Returns the state it ended in.
  */
-export async function setRead(id: string, read: boolean): Promise<ReadState> {
-  if (!ID.test(id)) throw new Error('not a story id');
+export async function setRead(accountId: string, id: string, read: boolean): Promise<ReadState> {
+  if (!ID.test(id) || !ID.test(accountId)) throw new Error('not a story id');
   if (read) {
+    // ON CONFLICT DO NOTHING keeps the moment it was FIRST read, which is the
+    // only thing this timestamp is for. Re-opening does not reset it.
     await q(
-      `UPDATE stories SET read_at = coalesce(read_at, now()) WHERE id = $1::uuid`, [id]);
+      `INSERT INTO story_reads (account_id, story_id) VALUES ($1::uuid, $2::uuid)
+       ON CONFLICT DO NOTHING`, [accountId, id]);
     return 'read';
   }
-  await q(`UPDATE stories SET read_at = NULL WHERE id = $1::uuid`, [id]);
+  await q(`DELETE FROM story_reads WHERE account_id = $1::uuid AND story_id = $2::uuid`,
+          [accountId, id]);
   return 'unread';
 }
 
-/**
- * Mark read on the way to rendering the article.
- *
- * `coalesce(read_at, now())` rather than `now()`: re-opening something keeps
- * the moment it was first read, which is the only thing this column is for.
- */
-export async function markRead(id: string): Promise<void> {
-  if (!ID.test(id)) return;
+/** Mark read on the way to rendering the article. */
+export async function markRead(accountId: string, id: string): Promise<void> {
+  if (!ID.test(id) || !ID.test(accountId)) return;
   await q(
-    `UPDATE stories SET read_at = coalesce(read_at, now())
-      WHERE id = $1::uuid AND read_at IS NULL`, [id]);
+    `INSERT INTO story_reads (account_id, story_id) VALUES ($1::uuid, $2::uuid)
+     ON CONFLICT DO NOTHING`, [accountId, id]);
 }
 
-/** How many collected stories have not been opened. */
-export async function unreadCount(): Promise<number> {
+/** How many collected stories THIS ACCOUNT has not opened. */
+export async function unreadCount(accountId: string): Promise<number> {
+  if (!ID.test(accountId)) return 0;
   const row = await one<{ n: string }>(
-    `SELECT count(*)::text AS n FROM stories
-      WHERE read_at IS NULL AND dismissed_at IS NULL AND superseded_by IS NULL
-        AND coalesce(is_tech, true)`);
+    `SELECT count(*)::text AS n FROM stories s
+      WHERE NOT EXISTS (SELECT 1 FROM story_reads r
+                         WHERE r.account_id = $1::uuid AND r.story_id = s.id)
+        AND s.dismissed_at IS NULL AND s.superseded_by IS NULL
+        AND coalesce(s.is_tech, true)`, [accountId]);
   return Number(row?.n ?? 0);
 }
 
-/** Mark everything currently unread as read. The "I am caught up" gesture. */
-export async function markAllRead(): Promise<number> {
+/** Mark everything currently unread as read, for this account. */
+export async function markAllRead(accountId: string): Promise<number> {
+  if (!ID.test(accountId)) return 0;
   const rows = await q<{ id: string }>(
-    `UPDATE stories SET read_at = now()
-      WHERE read_at IS NULL AND dismissed_at IS NULL AND superseded_by IS NULL
-      RETURNING id::text`);
+    `INSERT INTO story_reads (account_id, story_id)
+     SELECT $1::uuid, s.id FROM stories s
+      WHERE s.dismissed_at IS NULL AND s.superseded_by IS NULL
+        AND NOT EXISTS (SELECT 1 FROM story_reads r
+                         WHERE r.account_id = $1::uuid AND r.story_id = s.id)
+     ON CONFLICT DO NOTHING
+     RETURNING story_id::text AS id`, [accountId]);
   return rows.length;
 }
 

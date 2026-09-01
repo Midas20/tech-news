@@ -59,14 +59,22 @@ describe('writes need an account, and shared state needs an administrator', () =
     }
   });
 
-  it('lets a reader change their own two things and nothing else', () => {
-    // The whole of a common user's write surface, as asked for: focus fields,
-    // plus the theme that broke.
-    expect(user('POST', '/me/fields')).toBeNull();
-    expect(user('POST', '/me/theme')).toBeNull();
+  it('lets a reader keep their own reading', () => {
+    // The star returned 403 with "that changes something everybody sees",
+    // which was true of the schema and false of the act: favourites had
+    // PRIMARY KEY (story_id) and read_at was one timestamp. 0070 gave both an
+    // owner; these are now nobody else's business.
+    for (const path of ['/me/fields', '/me/theme', '/favourite', '/api/favourite',
+      '/read-state', '/read-all']) {
+      expect(user('POST', path), `${path} is personal`).toBeNull();
+    }
+  });
 
-    for (const path of ['/settings', '/stacks', '/dismiss', '/read-all',
-      '/favourite', '/api/dismiss']) {
+  it('still keeps a reader out of what changes the archive', () => {
+    // Dismissing is moderation -- it removes a story from EVERY reader, which
+    // is how eleven linkblog items were taken out at once. Settings and
+    // vocabulary are installation-wide.
+    for (const path of ['/settings', '/stacks', '/dismiss', '/api/dismiss']) {
       expect(user('POST', path), `${path} is shared state`).toBeTruthy();
     }
   });

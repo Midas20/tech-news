@@ -52,24 +52,37 @@ export function graceHours(): number {
  * river costs one query rather than fifty. Ids that are not in the table are
  * simply absent from the map, which reads as 'none'.
  */
-export async function favouriteState(ids: string[]): Promise<Map<string, FavState>> {
+/**
+ * A FAVOURITE BELONGS TO SOMEBODY.
+ *
+ * Before 0070 this table had PRIMARY KEY (story_id) and no owner, so there was
+ * one favourites list for the whole installation. Every function here takes the
+ * account first, and it is not optional: a default would quietly mean
+ * "everybody", which is the bug this replaced.
+ */
+export async function favouriteState(
+  accountId: string, ids: string[],
+): Promise<Map<string, FavState>> {
   const out = new Map<string, FavState>();
-  if (ids.length === 0) return out;
+  if (ids.length === 0 || !/^[0-9a-f-]{36}$/i.test(accountId)) return out;
   const rows = await q<{ story_id: string; released: boolean }>(
     `SELECT story_id::text, (unfavourited_at IS NOT NULL) AS released
-       FROM favourites WHERE story_id = ANY($1::uuid[])`, [ids]);
+       FROM favourites WHERE account_id = $2::uuid AND story_id = ANY($1::uuid[])`,
+    [ids, accountId]);
   for (const r of rows) out.set(r.story_id, r.released ? 'released' : 'kept');
   return out;
 }
 
-export async function favouriteOne(id: string): Promise<FavState> {
-  return (await favouriteState([id])).get(id) ?? 'none';
+export async function favouriteOne(accountId: string, id: string): Promise<FavState> {
+  return (await favouriteState(accountId, [id])).get(id) ?? 'none';
 }
 
 /** How many are currently kept. For the rail count. */
-export async function favouriteCount(): Promise<number> {
+export async function favouriteCount(accountId: string): Promise<number> {
+  if (!/^[0-9a-f-]{36}$/i.test(accountId)) return 0;
   const r = await one<{ n: string }>(
-    `SELECT count(*)::text AS n FROM favourites WHERE unfavourited_at IS NULL`);
+    `SELECT count(*)::text AS n FROM favourites
+      WHERE account_id = $1::uuid AND unfavourited_at IS NULL`, [accountId]);
   return Number(r?.n ?? 0);
 }
 
@@ -82,26 +95,29 @@ export async function favouriteCount(): Promise<number> {
  * never actually gone, and pretending it was just saved would throw away the
  * only record of how long it has been kept.
  */
-export async function setFavourite(id: string, keep: boolean): Promise<FavState> {
+export async function setFavourite(
+  accountId: string, id: string, keep: boolean,
+): Promise<FavState> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('not a story id');
+  if (!/^[0-9a-f-]{36}$/i.test(accountId)) throw new Error('not an account id');
 
   if (keep) {
     // Only for a story that still exists. Favouriting an id that retention
     // already took would create a claim on nothing, which the sweeper would
     // then have to clean up -- easier to never write it.
     const rows = await q<{ story_id: string }>(
-      `INSERT INTO favourites (story_id)
-       SELECT s.id FROM stories s WHERE s.id = $1::uuid
-       ON CONFLICT (story_id) DO UPDATE SET unfavourited_at = NULL
-       RETURNING story_id::text`, [id]);
+      `INSERT INTO favourites (account_id, story_id)
+       SELECT $2::uuid, s.id FROM stories s WHERE s.id = $1::uuid
+       ON CONFLICT (account_id, story_id) DO UPDATE SET unfavourited_at = NULL
+       RETURNING story_id::text`, [id, accountId]);
     return rows.length ? 'kept' : 'none';
   }
 
   const rows = await q<{ story_id: string }>(
     `UPDATE favourites SET unfavourited_at = now()
-      WHERE story_id = $1::uuid AND unfavourited_at IS NULL
-      RETURNING story_id::text`, [id]);
-  return rows.length ? 'released' : await favouriteOne(id);
+      WHERE account_id = $2::uuid AND story_id = $1::uuid AND unfavourited_at IS NULL
+      RETURNING story_id::text`, [id, accountId]);
+  return rows.length ? 'released' : await favouriteOne(accountId, id);
 }
 
 /**
@@ -181,7 +197,7 @@ function row(r: FavRow, now: number): string {
  * countdown and burying it under the first is how you find out it lapsed by
  * noticing the story is gone.
  */
-export async function renderFavourites(url: URL): Promise<string> {
+export async function renderFavourites(accountId: string, url: URL): Promise<string> {
   const showLapsing = url.searchParams.get('show') !== 'kept';
 
   const rows = await q<FavRow>(
@@ -193,9 +209,10 @@ export async function renderFavourites(url: URL): Promise<string> {
        FROM favourites f
        JOIN stories s ON s.id = f.story_id
        JOIN sources src ON src.id = s.source_id
-      ${showLapsing ? '' : 'WHERE f.unfavourited_at IS NULL'}
+      WHERE f.account_id = $1::uuid
+        ${showLapsing ? '' : 'AND f.unfavourited_at IS NULL'}
       ORDER BY (f.unfavourited_at IS NOT NULL), f.saved_at DESC
-      LIMIT 500`);
+      LIMIT 500`, [accountId]);
 
   const now = Date.now();
   const kept = rows.filter((r) => r.unfavourited_at === null);
