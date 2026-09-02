@@ -62,7 +62,7 @@ import {
   classifySources, summariseClassify,
 } from '../maintain/classify.ts';
 import { evaluateSources, summariseEvaluate } from '../maintain/evaluate.ts';
-import { saveDailyReport, summariseReport } from '../ui/movement.ts';
+import { runDailyReport, summariseReport } from '../analysis/briefing.ts';
 import { applyStoredSettings } from '../db/repos/settings.ts';
 import { getConfig } from '../config.ts';
 import type { LlmContext } from '../llm/router.ts';
@@ -236,19 +236,29 @@ export function buildJobs(opts: JobOptions = {}): Job[] {
 
     {
       name: 'report',
-      what: 'Write the day’s movement report: what moved, on what evidence.',
-      // After rollup and retain, so the day it describes is settled, and after
-      // tag so the stories it counts carry their vocabulary. The page still
-      // renders live -- this is the archive keeping its own record, which is the
-      // half that survives the stories being pruned.
+      what: 'Read the period’s stories field by field and write what happened.',
+      // After rollup, retain and tag, so the stories it reads carry their
+      // vocabulary and the day it describes is settled.
+      //
+      // SINCE THE LAST REPORT, not a rolling window. The first version read a
+      // rolling fourteen days every morning: that window holds 2,237 readable
+      // stories and about 171 arrive in a day, so consecutive reports shared
+      // roughly 92% of their evidence and therefore said the same thing. A daily
+      // report that does not change is not a daily report. `runDailyReport`
+      // picks up where the last one stopped, so nothing is read twice and
+      // nothing between two runs is skipped.
+      //
+      // The lease is long because this is fourteen model calls in sequence, one
+      // per field, and they are deliberately not concurrent: fourteen at once is
+      // how a provider rate limit turns one slow report into fourteen failures.
       everySeconds: 24 * 3600,
       atHour: 7,
-      leaseSeconds: 1800,
+      leaseSeconds: 3600,
       async run({ worker }) {
         const query = <T>(sql: string, params: unknown[] = []) =>
           worker.query<T>(sql, params);
         const ctx: LlmContext = { db: worker, env: process.env as Record<string, string> };
-        return summariseReport(await saveDailyReport(query, 90, new Date(), ctx));
+        return summariseReport(await runDailyReport(ctx, query));
       },
     },
     {

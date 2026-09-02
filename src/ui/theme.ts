@@ -1060,16 +1060,6 @@ h2.sect{
   font-variant-numeric:tabular-nums}
 .fc-n small{font:400 var(--t-11)/1 var(--sans);color:var(--ink-4);margin-left:5px}
 .fc-spark{opacity:.85}
-/* A report card is a field card carrying a direction instead of a sparkline.
-   The movement line is the reason to open one, so it reads before the count
-   does on anything narrower than a phone. */
-.repcard{
-  display:block;padding:var(--s-3);background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--r-3);transition:border-color .12s,background .12s;
-}
-.repcard:hover{border-color:var(--line-strong);background:var(--surface-2);text-decoration:none}
-.repcard-move{font-size:var(--t-12);color:var(--ink-2)}
-.repcard-src{font-size:var(--t-11);margin-top:2px}
 .chip-n{margin-left:4px;color:var(--ink-4);font-size:var(--t-9)}
 .chip.announce{
   background:var(--brand-soft);border-color:color-mix(in srgb,var(--brand) 40%,transparent);
@@ -1680,60 +1670,111 @@ ul.reasons a{color:var(--link)}
 .btn:hover{background:var(--raised);border-color:var(--line-strong)}
 .qacts .btn:not(.primary){background:var(--surface-2)}
 
-/* ---------- the movement report ----------
-   A verdict is a word, not a colour, so the badge carries the word and colour
-   only reinforces it. Growth and decline are the one place in this interface
-   where two hues are information rather than decoration -- everything else is
-   greyscale with one accent. --ok and --critical are reused rather than given
-   new values, because a third green would be a third meaning of green. */
-.mv{display:inline-flex;align-items:center;padding:2px 7px;border-radius:var(--r-full);
-  font:600 var(--t-10)/1.4 var(--mono);letter-spacing:.03em;white-space:nowrap;
-  border:1px solid var(--line-strong);color:var(--ink-3)}
-.mv-surging{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent);
-  background:color-mix(in srgb,var(--ok) 12%,transparent)}
-.mv-growing{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 30%,transparent)}
-.mv-steady{color:var(--ink-4)}
-.mv-fading{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 30%,transparent)}
-.mv-collapsing{color:var(--critical);border-color:color-mix(in srgb,var(--critical) 40%,transparent);
-  background:color-mix(in srgb,var(--critical) 10%,transparent)}
-.mv-unbaselined{color:var(--ink-4);border-style:dashed}
-/* Recommendation strength is the same badge shape carrying a different word. */
-.mv-strong{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent)}
-.mv-moderate{color:var(--warn)}
-.mv-weak{color:var(--ink-4)}
-.mv-warn{color:var(--warn)}
+/* ---------- the briefing ----------
+   What replaced the movement report, and the CSS says why. There are no verdict
+   badges here because there are no verdicts: the old page coloured a technology
+   green for "surging" on a ratio of story counts, and story counts measure the
+   feed list rather than the industry. A colour is a very confident way to say a
+   thing, and that one was confident about the wrong quantity.
 
+   So this is typography and citation, greyscale throughout. The only emphasis
+   left is on provenance -- whether a source speaks for the subject it describes
+   -- because that is the distinction a reader genuinely cannot recover for
+   themselves. */
 .mv-body{margin:0 0 var(--s-3);font:400 var(--t-14)/1.7 var(--serif);color:var(--ink-2);max-width:74ch}
 .mv-lede{margin:0 0 var(--s-4);font:400 var(--t-15)/1.6 var(--serif);color:var(--ink-2);
   max-width:74ch}
-.mv-h{margin:var(--s-5) 0 var(--s-2);font:600 var(--t-13)/1.2 var(--sans);
-  letter-spacing:.02em;color:var(--ink-3)}
+.mv-list{margin:0 0 var(--s-4);padding-left:var(--s-4)}
+.mv-list li{margin:0 0 var(--s-2);font-size:var(--t-13);line-height:1.6;max-width:80ch}
 h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
   border-bottom:1px solid var(--line);font:600 var(--t-17)/1.2 var(--serif);color:var(--ink)}
 
-/* The table scrolls inside itself rather than pushing the page sideways: six
-   columns of numbers do not fit a phone and never will. */
-.mvt{width:100%;border-collapse:collapse;margin:0 0 var(--s-4);display:block;overflow-x:auto}
-.mvt th{text-align:left;padding:var(--s-2) var(--s-3);border-bottom:1px solid var(--line-strong);
-  font:600 var(--t-10)/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;
-  color:var(--ink-4);white-space:nowrap}
-.mvt td{padding:var(--s-2) var(--s-3);border-bottom:1px solid var(--line);
-  font-size:var(--t-13);vertical-align:top}
-.mvt td.num,.mvt th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.mvt td .muted{margin-left:6px;font-size:var(--t-11)}
+/* A field, as one block a reader can take in before deciding to open it. */
+.bf-field{margin:0 0 var(--s-6);padding-left:var(--s-4);border-left:2px solid var(--line)}
+.bf-h{margin:0 0 var(--s-2);display:flex;align-items:center;gap:var(--s-2);
+  font:600 var(--t-12)/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-4)}
+.bf-h a{color:inherit;text-decoration:none}
+.bf-h a:hover{color:var(--ink-2)}
+.bf-head{margin:0 0 var(--s-2);font:600 var(--t-17)/1.3 var(--serif);color:var(--ink);
+  max-width:70ch}
 
-.mv-ev{margin:0 0 var(--s-4);padding-left:var(--s-3);border-left:2px solid var(--line)}
-.mv-ev h4{margin:0 0 var(--s-1);display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-2);
-  font:600 var(--t-13)/1.3 var(--sans)}
-.mv-ev ul{margin:0;padding-left:var(--s-4);list-style:disc}
-.mv-ev li{margin:3px 0;font-size:var(--t-13);line-height:1.5}
-.mv-ev li .muted{display:block;font-size:var(--t-11)}
+/* A finding and its sources are one unit, and the border says so. Indented
+   under the field rather than sitting beside it: the nesting is the argument
+   -- field, then finding, then the stories the finding came from. */
+.bf-theme{margin:0 0 var(--s-4)}
+.bf-theme h4{margin:0 0 var(--s-2);font:600 var(--t-14)/1.35 var(--sans);color:var(--ink);
+  max-width:70ch}
 
-.mv-rec{margin:0 0 var(--s-4);padding-left:var(--s-4)}
-.mv-rec li{margin:0 0 var(--s-3);font-size:var(--t-14)}
-.mv-rec li p{margin:2px 0 0;font-size:var(--t-13);color:var(--ink-3);max-width:74ch}
-.mv-list{margin:0 0 var(--s-4);padding-left:var(--s-4)}
-.mv-list li{margin:0 0 var(--s-2);font-size:var(--t-13);line-height:1.6;max-width:80ch}
+/* CITATIONS ARE OPEN BY DEFAULT WHEN THERE ARE FEW.
+   A claim whose evidence is one click away is a claim most people will never
+   check, and the whole design of this page is that checking is easy. Collapsed
+   only past three, where the list starts to push the next finding off screen. */
+.bf-ev{margin:var(--s-2) 0 0}
+.bf-ev>summary{cursor:pointer;font:500 var(--t-11)/1 var(--sans);color:var(--ink-4);
+  letter-spacing:.02em;padding:2px 0}
+.bf-ev>summary:hover{color:var(--ink-2)}
+.bf-ev[open]>summary{margin-bottom:var(--s-2)}
+.bf-cites{margin:0;padding-left:var(--s-4);list-style:disc}
+.bf-cites li{margin:0 0 var(--s-2);font-size:var(--t-13);line-height:1.5}
+.bf-cites li .muted{display:block;font-size:var(--t-11);margin-top:1px}
+
+/* The one thing on the page worth a colour. "First-party" means the source is
+   the subject describing itself: authoritative about what shipped, worthless as
+   evidence that anyone wanted it. A reader cannot infer that from a domain
+   name, so it is marked. */
+.bf-fp{color:var(--warn);font-weight:600}
+
+.bf-more{margin:0 0 var(--s-3)}
+.bf-more>summary{cursor:pointer;font:500 var(--t-12)/1 var(--sans);color:var(--ink-3);
+  padding:var(--s-2) 0}
+.bf-more>summary:hover{color:var(--ink)}
+.bf-more[open]>summary{margin-bottom:var(--s-3)}
+
+.bf-gap{max-width:78ch}
+
+/* Public figures, set in the mono face because they are the only numbers here
+   and they came from somewhere else. */
+.bf-figs{margin:0 0 var(--s-4);padding-left:var(--s-4);list-style:none}
+.bf-figs li{margin:0 0 var(--s-2);font-size:var(--t-13);line-height:1.5}
+.bf-figs li .muted{display:block;font:400 var(--t-11)/1.5 var(--mono);color:var(--ink-4)}
+
+/* ---------- the listings ----------
+   Every report is kept, and both ways of reaching one are lists of the same
+   shape: a label on the left, what the briefing FOUND on the right. A day and a
+   field are different axes onto the same grid, so they get the same row rather
+   than two designs a reader has to learn separately.
+
+   The headline is the point of the row. An earlier version led with counts --
+   how many stories a field produced that week -- which is a number about the
+   feed list and not an answer to any question a reader has. */
+.bf-days{margin:0 0 var(--s-4);padding:0;list-style:none}
+.bf-days li{padding:var(--s-2) 0;border-bottom:1px solid var(--line)}
+.bf-days li:last-child{border-bottom:0}
+.bf-days a{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s-1) var(--s-3);
+  text-decoration:none}
+.bf-when{flex:0 0 auto;min-width:11ch;display:inline-flex;align-items:center;gap:6px;
+  font:600 var(--t-11)/1.4 var(--mono);letter-spacing:.02em;color:var(--ink-4)}
+.bf-days a:hover .bf-when{color:var(--ink-2)}
+.bf-what{flex:1 1 22ch;font:400 var(--t-13)/1.45 var(--serif);color:var(--ink)}
+.bf-days a:hover .bf-what{text-decoration:underline;text-underline-offset:2px}
+.bf-days li>.muted{display:block;margin-top:2px;padding-left:calc(11ch + var(--s-3));
+  font-size:var(--t-11)}
+
+/* One day in the index. Same left border as a field block: both are "a report
+   about something", one indexed by date and one by subject. */
+.bf-day{margin:0 0 var(--s-5);padding-left:var(--s-4);border-left:2px solid var(--line)}
+
+/* Fourteen field links. A wrapped row rather than a grid of cards: the label is
+   the whole content, so a card would be padding around one word. */
+.bf-fields{display:flex;flex-wrap:wrap;gap:var(--s-2);margin:0 0 var(--s-5)}
+.bf-fields .btn{gap:6px}
+
+@media (max-width:560px){
+  /* The date and the headline stop sharing a line before either has to hyphenate. */
+  .bf-when{min-width:100%}
+  .bf-days li>.muted{padding-left:0}
+}
 
 /* ---------- the reading page ----------
    A measured column and nothing beside it. The old modal capped the article at

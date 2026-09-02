@@ -22,7 +22,7 @@ import {
   EVENT_KINDS, EVENT_DEFAULT, toggledKind, importanceTitle,
   type Filters, type MultiKey,
 } from './filters.ts';
-import { crumbsFor, backFrom } from './nav.ts';
+import { crumbsFor, backFrom, EXPLORE_ITEMS, isOn } from './nav.ts';
 import { railCounts, newsRailTail, unreadHere, type RailCounts } from './rail.ts';
 import { railGroup, type RailItem } from './html.ts';
 import { FIELDS } from '../vocab/fields.ts';
@@ -269,6 +269,22 @@ function newsRail(
 
   if (mode === 'explore') {
     return [
+      // THE SECTION'S OWN PAGES COME FIRST, and they were missing entirely.
+      //
+      // Explore's home is /all, /all is a reader stream, and a reader stream
+      // renders this facet panel instead of the section menu that
+      // renderRail() builds for /fields, /categories and /companies. So the
+      // Explore tab landed on the one page in its own section where its own
+      // menu did not exist -- and Reports, which is only reachable from that
+      // menu, could not be found by clicking anything. Asked on 2026-09-01:
+      // "where can I look these report lists".
+      //
+      // Facets narrow this list; these five leave it. Different jobs, so the
+      // group is separate rather than mixed into About.
+      railGroup('Explore', EXPLORE_ITEMS.map((i) => ({
+        href: i.href, label: i.label, icon: i.icon,
+        active: isOn(f.base, i),
+      }))),
       railGroup('About', typeItems, { checkbox: true }),
       railGroup('Field', fieldItems, { checkbox: true, limit: 10 }),
       railGroup('Kind of technology', categoryItems, {

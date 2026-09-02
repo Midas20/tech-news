@@ -24,7 +24,7 @@ import { topCompanies } from './companies.ts';
 import { CATEGORIES } from './stacks.ts';
 import {
   SECTIONS, sectionFor, isOn, EXPLORE_ITEMS, REGISTRY_ITEMS,
-  ANALYSE_ITEMS, SYSTEM_ITEMS, ADMIN_ITEMS,
+  ANALYSE_ITEMS, SYSTEM_ITEMS, ADMIN_ITEMS, REPORT_ITEMS,
   type NavItem,
 } from './nav.ts';
 import { GROUPS } from '../settings.ts';
@@ -53,6 +53,32 @@ export interface RailCounts {
 
 let cache: { at: number; value: RailCounts } | null = null;
 const TTL_MS = 5000;
+
+/**
+ * The days a report exists for, newest first.
+ *
+ * Read straight rather than through src/analysis/briefing.ts's reportIndex: that
+ * one joins every day to all of its field briefings so a page can list them, and
+ * a rail needs a date and a number. Cached with the other rail counts because it
+ * is drawn on every page of the section.
+ */
+const DAYS_TTL_MS = 60_000;
+let dayCache: { at: number; value: Array<{ day: string; fields: number }> } | null = null;
+
+export async function reportDays(
+  limit = 30,
+): Promise<Array<{ day: string; fields: number }>> {
+  if (dayCache && Date.now() - dayCache.at < DAYS_TTL_MS) return dayCache.value;
+  const rows = await q<{ day: string; fields: number }>(
+    `SELECT DISTINCT ON (day) day::text AS day, coalesce(fields, 0) AS fields
+       FROM daily_reports
+      WHERE generator LIKE 'content-%'
+      ORDER BY day DESC, generated_at DESC
+      LIMIT $1`, [limit]).catch(() => []);
+  const value = rows.map((r) => ({ day: r.day, fields: Number(r.fields) }));
+  dayCache = { at: Date.now(), value };
+  return value;
+}
 
 export async function railCounts(): Promise<RailCounts> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache.value;
@@ -222,15 +248,59 @@ export async function renderRail(
   }
 
   if (section.id === 'analyse') {
-    // The movement report is administrators only -- it names what the archive
-    // cannot support as readily as what it can, and the operational coverage
-    // figures it prints are about the instrument rather than the news. A rail
-    // entry a reader cannot open is worse than no entry, so it is removed here
-    // as well as refused at the route: one decision, enforced in both places.
+    return railGroup('Analyse', ANALYSE_ITEMS.map((i) => toItem(state, i)));
+  }
+
+  if (section.id === 'reports') {
+    // THE RAIL THIS SECTION DID NOT HAVE THE FIRST TIME.
+    //
+    // Reports was a tab on 2026-08-30 and lost it the same day, because its rail
+    // was fourteen links to fourteen field reports -- the index it duplicates,
+    // wearing a menu. What earns the tab back is that a report is now written
+    // every morning and kept, so there are two axes to move along: down the days
+    // and across the fields. Neither is reachable from the other without this.
+    //
+    // The days come from the database rather than from a constant, because a
+    // rail offering a day nobody wrote is a menu that lies about what exists.
     const items = role === 'admin'
-      ? ANALYSE_ITEMS
-      : ANALYSE_ITEMS.filter((i) => i.href !== '/trends/report');
-    return railGroup('Analyse', items.map((i) => toItem(state, i)));
+      ? REPORT_ITEMS
+      // The composed briefing is administrators only -- it states what the
+      // archive cannot support as readily as what it can, and it names the model
+      // that wrote it. A rail entry a reader cannot open is worse than no entry,
+      // so it goes here as well as at the route: one decision, both places.
+      : REPORT_ITEMS.filter((i) => i.href !== '/trends/report');
+
+    const days = await reportDays();
+    const dayItems: RailItem[] = days.map((r) => ({
+      href: `/reports/${r.day}`,
+      label: new Date(`${r.day}T00:00:00Z`).toLocaleDateString('en-GB',
+        { day: 'numeric', month: 'short', timeZone: 'UTC' }),
+      count: r.fields,
+      countKey: 'fields',
+      sub: true,
+      active: state.path === `/reports/${r.day}`,
+    }));
+
+    const fieldItems: RailItem[] = FIELDS.map((f) => ({
+      href: `/field/${encodeURIComponent(f.slug)}/report`,
+      label: f.label,
+      sub: true,
+      // A dated report for this field lights its row too: you are still reading
+      // that field, and a rail that goes blank when you open something is a rail
+      // that stops telling you where you are.
+      active: state.path.startsWith(`/field/${f.slug}/report`),
+    }));
+
+    return [
+      railGroup('Reports', items.map((i) => toItem(state, i))),
+      railGroup('Recent', dayItems, {
+        limit: 10,
+        note: days.length === 0
+          ? 'No report has been written yet.'
+          : 'One report a morning, over the stories that arrived since the last.' }),
+      railGroup('By field', fieldItems, { limit: 8,
+        note: 'The latest briefing for one field, with its earlier ones under it.' }),
+    ].join('');
   }
 
   if (section.id === 'system') {

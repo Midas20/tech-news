@@ -54,6 +54,15 @@ export interface NavSection {
   blurb: string;
   /** Path prefixes owned by this section. */
   owns: string[];
+  /**
+   * Paths a prefix cannot express.
+   *
+   * A field's report lives at '/field/<slug>/report', underneath the prefix that
+   * owns the field rivers, so no amount of prefix ordering separates them --
+   * Reports would have to claim '/field/' and take the rivers with it. Tested
+   * before the prefixes, so the more specific rule wins.
+   */
+  claims?: RegExp[];
 }
 
 export const SECTIONS: NavSection[] = [
@@ -63,7 +72,31 @@ export const SECTIONS: NavSection[] = [
     owns: ['/news', '/new', '/story/', '/read/', '/search',
       '/favourites', '/deleted'],
   },
-  // ANALYSE SITS SECOND, AND THAT IS THE POINT OF THE WHOLE PRODUCT.
+  // REPORTS SITS SECOND, AND IT USED TO BE AN ENTRY UNDER EXPLORE.
+  //
+  // It was a tab on 2026-08-30, demoted the same day -- "this page isn't enough
+  // to be individual menu" -- and the demotion was right at the time: it owned
+  // fourteen links to fourteen field reports, which is a rail holding nothing
+  // but the index it duplicates.
+  //
+  // What changed is that there is now something to navigate. A report is
+  // written every morning and kept, so the section has two axes -- eighteen days
+  // down one, fourteen fields across the other -- and a rail that answers "what
+  // did we say about cloud last Tuesday" without going through a list of
+  // everything. That is a section.
+  //
+  // It takes /trends/report with it. The composed whole-archive briefing was in
+  // Analyse because that is where the movement report lived, and it is a report;
+  // having reports in two tabs is how a reader learns to check both.
+  {
+    id: 'reports', label: 'Reports', icon: 'book', home: '/reports',
+    blurb: 'What happened, written each morning from the stories that arrived.',
+    owns: ['/reports', '/trends/report'],
+    // '/field/<slug>/report' and '/field/<slug>/report/<day>', which live under
+    // Explore's '/field/' prefix and are not Explore's pages.
+    claims: [/^\/field\/[^/]+\/report(\/|$)/],
+  },
+  // ANALYSE SITS THIRD, AND THAT IS THE POINT OF THE WHOLE PRODUCT.
   //
   // The retention contract deletes stories and keeps `stack_month` forever, so
   // the month-by-month series is the one artefact here that is not reproducible
@@ -73,7 +106,7 @@ export const SECTIONS: NavSection[] = [
   {
     id: 'analyse', label: 'Analyse', icon: 'trending', home: '/trends',
     blurb: 'What rose and what fell, month by month, for as far back as it goes.',
-    owns: ['/trends', '/trends/report', '/trend/'],
+    owns: ['/trends', '/trend/'],
   },
   {
     id: 'explore', label: 'Explore', icon: 'layers', home: '/all',
@@ -122,6 +155,7 @@ export const SECTIONS: NavSection[] = [
 export function sectionFor(path: string): NavSection {
   if (path === '/') return SECTIONS[0]!;
   for (const s of SECTIONS) {
+    if (s.claims?.some((re) => re.test(path))) return s;
     if (s.owns.some((p) => {
       const base = p.endsWith('/') ? p.slice(0, -1) : p;
       return path === base || path.startsWith(`${base}/`);
@@ -153,8 +187,8 @@ export function crumbsFor(path: string, label: string): { label: string; href?: 
   if (label === section.label) return trail;
   // A detail page passes the LIST it came from, which is a real destination and
   // gets a link; a list page passes its own name, which does not.
-  const item = [...REGISTRY_ITEMS, ...EXPLORE_ITEMS, ...SYSTEM_ITEMS, ...ANALYSE_ITEMS]
-    .find((i) => i.label === label);
+  const item = [...REGISTRY_ITEMS, ...EXPLORE_ITEMS, ...SYSTEM_ITEMS, ...ANALYSE_ITEMS,
+    ...REPORT_ITEMS].find((i) => i.label === label);
   trail.push(item ? { label, href: item.href } : { label });
   return trail;
 }
@@ -168,8 +202,9 @@ export function isOn(path: string, item: NavItem): boolean {
     // rivers -- so without this both entries light, or the wrong one does.
     if (m.startsWith('*')) return path.endsWith(m.slice(1));
     // And the same distinction from the other side: '/field/' claims the field
-    // rivers, not the reports written from them.
-    if (path.endsWith('/report')) return false;
+    // rivers, not the reports written from them -- including the dated ones,
+    // which is why this is a segment test and not endsWith('/report').
+    if (/\/report(\/|$)/.test(path)) return false;
     const base = m.endsWith('/') ? m.slice(0, -1) : m;
     return path === base || path.startsWith(`${base}/`);
   }) ?? false;
@@ -193,12 +228,6 @@ export const EXPLORE_ITEMS: NavItem[] = [
     blurb: 'Technology, company, platform or field — every count a link into the reader.' },
   { href: '/fields', label: 'Fields', icon: 'layers', match: ['/field/'],
     blurb: 'One page per domain, from the roots of the taxonomy.' },
-  // A page, not a section. It was briefly a tab of its own and did not carry
-  // one: fourteen links to fourteen reports is a rail with nothing in it but
-  // the index it duplicates. What it needed was a way in that does not run
-  // through the raw list it replaces, and an entry here is that.
-  { href: '/reports', label: 'Reports', icon: 'book', match: ['*/report'],
-    blurb: 'What happened in a field, counted and grouped by technology, instead of listed.' },
   { href: '/companies', label: 'Companies', icon: 'gem', match: ['/company/'],
     blurb: 'What a vendor announced, kept apart from what was written about it.' },
 ];
@@ -211,17 +240,26 @@ export const EXPLORE_ITEMS: NavItem[] = [
 // field report are Explore's pages, but "how much of this is there, over time"
 // is an analysis question no matter which renderer answers it.
 export const ANALYSE_ITEMS: NavItem[] = [
-  // First, because it is the only page here that answers the question rather
-  // than handing over the numbers and letting the reader do the comparison,
-  // the normalisation and the corroboration themselves.
-  { href: '/trends/report', label: 'Movement report', icon: 'book',
-    blurb: 'What moved, the stories that say so, and what to watch.' },
   { href: '/trends', label: 'Technology trends', icon: 'trending',
-    blurb: 'What rose and what fell, month by month, for as far back as it goes.' },
+    blurb: 'What this archive collected, month by month, for as far back as it goes.' },
   { href: '/fields', label: 'Volume by field', icon: 'layers',
     blurb: 'How much each domain produced, as a series rather than a list.' },
-  { href: '/reports', label: 'Field reports', icon: 'book',
-    blurb: 'What happened in a field, counted and grouped by technology.' },
+];
+
+/**
+ * The Reports rail.
+ *
+ * Two entries and then two axes. The days and the fields are built from the
+ * database in src/ui/rail.ts, because a rail listing reports that do not exist
+ * is worse than no rail -- this section is one of the few whose menu is a fact
+ * about the data rather than about the code.
+ */
+export const REPORT_ITEMS: NavItem[] = [
+  { href: '/reports', label: 'Every report', icon: 'book',
+    blurb: 'Every briefing written so far, by day and by field.' },
+  // Administrators only, filtered out in rail.ts and refused at the route.
+  { href: '/trends/report', label: 'Latest briefing', icon: 'spark',
+    blurb: 'The most recent morning, whole: every field, with the stories cited.' },
 ];
 
 // One vocabulary, four lists. The split is by what a thing IS to you -- a

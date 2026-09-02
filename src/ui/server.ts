@@ -28,7 +28,10 @@ import { renderNotFound } from './notfound.ts';
 import { q } from './db.ts';
 import { renderOverview } from './overview.ts';
 import { renderTrends, renderTrend } from './trends.ts';
-import { renderMovementReport, reportWindow } from './movement.ts';
+import {
+  renderArchiveReport, renderFieldBriefing, renderReportIndex, renderReportDay,
+  reportDay,
+} from './briefing.ts';
 import { renderRail, statusBadge, topNav, railCounts } from './rail.ts';
 import { renderSources } from './sources.ts';
 import { renderIntel } from './intel.ts';
@@ -41,7 +44,7 @@ import { renderLogin, renderSignup, renderMe } from './signin.ts';
 import { FIELDS } from '../vocab/fields.ts';
 import { renderSearch, suggest } from './search.ts';
 import { renderFields, renderField } from './fields.ts';
-import { renderFieldReport, renderReports, reportDays } from './report.ts';
+
 import { renderCompanies, renderCompany } from './companies.ts';
 import { renderCatalogue, renderCategory, CATEGORIES } from './stacks.ts';
 import { renderRegistry, decideCandidate } from './registry.ts';
@@ -854,16 +857,38 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
     }
 
     if (path === '/reports') {
-      return render('Reports', await renderReports(reportDays(url.searchParams.get('days'))));
+      return render('Reports', await renderReportIndex());
+    }
+    // One day, listed. `reportDay` returns null for anything that is not a
+    // calendar date, and the renderer says so rather than falling back to the
+    // latest -- showing today's report under yesterday's address would be a lie
+    // about which report you are reading.
+    //
+    // This lists the day's briefings rather than composing them, because the
+    // composed view is administrators only a few routes down. Rendering it here
+    // too would have been a gate with a door beside it.
+    if (path.startsWith('/reports/')) {
+      const day = reportDay(decodeURIComponent(path.slice('/reports/'.length)));
+      if (!day) return missing({ path });
+      return render(`Report ${day}`, await renderReportDay(day));
     }
     if (path === '/fields') return render('Fields', await renderFields());
     if (path.startsWith('/field/')) {
       const rest = path.slice('/field/'.length);
       // `/field/ai/report` before `/field/ai`, or the slug swallows the suffix.
+      // `/field/ai/report/2026-09-01` before both, for the same reason one level
+      // deeper: a field's briefing on a given day is its own page, so a reader
+      // can link to what was said rather than to whatever is said now.
+      const dated = rest.match(/^(.+)\/report\/([^/]+)$/);
+      if (dated) {
+        const day = reportDay(decodeURIComponent(dated[2]!));
+        if (!day) return missing({ path });
+        const slug = decodeURIComponent(dated[1]!);
+        return render(`${slug} briefing ${day}`, await renderFieldBriefing(slug, day));
+      }
       if (rest.endsWith('/report')) {
         const slug = decodeURIComponent(rest.slice(0, -'/report'.length));
-        const days = reportDays(url.searchParams.get('days'));
-        return render(`${slug} report`, await renderFieldReport(slug, days));
+        return render(`${slug} briefing`, await renderFieldBriefing(slug, null));
       }
       const slug = decodeURIComponent(rest);
       return render(slug, await renderField(slug));
@@ -912,14 +937,14 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
       const refused = adminRefusal(req, url, role);
       if (refused) {
         return send(req, res, 403, 'text/html; charset=utf-8', page({
-          title: 'Movement report',
+          title: 'Intelligence briefing',
           rail: railGroup('', [{ href: '/trends', label: '← Technology trends' }]),
           body: wrap(`${pageHead('Administrators only')}
             <p class="muted">${escapeHtml(refused)}</p>`),
         }), { 'cache-control': 'no-store' });
       }
-      return render('Movement report',
-        await renderMovementReport(reportWindow(url.searchParams.get('days'))));
+      return render('Intelligence briefing',
+        await renderArchiveReport(reportDay(url.searchParams.get('day'))));
     }
     if (path === '/trends') return render('Trends', await renderTrends());
     if (path.startsWith('/trend/')) {

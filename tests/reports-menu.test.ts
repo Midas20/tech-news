@@ -1,55 +1,118 @@
-// The report needs a way in, and it does not need a section.
+// A report needed a way in, then it did not deserve a section, and now it does.
 //
-// `/field/<slug>/report` existed for a week reachable from exactly one place: a
-// button most of the way down `/field/<slug>`. So the only route to the summary
-// ran through the raw list it was written to replace, which is a fair
-// description of not shipping it.
+// The history is the argument, so it is written down rather than assumed:
 //
-// The first fix overshot and gave it a tab of its own. It did not carry one --
-// fourteen links to fourteen reports is a rail holding nothing but the index it
-// duplicates. It lives under Explore, as one entry beside Fields.
+//   2026-08-29  `/field/<slug>/report` reachable from one button most of the way
+//               down the river it was written to replace. Not shipped, really.
+//   2026-08-30  given a tab. Taken away the same day -- "this page isn't enough
+//               to be individual menu" -- and that was right: the rail was
+//               fourteen links to fourteen field reports, which is the index it
+//               duplicates wearing a menu.
+//   2026-09-01  a tab again, because a report is now written every morning and
+//               kept. The section has two axes -- days down, fields across --
+//               and neither is reachable from the other without a rail.
 //
-// What has to stay true either way: a report is reachable without reading the
-// river first, and the navigation agrees with itself about where you are.
+// What has to stay true through all three: a report is reachable without reading
+// the river first, and the navigation agrees with itself about where you are.
 
 import { describe, it, expect } from 'vitest';
-import { SECTIONS, sectionFor, isOn, EXPLORE_ITEMS } from '../src/ui/nav.ts';
+import {
+  SECTIONS, sectionFor, isOn, EXPLORE_ITEMS, ANALYSE_ITEMS, REPORT_ITEMS, crumbsFor,
+} from '../src/ui/nav.ts';
 import { FIELDS } from '../src/vocab/fields.ts';
 
-const reports = EXPLORE_ITEMS.find((i) => i.href === '/reports');
+const section = SECTIONS.find((s) => s.id === 'reports');
 
-describe('the way in to a report', () => {
-  it('is an entry in Explore, not a section of its own', () => {
-    expect(reports).toBeDefined();
-    expect(SECTIONS.some((s) => s.home === '/reports')).toBe(false);
+describe('reports is a section', () => {
+  it('has a tab of its own, landing on the index', () => {
+    expect(section).toBeDefined();
+    expect(section!.home).toBe('/reports');
   });
 
-  it('puts the index and every report inside Explore', () => {
-    expect(sectionFor('/reports').id).toBe('explore');
+  it('owns the index, a dated day, and every field report', () => {
+    expect(sectionFor('/reports').id).toBe('reports');
+    expect(sectionFor('/reports/2026-08-20').id).toBe('reports');
     for (const f of FIELDS) {
-      expect(sectionFor(`/field/${f.slug}/report`).id).toBe('explore');
+      expect(sectionFor(`/field/${f.slug}/report`).id).toBe('reports');
+      expect(sectionFor(`/field/${f.slug}/report/2026-08-26`).id).toBe('reports');
     }
   });
 
-  it('lights Reports on a report and Fields on the field itself', () => {
-    // The distinction a prefix cannot make. Every report lives UNDER
-    // '/field/<slug>', which is exactly what the Fields entry matches, so
-    // without a suffix rule both entries light or the wrong one does.
-    const fields = EXPLORE_ITEMS.find((i) => i.href === '/fields')!;
+  it('takes the composed briefing out of Analyse rather than listing it twice', () => {
+    // A destination in two rails is how a reader learns to check both.
+    expect(sectionFor('/trends/report').id).toBe('reports');
+    expect(ANALYSE_ITEMS.some((i) => i.href === '/trends/report')).toBe(false);
+    expect(ANALYSE_ITEMS.some((i) => i.href === '/reports')).toBe(false);
+    expect(EXPLORE_ITEMS.some((i) => i.href === '/reports')).toBe(false);
+  });
 
-    expect(isOn('/field/security/report', reports!)).toBe(true);
+  it('leaves the series and the rivers where they were', () => {
+    expect(sectionFor('/trends').id).toBe('analyse');
+    expect(sectionFor('/trend/rust').id).toBe('analyse');
+    expect(sectionFor('/fields').id).toBe('explore');
+    for (const f of FIELDS) {
+      expect(sectionFor(`/field/${f.slug}`).id).toBe('explore');
+    }
+  });
+});
+
+describe('the distinction a prefix cannot make', () => {
+  // Every report lives UNDER '/field/<slug>', which is what Explore's Fields
+  // entry matches. No ordering of prefixes separates them: Reports would have to
+  // claim '/field/' and take the rivers with it.
+  const fields = EXPLORE_ITEMS.find((i) => i.href === '/fields')!;
+
+  it('does not light Fields on a report', () => {
     expect(isOn('/field/security/report', fields)).toBe(false);
+    expect(isOn('/field/security/report/2026-08-26', fields)).toBe(false);
+  });
 
+  it('still lights Fields on the field itself', () => {
     expect(isOn('/field/security', fields)).toBe(true);
-    expect(isOn('/field/security', reports!)).toBe(false);
-
     expect(isOn('/fields', fields)).toBe(true);
   });
 
-  it('does not let a report path fall through to the default section', () => {
+  it('separates them by a rule that survives a dated report', () => {
+    // The guard was endsWith('/report'), which a dated URL walks straight past.
+    expect(sectionFor('/field/security/report/2026-08-26').id).toBe('reports');
+    expect(sectionFor('/field/security').id).toBe('explore');
+  });
+
+  it('does not claim a field whose slug merely starts with report', () => {
+    expect(sectionFor('/field/reporting').id).toBe('explore');
+  });
+});
+
+describe('the navigation agrees with itself', () => {
+  it('never leaves a report path falling through to the default section', () => {
     // sectionFor() returns SECTIONS[0] for anything unclaimed, so a broken rule
     // shows up as the wrong tab rather than as an error.
     expect(SECTIONS[0]!.id).toBe('news');
-    expect(sectionFor('/reports').id).not.toBe('news');
+    for (const p of ['/reports', '/reports/2026-08-20', '/field/ai/report',
+      '/field/ai/report/2026-08-26', '/trends/report']) {
+      expect(sectionFor(p).id, `${p} fell through`).toBe('reports');
+    }
+  });
+
+  it('gives a report page a breadcrumb naming a section that exists', () => {
+    // A breadcrumb that names a section the top bar does not have is worse than
+    // none, because it is a claim about where you are.
+    const trail = crumbsFor('/field/ai/report', 'AI & ML');
+    expect(trail[0]).toMatchObject({ label: 'Reports', href: '/reports' });
+  });
+
+  it('says nothing on the section home, where the tab already says it', () => {
+    expect(crumbsFor('/reports', 'Reports')).toEqual([]);
+  });
+
+  it('offers a rail entry for every report page a reader can open', () => {
+    expect(REPORT_ITEMS.some((i) => i.href === '/reports')).toBe(true);
+    expect(REPORT_ITEMS.some((i) => i.href === '/trends/report')).toBe(true);
+  });
+
+  it('keeps every section pointing at a page inside itself', () => {
+    for (const s of SECTIONS) {
+      expect(sectionFor(s.home).id, `${s.id} home is in another section`).toBe(s.id);
+    }
   });
 });

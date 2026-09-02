@@ -61,13 +61,44 @@ async function main(): Promise<void> {
 
     for (const file of files) {
       const sql = await readFile(join(MIGRATIONS_DIR, file), 'utf8');
-      const checksum = await sha256Hex(sql);
+
+      // HASH THE SQL, NOT THE CHECKOUT.
+      //
+      // git is configured with core.autocrlf on Windows, so the same committed
+      // migration is CRLF in this working tree and LF in a Linux one. Hashing
+      // the raw bytes made the checksum a property of the machine: 0071 was
+      // applied as a1d5efb7 and read back as 943b2530 after nothing but a line
+      // ending changed, and every migration would have failed the same way on a
+      // fresh clone from another platform.
+      //
+      // Normalising here is safe because the thing being guarded is the SQL
+      // that ran. A line ending cannot change what a statement does, so two
+      // checkouts of one commit must not be able to disagree about whether the
+      // history matches. An actual edit still changes the hash, which is the
+      // property this check exists for.
+      const checksum = await sha256Hex(sql.replace(/\r\n/g, '\n'));
 
       const previous = applied.get(file);
       if (previous) {
         // A changed migration is an error, not something to re-run. Schema
         // history has to match what actually happened to the database.
         if (previous !== checksum) {
+          // Unless the only thing that changed is the line ending. Rows written
+          // before the normalisation above hold the hash of whatever bytes that
+          // checkout happened to have, so this table currently holds a mix: some
+          // migrations were applied from a CRLF working tree and some from LF.
+          // Re-hashing the raw file tells the two cases apart -- a match means
+          // the SQL is byte-identical and only the endings moved, which cannot
+          // change what ran, so the row is corrected in place. Anything that
+          // matches neither form is a genuine edit and still stops the run.
+          if (previous === await sha256Hex(sql)) {
+            await client.query(
+              'UPDATE schema_migrations SET checksum = $2 WHERE filename = $1',
+              [file, checksum],
+            );
+            console.log(`${file} checksum normalised (line endings only)`);
+            continue;
+          }
           throw new Error(
             `${file} has changed since it was applied (${previous.slice(0, 8)} -> ${checksum.slice(0, 8)}). ` +
             'Write a new migration instead of editing an applied one.',

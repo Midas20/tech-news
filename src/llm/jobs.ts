@@ -246,75 +246,160 @@ export const JOBS: Record<string, JobSpec> = {
     },
   },
 
-  // THE REPORT IS WRITTEN, NOT ASSEMBLED.
+  // THE REPORT IS READ AND WRITTEN, NOT COUNTED.
   //
-  // /field/<slug>/report already counts and groups: "1,039 stories, 129
-  // launches, 219 releases". That is a digest, and a digest still leaves the
-  // reader to work out what happened. What this writes is the paragraph a
-  // person would write having read the same evidence, which is the only
-  // artefact here that is genuinely new rather than a re-arrangement of rows.
+  // What this replaced compared how many stories each technology attracted this
+  // window against the last and called the ratio a finding. Rejected on
+  // 2026-09-01: "don't count news, it is fake value because we can't collect all
+  // news". The denominator -- everything published anywhere -- is unknown, so a
+  // ratio over it describes the feed list and nothing else.
   //
-  // EVERY CLAIM IS BOUND TO A NUMBER IT WAS GIVEN. The prompt supplies measured
-  // movements and real headlines and forbids anything else, because a model
-  // asked to write about technology trends will happily supply the industry
-  // consensus from its training data. That would be a plausible report about
-  // last year written in the archive's voice, and indistinguishable from a real
-  // one to the person reading it.
+  // This prompt therefore FORBIDS COUNTING. The model is handed forty stories
+  // with their text and told to say what is in them. The only quantities it may
+  // use are public GitHub figures measured outside this archive, and it must
+  // quote the date they were taken, because an adoption number without a date is
+  // a claim about the present made from an unknown past.
   //
-  // Claude first: this is the one output here that a person reads as prose, and
-  // a weaker model hedging its way through it costs more trust than the tokens
-  // save.
+  // CITATIONS ARE STRUCTURAL, not stylistic. Every theme returns the story
+  // numbers it was drawn from, and src/analysis/briefing.ts drops any theme that
+  // cites nothing or cites a story that does not exist. That check is the only
+  // defence against the real failure mode here: a model asked about technology
+  // trends will fluently supply the industry consensus from its training data,
+  // and a plausible paragraph about last year is indistinguishable from a
+  // finding to the person reading it.
   //
-  // The chain is long anyway, because a briefing nobody can generate is worth
-  // less than a plainer one somebody can. On this installation
-  // ANTHROPIC_API_KEY is unset and the Gemini free tier answers 429 to a prompt
-  // this size, so without the tail the archive would simply never write a
-  // report. The stored row and the page both name the model that wrote them --
-  // the degradation is disclosed rather than smoothed over, which is the only
-  // thing that makes a fallback chain honest for prose a person will quote.
-  movement_report: {
+  // The chain is long because a briefing nobody can generate is worth less than
+  // a plainer one somebody can. ANTHROPIC_API_KEY is unset on this installation
+  // and the Gemini free tier answers 429 to a prompt this size. The stored row
+  // and the page both name the model that wrote them, so the degradation is
+  // disclosed rather than smoothed over.
+  field_briefing: {
     chain: ['claude', 'gemini-flash', 'gemini-flash-lite', 'cerebras', 'groq'],
-    promptVersion: 'v1',
-    maxTokens: 3000,
+    // v2 banned the volume vocabulary outright. v1 forbade counting and the model
+    // obeyed the letter of it, then opened with "AI infrastructure and agent
+    // platforms dominate updates" -- a claim about how many, made without a
+    // number, and exactly the reading this rewrite exists to prevent.
+    //
+    // v3 MAKES IT WRITE NEWS. v2 was accurate, cited, and read like a filing
+    // system: "AI Agent Governance and Enterprise Infrastructure Updates", "New
+    // Cloud Hardware and Database Regions", "Framework and Tooling Updates".
+    // Every title a noun phrase -- no actor, no verb, nothing that happened --
+    // while the evidence underneath held AWS opening its Agent Registry,
+    // LangChain raising $125m and Debian ruling on AI contributions. The model
+    // was abstracting real events up into categories, which is the opposite of
+    // the job, and a reader learns nothing from a category they did not already
+    // know from the section heading. The rules now demand a subject and a verb,
+    // and show four of v2's own titles as what not to write.
+    promptVersion: 'v3',
+    maxTokens: 4000,
     system: [
-      'You are writing a short intelligence briefing for engineers, from measured',
-      'evidence supplied by a technology news archive.',
+      'You are a technology analyst. You have been given the actual text of recent',
+      'stories in one field. Read them and write what happened.',
       '',
       'RULES, in order of importance:',
-      '1. Use ONLY the movements and headlines given. Never introduce a technology,',
-      '   company, product, version or event that is not in the input. You have no',
-      '   knowledge of what happened outside this data.',
-      '2. Every claim must be traceable to a supplied number. Say "share of coverage',
-      '   roughly doubled" when the ratio says so, not "adoption is accelerating",',
-      '   which the data cannot support.',
-      '3. Distinguish corroborated movement from first-party noise. A movement',
-      '   carried only by the channel of the vendor itself is activity, not evidence',
-      '   that anyone adopted anything, and must be described that way.',
-      '4. Releases are routine. A rise made of version traffic is a project shipping;',
-      '   a rise made of launches, changes and market moves is a signal.',
-      '5. If the evidence is thin, say so. "Too little to call" is a valid finding,',
-      '   and a better one than a confident sentence with nothing under it.',
       '',
-      'STYLE: plain declarative English, British spelling, no marketing register,',
-      'no bullet lists inside paragraphs, no hedging padding. Three to five short',
-      'paragraphs. Do not open with a scene-setting clause about a fast-moving',
-      'landscape or similar. Name things.',
+      '1. NEVER COUNT THE STORIES, AND NEVER IMPLY A COUNT. Banned outright:',
+      '   "seven stories", "most coverage", "the majority of reports", "dominate",',
+      '   "dominant", "increasingly", "a wave of", "widespread", "everyone is",',
+      '   "the trend", "growing interest", and any other phrase whose only evidence',
+      '   is how many items you were shown. You were given a capped selection from',
+      '   an incomplete archive: the quantities in front of you measure the feed',
+      '   list, not the industry. Volume is not a finding here. Write what the',
+      '   stories say happened, not how many of them there were.',
+      '',
+      '2. USE ONLY WHAT IS IN THE STORIES. Never introduce a technology, company,',
+      '   product, version, funding round or event that does not appear in the text',
+      '   you were given. You have no knowledge of anything outside it.',
+      '',
+      '3. CITE EVERYTHING. Each theme lists the story numbers it came from. A theme',
+      '   you cannot cite must not be written. Two stories that say the same thing',
+      '   from unrelated sources are worth more than five that repeat one vendor.',
+      '',
+      '4. THE ONLY NUMBERS YOU MAY USE are the public figures block, and you must',
+      '   name the date they were measured. If that block is empty, state no size,',
+      '   adoption or popularity figure at all.',
+      '',
+      '5. SEPARATE WHAT SOMEBODY DID FROM WHAT SOMEBODY SAYS. A story marked',
+      '   first-party is the subject describing itself: authoritative about what',
+      '   shipped, worthless as evidence that anyone wanted it. Say which you have.',
+      '',
+      '6. SAY WHAT IS ABSENT. If the stories do not settle a question a reader would',
+      '   obviously ask, put that in "gaps". "The text does not say whether this',
+      '   shipped to general availability" is a genuine finding.',
+      '',
+      'WHAT YOU ARE WRITING: news. Not a summary of news, not a taxonomy of it.',
+      'Each item reports a thing that happened, or a thing several unrelated',
+      'sources independently report. The reader should be able to learn what',
+      'happened from your text alone and use the citations to check it.',
+      '',
+      'EVERY TITLE IS A SENTENCE WITH SOMEBODY DOING SOMETHING. A title with no',
+      'actor and no verb is a filing label, and a page of filing labels tells a',
+      'reader nothing they did not already know from the section heading.',
+      '',
+      '  BAD  AI Agent Governance and Enterprise Infrastructure Updates',
+      '  BAD  New Cloud Hardware and Database Regions',
+      '  BAD  Security Updates, Vulnerability Fixes and Agent Releases',
+      '  BAD  Framework and Tooling Updates',
+      '  GOOD AWS opens its Agent Registry to every account',
+      '  GOOD Canonical patches OpenZFS in three Ubuntu releases',
+      '  GOOD LangChain raises $125m and renames LangGraph Platform',
+      '  GOOD Debian rules AI-generated contributions out of main',
+      '',
+      'Never end a title with Updates, Releases, Enhancements, Additions,',
+      'Changes, Adjustments, Improvements, Features, Tooling, Fixes, Roundup or',
+      'News. Never build one by joining two or three subjects with "and" -- if',
+      'two things happened, they are two items.',
+      '',
+      'Open each body with the specific event: who did what, and when, in the',
+      'first sentence. Then the detail that matters, then what somebody else said',
+      'about it if anybody independent did. Do not open with a summary of the',
+      'paragraph you are about to write.',
+      '',
+      'PREFER THE SPECIFIC. A version number, a price, a named product, a named',
+      'company is worth more than any adjective. If the stories give you a figure',
+      'that somebody else published -- a funding round, a limit, a price -- use it',
+      'and say who published it.',
+      '',
+      'STYLE: plain declarative English, British spelling, present or simple past.',
+      'No marketing register, no hedging padding, no scene-setting opener about a',
+      'fast-moving landscape. Name things. Each body is one or two short',
+      'paragraphs.',
+      '',
+      'Three to five items. Fewer, if the stories only support fewer -- two real',
+      'events beat five categories every time.',
       '',
       'Return JSON only:',
-      '{"headline":"...","summary":"...","body":"...","watch":["..."]}',
-      'headline: under 90 characters, naming the actual subject.',
-      'summary: one sentence, under 220 characters.',
-      'body: the briefing, paragraphs separated by a blank line.',
-      'watch: 2 to 4 short lines on what to watch and why, each tied to evidence.',
+      '{"headline":"...","summary":"...","themes":[{"title":"...","body":"...",',
+      '"evidence":[1,4,9]}],"watch":["..."],"gaps":"..."}',
+      'headline: the single most important thing that happened, as a sentence with',
+      '  a subject and a verb. Under 90 characters. Not the name of the field, and',
+      '  not a list of topics.',
+      'summary: one sentence under 220 characters, what a reader should take away.',
+      'themes: 3 to 5 news items, each titled as above, each with evidence as story',
+      '  numbers from the list.',
+      'watch: 2 to 4 short lines on what to watch next and why, each tied to a story.',
+      'gaps: one or two sentences on what these stories could not tell you.',
     ].join('\n'),
     schema: {
       type: 'object',
-      required: ['headline', 'summary', 'body', 'watch'],
+      required: ['headline', 'summary', 'themes', 'watch', 'gaps'],
       properties: {
         headline: { type: 'string', maxLength: 200 },
         summary: { type: 'string', maxLength: 400 },
-        body: { type: 'string', maxLength: 6000 },
+        themes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['title', 'body', 'evidence'],
+            properties: {
+              title: { type: 'string', maxLength: 160 },
+              body: { type: 'string', maxLength: 2000 },
+              evidence: { type: 'array', items: { type: 'integer' } },
+            },
+          },
+        },
         watch: { type: 'array', items: { type: 'string', maxLength: 300 } },
+        gaps: { type: 'string', maxLength: 600 },
       },
     },
   },

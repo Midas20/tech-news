@@ -1530,184 +1530,417 @@ dismissed rows, `rollup` now does too — search did not, so the 785 Qdrant
 documentation pages taken out an hour earlier were still returnable, and the
 result count disagreed with the list it was counting. All three now exclude them.
 
-## The movement report: a finding, its evidence, and what to do
+## Counting our own stories was the fake measurement
 
-`/trends` is a table. "Rust, 412" is not a finding — the reader still has to do
-the comparison, the normalisation and the corroboration in their head before it
-means anything. `/trends/report` does those three things and states the result as
-a sentence, with the rows it was computed from underneath it.
+Said on 2026-09-01, and it retired an entire feature:
 
-Four sections, in the order a reader needs them: **the finding**, **the
-evidence**, **what to watch**, and **what this cannot tell you**. The
-recommendation is last on purpose — it is the only part that is an opinion, and
-the only route to it runs past the evidence it was drawn from.
+> *"I don't want to analysis news' count. I want to analysis news's content and
+> summarize and then build report based on it by fields. In analysis feature,
+> don't count news, it is fake value because we can't collect all news. If you
+> want to use this value, collect public value of it in net."*
 
-### The measurement that would have made it lie
+The movement report compared how many stories each technology attracted over 90
+days against the 90 before, normalised both to a **share** of their window, and
+called the ratio a finding. The share normalisation was the sophisticated part —
+it existed so that the archive doubling in size would not read as every
+technology doubling — and it does not survive the objection, because it does not
+touch it.
 
-Measured on 2026-09-01: the last 90 days hold 8,195 stories from 325 active
-sources; the prior 90 hold 4,205 from 213. The archive itself roughly doubled —
-179 release feeds were resumed, 61 first-party channels seeded, and a backfill
-walked GitHub release history to January 2024.
+**The denominator is the problem, and normalising cannot fix a denominator you
+do not have.** This archive sees what 352 feeds carry. Everything technology
+publishes anywhere is the population, nobody has that number, and no arithmetic
+over a sample of unknown coverage produces a statement about the population.
+"Rust grew its share of coverage 1.4×" reads as a fact about Rust and is a fact
+about the feed list — and about the feed list *on the day*, which is why
+repairing 179 dead release feeds moved every verdict in the table at once.
 
-A verdict built on raw counts would have reported the whole vocabulary as growing
-about 2×, and it would have been measuring this repository's commit history
-rather than the industry. That is the failure mode of every "trending" panel that
-counts documents.
+So the count is demoted to the only honest job it has: **deciding what to read**.
+Choosing to open a story is not a claim about the world. The claims now come from
+the text.
 
-**So the comparison is on share of the window, not volume.** If collection doubles
-uniformly, every share is unchanged and every verdict is "steady" — which is the
-correct answer. A technology moves here only when it moved relative to everything
-else the archive saw in the same period. The coverage ratios are printed on the
-page regardless, because a reader is entitled to know how much the instrument
-changed under the measurement.
+### Read forty, write five, cite everything
 
-### A ratio needs a baseline, and the archive keeps growing one
+`src/analysis/corpus.ts` selects. `src/analysis/briefing.ts` writes. The
+selection is ranked by event kind then importance then recency, over-pulls 400
+rows, and is then cut to 40 by caps that are the difference between *what
+happened in cloud* and *what the loudest publisher in cloud did*:
 
-The first run put **AT Protocol at 254×** — 495 stories against 1. That is not a
-technology arriving, it is a feed arriving: AT Protocol was one of the 179
-resumed the same morning. `MIN_PREV` sends anything with a thin prior window to a
-**Newly covered** list that is named rather than ranked. It is a real fact about
-the archive, stated as one, and it keeps this repository's own repairs out of the
-findings.
+| cap | value | what it prevents |
+|---|---|---|
+| `perSource` | 4 | one vendor's changelog filling a field |
+| `perSubject` | 3 | one project out-producing an industry |
+| hard subject ceiling | 6 | the same project talking past its cap on co-tags |
+| `maxReleases` | 8 | routine version traffic crowding out events |
+| `total` | 40 | more than a model reads carefully, or a person checks |
 
-### Corroboration outranks speed
+`summary_en` is **required**, not preferred. A story with no text cannot be read,
+and admitting one would let a headline stand in for evidence — which is how a
+briefing ends up asserting what a title merely implied.
 
-A vendor is authoritative about what it shipped and worthless as evidence that
-anyone wanted it, so `sources.source_type` is graded through
-`vocab/intel.ts` — the `independent` flag — and:
+Two of those caps have subtleties worth stating. The **field root is not a
+subject**: ask for cloud and nearly everything comes back tagged `cloud`, so
+charging the root against `perSubject` would end the corpus at three stories. And
+the **soft cap is evadable by design** — a story about Rust *and* WebAssembly is
+admitted when Rust is full, because it is the only WebAssembly evidence there is.
+That rule is right and it is also a hole: a project with a generous tag cloud
+(`solana, web3, defi, blockchain`) always has one subject with room, so it never
+actually caps. The hard ceiling at 2× is the backstop. A subject may exceed its
+soft cap by bringing genuinely new ones, and never past twice.
 
-- nothing is recommended without at least one independent source,
-- ranking is by independent source count first and movement second,
-- anything growing on first-party sources alone gets its own section headed
-  *Moving, but only its own people are saying so*.
+The effect on the real archive, measured over a 14-day window before the daily
+window replaced it: 40 stories from **26 distinct sources** in infrastructure and
+web platform, 17 in AI. Before the caps, one changelog could supply half a field.
+On the one-day windows the report now uses the caps bind less often, because a
+day rarely offers a publisher four chances to dominate — they still bind on the
+release feeds, which ship whether or not there is news.
 
-The recommendation also says which kind of movement it is: 30 releases and 2
-events is a project shipping, not a market moving, and the sentence admits it
-rather than implying adoption.
+### Three things keep a written report honest
 
-### What it refuses to say
+**1. The writer sees only the corpus.** Forty numbered stories — title, summary,
+source, event kind, date, and whether the source speaks for its own subject.
+Every theme returns the story numbers it came from, and `validate()` drops any
+theme citing nothing, or citing a story that does not exist. Dropped, not
+flagged: a briefing containing one unsupported paragraph is worse than a shorter
+briefing, because the reader cannot tell which paragraph it was.
 
-Of 940 technologies with any activity, 250 got a verdict. **674 are below the
-floor** — under 8 stories in the window or under 20 across both — because a ratio
-built on three stories is arithmetic, not evidence. The page prints that count
-rather than quietly reporting on the 250 as though they were everything.
+This guards the real failure mode. A model asked about technology trends will
+fluently supply the industry consensus from its training data, and a plausible
+paragraph about last year is indistinguishable from a finding to the person
+reading it. Citation is the only thing that separates them.
 
-### It is written once a day, and kept
+**2. No quantity comes from this archive.** The prompt bans the vocabulary
+outright — *"seven stories"*, *"most coverage"*, *"the majority of reports"*,
+*"dominate"*, *"increasingly"*, *"a wave of"*, *"widespread"*. That list is not
+hypothetical. v1 forbade counting, the model obeyed the letter of it, and then
+opened the AI briefing with *"AI infrastructure and agent platforms **dominate**
+updates"* — a claim about how many, made without a number. v2 bans the words and
+`tests/briefing.test.ts` asserts each one is still banned.
 
-The page renders live, because somebody looking now should see now. That is not
-enough on its own: the verdicts move as collection moves, so what the archive
-said about Rust last Tuesday was unrecoverable by Wednesday. For an instrument
-whose entire subject is the passage of time, the analysis is supposed to be the
-durable half.
+**3. The only numbers are public.** `src/analysis/public.ts` supplies GitHub's
+topic census and star counts from `stack_adoption`, refreshed by the existing
+`adoption` job — 2,338 technologies carry a public project figure, 746 a star
+count. Every figure is quoted with the date it was measured, because an adoption
+number without a date is a claim about the present made from an unknown past. If
+nothing was measured, the prompt says *state no size figure at all*, and an
+unmeasured technology is never rendered as zero: "nobody asked" and "nothing
+exists" look identical in a column that defaults to 0, and only one is a fact.
 
-So a `report` job runs daily at 07:00 — after rollup, retain and tag, so the day
-it describes is settled and the stories it counts carry their vocabulary — and
-writes to `daily_reports`. One row per `(day, window)`: the window is part of the
-identity, because a 30-day and a 365-day report on the same morning are two
-different statements. Re-running a day corrects that row rather than appending a
-second opinion, and `forbid_delete` applies, because a report is analysis and
-analysis outlives the stories underneath it.
+### What the pages look like now
 
-The payload is `jsonb` carrying a `generator` version. The shape of a finding is
-the thing most likely to change here — a new band, a new corroboration measure —
-and a table of columns would need a migration per idea and would still lose the
-old shape on the way. Versioning it means an old row stays readable as what it
-was rather than being reinterpreted as what today's code would have written.
+`/trends/report` is the whole archive, field by field. `/field/<slug>/report` is
+one field, fully expanded. `/reports` lists every report ever written, and its
+rows lead with what each briefing **found** rather than how many stories a field
+produced — which was the old card's headline number and is not an answer to any
+question a reader has. The full set of addresses is in **Every report is kept**
+below.
 
-### The title names the subject and the day
+There is **no window picker**, and there was one first. It offered 7, 14, 30 and
+90 days, and three of those four led to an empty page, because the job writes one
+briefing a day over one window — a control whose options mostly produce *nothing
+has been written yet* teaches a reader that the page is broken. The deeper reason
+is that the window is a property *of the report*: this is not a query that can be
+re-run at any range, it is a piece of writing made once, from a period the report
+itself records. So the window is stated on the page, and the thing a reader picks
+is a **day**. `reportDay` guards it, because a hand-typed parameter must not
+reach a query either way.
 
-"Movement report" on two hundred rows is a filename. A report is *about*
-something — a technology, a tool, a platform, a company, or the money — and about
-a date, so the title carries both:
+Under every finding sit the stories it was drawn from, open by default when there
+are three or fewer. A citation the reader has to go looking for is a citation they
+will not check, and the entire design here is that checking is easy. First-party
+sources are marked in the citation list, because a reader cannot tell from a
+domain name that a source is the subject describing itself.
 
-```
-Software, Testing and AI Agents — 1 September 2026
-Market moves: NVIDIA, AWS and Microsoft — 14 September 2026
-```
+There are no verdict badges any more, and no colour except one. The old page
+painted a technology green for "surging" on a ratio of story counts; a colour is a
+very confident way to say a thing, and that one was confident about the wrong
+quantity. The single remaining accent marks `first-party`.
 
-The subject is chosen the way the recommendations are: **corroboration first**.
-Naming whatever moved fastest would put a vendor's own publishing schedule in the
-headline, which is the mistake the rest of this feature exists to avoid. When
-nothing has independent backing the movers are still named, followed by
-`(uncorroborated)` — the report says what it has rather than going quiet.
-`Market moves:` leads when the window's funding, acquisition and consolidation
-events outweigh its launches and changes, because that is a different kind of day
-and the title should say so before it says any name.
+### The daily report was not daily
 
-### One report, every kind of subject
+The first version of this read a rolling **fourteen days** every morning. The
+window length was chosen carefully and the whole thing was still wrong, as the
+next day's reader said plainly: *"The report don't change."*
 
-A report that can name a stack but not a company describes half of what this
-archive collects: 14,713 stories carry a company tag. `stories.stacks`,
-`stories.companies` and `stories.platforms` are structurally identical — a
-`text[]` of slugs against a table with a slug and a name — so one query shape
-covers all three rather than three hand-written ones that would drift. Technology,
-company and platform movements land in the same report, ranked against each other,
-which is what makes it one report about the archive instead of three about
-its columns.
+The arithmetic is not close. Measured 2026-09-01: a fourteen-day window holds
+**2,237** readable stories and about **171** arrive in a day. Consecutive reports
+therefore shared roughly **92%** of their evidence — same evidence, same
+briefing. Calling it daily made it look like a fresh reading of the news when it
+was yesterday's reading with one day stirred in.
+
+So a report now covers **the period since the last one**. `nextWindow` starts
+where the previous report's `covered_to` stopped, so no story is read into two
+briefings and none is skipped between them. Both ends are stored on the row
+rather than derived, because "the last fourteen days" is a different set of
+stories depending on when you ask, and a report has to be able to say exactly
+what it read — including a week later, when the job has run six more times.
+
+Two guards on that:
+
+- **First run reads a week.** There is no previous report to follow, and a
+  single day would make the very first report thin for no reason.
+- **A catch-up is capped at seven days.** Without the cap, a fortnight's outage
+  produces a fortnight-wide report — the rolling window this version exists to
+  remove, arriving through the back door. The gap is stated on the page rather
+  than hidden, so a reader can see the days nobody wrote about.
+
+`first_seen_at` would be the obvious column for *new to us*, and it is unusable
+here: the backfill campaign re-inserted the archive, so **22,167** stories claim
+to have been first seen within a day. `published_at` is what actually happened
+when, so the window is a window on the news rather than on our own write traffic.
+
+Four consecutive days, generated to check the fix:
+
+| day | fields | findings | stories read | leading subjects |
+|---|---|---|---|---|
+| 29 Aug | 11 | 47 | 196 | Tencent, Open Source, Hugging Face |
+| 30 Aug | 3 | 10 | 16 | Debian, Documentation, Generator |
+| 31 Aug | 9 | 35 | 88 | Vercel, SDK, API |
+| 1 Sep | 14 | 53 | 322 | AWS, Model Context Protocol, HashiCorp |
+
+**Zero cited stories are shared between any consecutive pair.** 30 August was a
+Sunday: sixteen stories, three fields, and the other eleven fields reported as
+having too little to write from. That is the correct answer to a quiet Sunday and
+the old rolling window could not have given it.
+
+### The briefing read like a filing system
+
+v2 was accurate, cited, forbidden to count — and unreadable as news. Asked on
+2026-09-01: *"the report have to be new news that generated by recent news."*
+Its own output is the argument:
+
+| what it wrote | what was underneath it |
+|---|---|
+| AI Agent Governance and Enterprise Infrastructure Updates | AWS opening Agent Registry; Meta shipping Muse Code |
+| New Cloud Hardware and Database Regions | Graviton5 EC2 instances; BigQuery Graph reaching GA |
+| Security Updates, Vulnerability Fixes and Agent Releases | Canonical patching OpenSSL and OpenZFS |
+| Framework and Tooling Updates | a $74m Tectonic exploit and a network restart |
+
+Every title a noun phrase: no actor, no verb, nothing that happened. The model
+was abstracting real events *up* into categories, which is the opposite of the
+job — and a category tells a reader nothing they did not already know from the
+section heading they clicked to get there.
+
+v3 demands **a subject and a verb in every title**, bans the endings that made
+them interchangeable (Updates, Releases, Enhancements, Fixes, Roundup…), refuses
+titles that join two subjects with "and" — if two things happened they are two
+items — and requires the body to open with who did what and when. The four
+examples of what *not* to write are v2's own titles, because an abstract rule
+about noun phrases did not stop it and four concrete lines did.
+
+The same days, rewritten:
+
+> **Meta launches Muse Code and AWS releases Agent Registry**
+> — AWS makes Agent Registry generally available for organization governance
+> — HashiCorp integrates native AI agent support into Vault Enterprise 2.1
+> — Cronos network restarts following a $74 million Tectonic exploit
+
+**No validator enforces this, and that is a finding rather than an omission.**
+The obvious guard drops any title ending in Updates, Releases, Fixes and so on.
+Run against 155 real titles it flagged 12, and all 12 were correct news
+sentences: *"LanceDB releases version 0.38.0 with breaking changes"*, *"Canonical
+patches OpenZFS and OpenSSL vulnerabilities in Ubuntu releases"*. Those words are
+verbs and objects at least as often as they are labels, so the check rejects good
+writing to catch a fault the prompt already fixed — none of the 155 lacked a
+verb. The rule lives in the prompt; the evidence lives in
+`tests/briefing.test.ts` so nobody adds the validator later.
+
+### A rate limit was being reported as a quiet industry
+
+Found generating a fortnight of back reports on 2026-09-01. 15 to 18 August
+wrote, then `gemini-flash-lite` hit its rate limit, and the next ten days came
+back as **fourteen quiet fields each**. The page would have told a reader that
+technology went silent for ten days while the archive held some 1,800 readable
+stories from them.
+
+The cause was one return type. `briefField` returned `null` for both *too little
+arrived to write from* and *no model would answer*, and `briefArchive` filed both
+under `quiet` — so the page said "produced too little to write from", which is a
+statement about coverage and was simply false. The part of the code that reports
+the limits was making exactly the kind of unfounded claim the rest of this
+rewrite exists to prevent.
+
+`briefField` now returns a `FieldOutcome`:
+
+| outcome | meaning | what the page says |
+|---|---|---|
+| `written` | a briefing | the briefing |
+| `quiet` | too little evidence | "too little to write from" — a fact about coverage |
+| `unwritten` | evidence, no briefing | "had stories and no briefing", named, with how much went unread |
+
+An `unwritten` field is never called quiet. The page states which fields they
+were and how many stories went unread, because a gap in the archive's account of
+a period is the reader's business and its size is part of it.
+
+The damage was real and not hypothetical: regenerating 18 August under the fixed
+code took it from **2 briefed fields to 12**. Ten fields had been recorded as a
+quiet industry when the truth was a provider cooldown. 15, 16 and 17 August came
+back identical, so those were honest.
+
+A rate limit is a wait and not a verdict, so the backfill retries refused fields
+once after a pause; 20, 24 and 27 August each needed it and each came back
+complete.
+
+### Reports could not be found by clicking anything
+
+Asked on 2026-09-01: *"where can I look these report lists"*. They were one rail
+entry under Explore, and that entry was invisible from the page the Explore tab
+lands on.
+
+`/all` is Explore's home. `/all` is also a **reader stream**, so it renders the
+faceted query panel instead of the section menu that `renderRail()` builds for
+`/fields`, `/categories` and `/companies`. Clicking **Explore** therefore landed
+on the one page in the section where the section's own menu did not exist — and
+Reports was only reachable from that menu. Everything worked; nothing was
+findable.
+
+The Explore group is now the first block of the faceted rail too. Facets narrow
+the list; those links leave it, so they are a separate group rather than mixed in
+among the checkboxes.
+
+### Reports is a section again
+
+Asked immediately after: *"hey add tab for this"*. It is the third answer this
+question has had, and the first two were both right at the time:
+
+| | |
+|---|---|
+| 29 Aug | reachable from one button, most of the way down the river it replaces |
+| 30 Aug | given a tab, then demoted the same day — *"this page isn't enough to be individual menu"* |
+| 1 Sep | a tab again |
+
+The demotion was correct. A section earns its place by having a rail worth
+opening, and that rail was fourteen links to fourteen field reports — the index
+it duplicates, wearing a menu.
+
+**What changed is that there is now something to navigate.** A report is written
+every morning and kept, so the section has two axes: eighteen days down one,
+fourteen fields across the other, and neither reachable from the other without a
+rail. The Recent group is built from `daily_reports` rather than from a constant,
+because a rail offering a day nobody wrote is a menu that lies about what exists.
+
+`/trends/report` moves with it. The composed whole-archive briefing was in
+Analyse because that is where the movement report lived, and it is a report;
+reports in two tabs is how a reader learns to check both. It stays
+administrators-only, filtered from the rail and refused at the route.
+
+**A section cannot be a prefix here.** Every field report lives at
+`/field/<slug>/report`, underneath the prefix that owns the field rivers, so no
+ordering of `owns` separates them — Reports would have to claim `/field/` and
+take the rivers with it. `NavSection` gained `claims`, a list of patterns tested
+before the prefixes, and Reports claims `/^\/field\/[^/]+\/report(\/|$)/`. The
+matching guard on the Fields entry became a segment test for the same reason:
+`endsWith('/report')` walks straight past `/field/ai/report/2026-08-26`.
+
+One thing the move broke and the tests did not catch, because it is a rendering
+detail rather than a routing one: every report page called
+`crumbsFor('/reports', 'Reports')`, and `crumbsFor` returns an empty trail when
+the path IS its section's home. `/reports` had just become one, so the
+breadcrumbs collapsed from *"Explore / Reports / AI & ML"* to *"AI & ML"* — no
+way back. Each page now passes its own path, and reads **Reports / AI & ML**,
+**Reports / 20 August 2026**, and nothing at all on `/reports` itself, where the
+tab already says it.
+
+### Every report is kept, and both ways in are listed
+
+Asked for in the same breath: the report must *"list that compose each report for
+each day and each fields"*. Two axes onto one grid.
+
+| page | what it is |
+|---|---|
+| `/reports` | every day, each with its fields under it |
+| `/reports/<day>` | one day, listed |
+| `/field/<slug>/report` | one field, latest, with its own history under it |
+| `/field/<slug>/report/<day>` | one field, one day |
+| `/trends/report` | the composed whole-archive briefing (administrators) |
+
+Migration 0073 adds `field_briefings`, keyed `(day, field)` — the grain a reader
+actually navigates, down the days for one field and across the fields for one
+day. Before it, the briefings lived inside one jsonb blob per day, so "every AI
+briefing this month" meant parsing every day's payload and a single field's
+report had no address of its own. `daily_reports` keeps its row per day for the
+composed title and the totals, and carries no findings of its own — two copies of
+a finding is two things that can disagree.
+
+**A day appears once.** `daily_reports` is keyed `(day, window_days)`, which was
+right when the window was a reader's choice and is not any more. `forbid_delete`
+keeps the old rows, so 1 September held both a `content-v1` row over fourteen
+rolling days and a `content-v2` row over one, and the index listed the day twice
+with two sets of totals and identical fields beneath them. `DISTINCT ON (day)
+… ORDER BY day DESC, generated_at DESC` — by *when it was written*, not by a
+filter on the generator string, because the same thing happens at v3 and a filter
+would have to be remembered.
+
+**`/reports/<day>` lists; it does not compose.** That distinction is a
+permission. The composed whole-archive view is administrators only, and rendering
+the same content under a second address would have been a gate with a door beside
+it. A reader gets the day's title, what it covered, and a way into each field's
+briefing — which has always been theirs. Verified: reader gets `403` on
+`/trends/report` and `/trends/report?day=…`, `200` and zero finding-prose on
+`/reports/<day>`.
+
+A day that was never written returns a page saying so, and a day-shaped string
+that is not a date returns **404**. `reportDay` rejects `2026-02-30` rather than
+letting `Date` roll it over to 2 March, because accepting it would put one day's
+report at another day's address.
+
+### The report is a record, not a page
+
+Generated once a day at 07:00 by the `report` job, after rollup, retain and tag,
+and read back on view. Generating on view would cost a model call per refresh and,
+worse, would give two people looking at the same archive two different reports — a
+report that changes when you reload is not a report.
+
+The fourteen model calls are **sequential on purpose**. Fourteen at once is how a
+provider's rate limit turns one slow report into fourteen failed ones, and the job
+holds an hour's lease to do it in.
+
+Citations are stored **resolved into real stories** (id, title, source, date)
+rather than as indexes into a corpus, because retention deletes stories after four
+months and these tables outlive them — an unresolved index becomes a pointer to
+nothing exactly when the report becomes historically interesting. `forbid_delete`
+applies to both tables for the same reason.
+
+Migration 0072 made the old verdict columns nullable rather than dropping them.
+Rows written under `movement-v1` are still true as what they were — a record of
+what the archive was prepared to say on those mornings, under an analysis it no
+longer performs — and dropping the columns would silently rewrite that history
+into something it never said.
+
+### The title names a subject, not a filename
+
+Asked for on 2026-08-31: the title must name a market, technology, platform or
+company, and the day. The subjects come from the stories each briefing **led
+with**, so the title is made of the same judgement the briefing was rather than a
+second one computed from tallies. Field roots are excluded — every story in the
+cloud briefing is tagged `cloud`, and a title built from roots reads "Ai, Cloud,
+Data", which is fourteen words for *we have fourteen sections*. Slugs are resolved
+to real names through `stacks`, `companies` and `platforms`, because `ai-agents`
+title-cases to "Ai Agents" and a title is the one string nobody reads charitably.
+"Market moves:" leads when the leading evidence is money rather than shipping.
+
+The first report written this way:
+
+> **AWS, Model Context Protocol, HashiCorp — 14 fields briefed, 1 September 2026**
+
+14 fields, 53 findings, **0 uncited**, written from 322 stories read across every
+source that carried them.
 
 ### Administrators only
 
 `/trends/report` is refused to readers by the same rule `/admin` uses: a signed-in
-administrator is the authorisation, and the token stays for headless access. It
-names what the archive cannot support as readily as what it can, and the coverage
-ratios it prints are facts about the instrument rather than about the news.
+admin *is* the authorisation, and the token stays for headless access. The refusal
+lives in the route, not only in the rail — a rail that hides a link is a menu, not
+a permission.
 
-The rail entry is removed for readers **and** the route refuses them. A rail that
-hides a link is a menu, not a permission.
+### What it still cannot tell you, said on the page
 
-### The report is written, not assembled
+Four limits, stated rather than buried: this is an unmeasured sample; every
+finding is capped and cited; **absence is not evidence** (a quiet field is a
+statement about coverage, not about the field); and the prose was written by a
+model, which is named on its own briefing. Disclosure is what makes a fallback
+chain honest for text somebody may quote — the chain runs Claude first and falls
+through to `gemini-flash-lite` on this installation, and the page says so.
 
-`/field/<slug>/report` counts and groups: *1,039 stories, 129 launches, 219
-releases*. That is a digest, and a digest still leaves the reader to work out
-what happened. The briefing is the paragraph a person would write having read the
-same evidence — the only artefact here that is genuinely new rather than a
-re-arrangement of rows.
-
-The measured movements become an **evidence packet**: share changes, story counts
-for both windows, source counts split by independence, the event mix, and the
-real headlines behind everything the report is allowed to name. The model gets
-numbers, not prose, so there is nothing to copy and every sentence has to be
-derived.
-
-**Every claim is bound to a number it was given.** The prompt forbids naming any
-technology, company, product, version or event that is not in the input, because
-a model asked to write about technology trends will happily supply the industry
-consensus from its training data — a plausible report about last year, written in
-the archive's voice, and indistinguishable from a real one to the person reading
-it. The rules also force the distinctions the rest of this feature exists to
-make: corroborated movement against first-party noise, a rise made of version
-traffic against one made of launches and market moves, and "too little to call"
-as a valid finding.
-
-It shows. From the first real run, unprompted:
-
-> Independent corroboration across these gains remains minimal; most subjects
-> show very few independent sources relative to their total story counts,
-> indicating high volumes of first-party vendor activity.
-
-> Subjects such as Redis and AT Protocol are newly covered with no prior baseline
-> and cannot be counted as growth within the archive.
-
-### Written once a day, not once a view
-
-Generating on view would cost a model call per refresh and, worse, would give two
-people looking at the same archive two different briefings. A report that changes
-when you reload is not a report. The `report` job writes one daily and the page
-reads it; the measured sections underneath are computed live, because those are
-counts and counts should be current.
-
-### The chain is long, and the page says which model wrote it
-
-Claude first: this is the one output a person reads as prose. It is not Claude
-only. On this installation `ANTHROPIC_API_KEY` is unset and the Gemini free tier
-answers 429 to a prompt this size, so a short chain would mean the archive never
-writes a report at all — worse than a plainer one.
-
-The stored row and the page both name the model. Disclosure is what makes a
-fallback chain honest for prose somebody may quote: the first briefing generated
-here says *written by gemini-flash-lite* on its face. When no model is reachable
-the page keeps the measured findings and says no briefing has been written, and
-the job logs `[measured only, no model]`.
 
 ## The market is the second thing this is for
 
@@ -2183,10 +2416,11 @@ back 304:
 | oldest year reached | 2026 | **2011** |
 
 Three collect cycles took 447, 1,132 and 1,121 new stories. The four requested
-months are held and displayed - `/field/ai/report?days=120` reports 820 AI
-stories across them - and the archive now also carries the back catalogue each
-feed still offers, which is what "keep everything" means when the feeds are
-asked without a cutoff.
+months are held, and the archive now also carries the back catalogue each feed
+still offers, which is what "keep everything" means when the feeds are asked
+without a cutoff. (The `?days=120` reading that used to be quoted here is gone
+with the counting: see **Counting our own stories was the fake measurement**.
+The windows a report accepts are now 7, 14, 30 and 90 days.)
 
 ---
 
@@ -2720,10 +2954,13 @@ fourteen links to fourteen reports — nothing but the index it duplicates, taki
 a slot beside News and Stacks to say the same names twice.
 
 So: **one entry in Explore, beside Fields.** The index at `/reports` is the
-menu — one card per field carrying the two numbers that decide whether it is
-worth opening: how much arrived in the period, and whether that is more or less
-than the period before. A quiet field keeps its card, because an empty report is
-a true answer and a menu that changes shape week to week is not a menu.
+menu — one card per field. It carried two numbers at first: how much arrived in
+the period, and whether that was more or less than the period before. Both were
+retired on 2026-09-01 (**Counting our own stories was the fake measurement**),
+and the card now leads with what the briefing actually **found**, which is an
+answer to the question a reader has. A quiet field keeps its card, because "too
+little text to read" is a true answer and a menu that changes shape week to week
+is not a menu.
 
 ### The distinction a prefix cannot make
 
