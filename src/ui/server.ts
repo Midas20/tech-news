@@ -296,6 +296,10 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
   const path = url.pathname;
   const state = { path, search: url.searchParams };
 
+  // Hoisted out of the try so the error handler can see it. An internal message
+  // is worth showing to somebody who can act on it and nobody else.
+  let seenRole: 'admin' | 'user' | null = null;
+
   try {
     // The stylesheet and the script. Content-hashed, so `immutable` is a
     // statement of fact rather than a hope: this URL cannot ever hold different
@@ -337,6 +341,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
     const sessionId = await readSession(cookieFrom(req.headers.cookie, COOKIE));
     const account: Account | null = sessionId ? await accountById(sessionId) : null;
     const role = account?.role ?? null;
+    seenRole = role;
 
     const redirect = (to: string, cookie?: string) => {
       res.writeHead(303, {
@@ -982,13 +987,30 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
 
     return missing({ path });
   } catch (err) {
+    // THE MESSAGE GOES TO THE LOG ALWAYS AND TO THE PAGE ALMOST NEVER.
+    //
+    // This printed the raw internal message to whoever asked. On 2026-09-05 the
+    // database ran out of its data-transfer allowance and every visitor to the
+    // site was shown "Your project has exceeded the data transfer quota.
+    // Upgrade your plan to increase limits." -- the hosting provider's billing
+    // state, on a public deployment bound to 0.0.0.0.
+    //
+    // That was the polite version. The same path renders SQL errors, which name
+    // tables and columns, and connection failures, which name hosts. None of it
+    // helps a reader and all of it helps somebody probing.
+    //
+    // An administrator sees it, because they are the person who can act on it,
+    // and the server log always has it either way.
     const message = err instanceof Error ? err.message : String(err);
     console.error(`${path}: ${message}`);
+    const detail = seenRole === 'admin'
+      ? `<pre class="mono" style="white-space:pre-wrap">${escapeHtml(message)}</pre>`
+      : `<p class="muted">Something went wrong at our end. It has been logged.
+           Nothing you did caused it, and trying again shortly is worth a go.</p>`;
     send(req, res, 500, 'text/html; charset=utf-8', page({
       title: 'Error',
       rail: railGroup('', [{ href: '/', label: '← Back to news' }]),
-      body: wrap(`${pageHead('Something failed')}
-        <pre class="mono" style="white-space:pre-wrap">${escapeHtml(message)}</pre>`),
+      body: wrap(`${pageHead('Something failed')}${detail}`),
     }), { 'cache-control': 'no-store' });
   }
 }

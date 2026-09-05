@@ -52,7 +52,21 @@ export interface RailCounts {
 }
 
 let cache: { at: number; value: RailCounts } | null = null;
-const TTL_MS = 5000;
+
+/**
+ * Longer than the browser's poll, which is the whole point.
+ *
+ * This was 5s against a 15s poll, so the cache never once hit: every tick of
+ * every open tab re-ran the whole count set -- a dozen aggregates over 38,578
+ * stories, 5,760 times a day per visible tab, to move a number that changes
+ * when the collector runs every 30 seconds.
+ *
+ * At 30s a poll finds a warm cache roughly every other tick and no number on
+ * screen is more than half a minute stale, which is well inside the honesty of
+ * a badge that already says "collected 18m ago". Found on 2026-09-05 looking
+ * for what spent a database's data-transfer quota.
+ */
+const TTL_MS = 30_000;
 
 /**
  * The days a report exists for, newest first.

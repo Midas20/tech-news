@@ -7826,6 +7826,57 @@ bind message supplies 2 parameters, but prepared statement "" requires 1
 The row query worked perfectly while the page around it returned 500. It has
 its own array now.
 
+## The database went away and took the web server with it
+
+On 2026-09-05 the Neon project exhausted its data-transfer allowance. Every
+query failed, `SELECT 1` included. That is a billing fact and not a bug — what
+the archive *did* about it was three bugs, none of which are about quotas.
+
+**The process died.** `Scheduler.start()` registers the job catalogue, and its
+first query threw. `main.ts` awaits that at the top level, so an unreachable
+database took the whole process down — web server included. "The archive cannot
+reach its database" became "there is nothing listening on port 3000", which is a
+worse outage than the one that caused it and far harder to diagnose from
+outside. Start-up now treats a failure as a failed tick and hands it to the
+backoff; the catalogue is written by the first tick that gets through, which is
+safe because the upsert was already idempotent.
+
+**It retried forever, at full speed.** A failed tick rescheduled on the same
+five-second cadence: 17,280 attempts a day against a dependency that had already
+said no, and an identical log line for every one. The failures that reach that
+handler are the database being down, out of quota, or refusing credentials — all
+three want waiting, not retrying, and job-level errors never surface there
+anyway. The delay now doubles per consecutive failure and resets on the first
+success, capped at five minutes. A day of outage costs about 250 attempts
+instead of 17,280. The cap matters as much as the growth: a scheduler backed off
+to an hour stays down long after its database came back.
+
+**It told everyone why.** The 500 page printed the raw internal message to
+whoever asked, so every visitor was shown *"Your project has exceeded the data
+transfer quota. Upgrade your plan to increase limits."* — the hosting provider's
+billing state, on a deployment bound to `0.0.0.0` from a public repository. That
+was the polite version; the same path renders SQL errors, which name tables and
+columns. An administrator sees the detail now because they are the person who
+can act on it, everyone else gets a sentence, and the log always has it either
+way. `role` had to be hoisted out of the `try` for this: it was declared inside,
+so the handler could not see it and would have hidden the message from the
+administrator too.
+
+### What it was spending
+
+No Neon API key is configured here, so the usage breakdown is the console's to
+give. One thing was measurable from the code and was plainly wrong: the browser
+polls `/api/counts` every **15 seconds** while a tab is visible, and the counts
+cache expired after **5**. The cache never hit once. Every tick of every open tab
+re-ran a dozen aggregates over 38,578 stories — 5,760 times a day per tab — to
+move a number that only changes when the collector runs, every 30 seconds. The
+TTL is now 30 seconds, which is inside the honesty of a badge that already says
+"collected 18m ago".
+
+`tests/outage.test.ts` holds the backoff arithmetic, the exponent clamp (`2 **
+1000` is `Infinity`, and an infinite delay fires immediately), the role gate, and
+an assertion that the counts cache outlives the interval that asks for it.
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.

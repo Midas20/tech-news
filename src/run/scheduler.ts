@@ -75,6 +75,9 @@ export interface SchedulerOptions {
 /** The ceiling on backoff: sixteen intervals, then it stops getting worse. */
 const MAX_BACKOFF_MULTIPLIER = 16;
 
+/** The longest a failing scheduler will wait before trying again. */
+const MAX_BACKOFF_MS = 5 * 60_000;
+
 export class Scheduler {
   private readonly opts: Required<Omit<SchedulerOptions, 'jobs' | 'worker' | 'owner'>>
     & Pick<SchedulerOptions, 'jobs' | 'worker' | 'owner'>;
@@ -84,6 +87,22 @@ export class Scheduler {
   private stopping = false;
   private timer: NodeJS.Timeout | null = null;
   private idle: Promise<void> = Promise.resolve();
+
+  /**
+   * Consecutive failed ticks, which is how fast the next one comes.
+   *
+   * A tick that fails because the DATABASE is unreachable used to be retried on
+   * the same five-second cadence, forever. On 2026-09-05 the Neon project ran
+   * out of data transfer and the log filled with one identical line every five
+   * seconds -- 17,000 of them a day, each one a connection attempt against a
+   * dependency that had already said no.
+   *
+   * A tick failing is almost never a transient the next tick can fix: the ones
+   * that reach here are the database being down, out of quota, or refusing
+   * credentials, and all three want waiting rather than retrying. Job-level
+   * errors are handled inside the run and never surface here.
+   */
+  private failures = 0;
 
   constructor(options: SchedulerOptions) {
     this.opts = {
@@ -103,7 +122,39 @@ export class Scheduler {
    * exists. A deploy at 03:02 must not reset the 03:10 rollup to "now", and two
    * containers coming up must not each decide everything is due.
    */
+  /**
+   * Bring the scheduler up, even when the database will not have it.
+   *
+   * This used to let the first failing query out, and `await scheduler.start()`
+   * in main.ts is a top-level await -- so an unreachable database took the
+   * whole process down, web server included. On 2026-09-05 that turned "the
+   * archive cannot reach its database" into "there is nothing listening on port
+   * 3000", which is a worse outage than the one that caused it and a much
+   * harder one to diagnose from outside.
+   *
+   * A failure here is the same failure a tick has, so it is counted as one and
+   * handed to the same backoff. The catalogue is re-registered on the first
+   * tick that succeeds, because the upsert is idempotent by design.
+   */
   async start(): Promise<void> {
+    try {
+      await this.register();
+      this.registered = true;
+      this.opts.log?.(`scheduler: ${this.byName.size} jobs, tick `
+        + `${this.opts.tickSeconds}s, runner ${this.opts.runner}`);
+    } catch (err) {
+      this.failures += 1;
+      this.opts.log?.(`scheduler: cannot reach the database (${message(err)}) -- `
+        + `retrying in ${Math.round(this.nextDelayMs() / 1000)}s; `
+        + 'the web server is up and will serve what it can');
+    }
+    this.schedule();
+  }
+
+  /** Whether the catalogue has been written. Retried until it has. */
+  private registered = false;
+
+  private async register(): Promise<void> {
     for (const job of this.byName.values()) {
       await this.opts.worker.query(
         `INSERT INTO job_runs (name, every_seconds, at_hour, lease_seconds, enabled, next_run_at)
@@ -130,10 +181,6 @@ export class Scheduler {
     // a rare and deliberate act; deleting its row can be too.
 
     await this.reclaimFromDeadRunners();
-
-    this.opts.log?.(`scheduler: ${this.byName.size} jobs, tick ${this.opts.tickSeconds}s, `
-      + `runner ${this.opts.runner}`);
-    this.schedule();
   }
 
   /**
@@ -193,18 +240,59 @@ export class Scheduler {
       .catch(() => undefined);
   }
 
+  /**
+   * How long before the next tick.
+   *
+   * Doubles per consecutive failure and resets on the first success, so a
+   * healthy scheduler keeps its cadence exactly and a broken one backs off to
+   * five minutes instead of hammering. The cap matters as much as the growth:
+   * whatever went wrong may be fixed at any moment, and a scheduler that has
+   * backed off to an hour is one that stays down long after its database came
+   * back.
+   */
+  private nextDelayMs(): number {
+    const base = this.opts.tickSeconds * 1000;
+    if (this.failures === 0) return base;
+    return Math.min(base * 2 ** Math.min(this.failures, 10), MAX_BACKOFF_MS);
+  }
+
   private schedule(): void {
     if (this.stopping) return;
     this.timer = setTimeout(() => {
-      this.idle = this.tick().catch((err: unknown) => {
-        this.opts.log?.(`scheduler: tick failed: ${message(err)}`);
+      this.idle = this.tick().then(() => {
+        if (this.failures > 0) {
+          this.opts.log?.(`scheduler: recovered after ${this.failures} failed `
+            + `tick${this.failures === 1 ? '' : 's'}`);
+          this.failures = 0;
+        }
+      }).catch((err: unknown) => {
+        this.failures += 1;
+        // Logged on the way up and then only as the delay changes, because the
+        // point of the line is to say something is wrong -- repeating it every
+        // five seconds says nothing the first one did not.
+        const wait = Math.round(this.nextDelayMs() / 1000);
+        if (this.failures <= 3 || this.failures % 10 === 0) {
+          this.opts.log?.(`scheduler: tick failed (${this.failures}): `
+            + `${message(err)} -- next attempt in ${wait}s`);
+        }
       }).finally(() => this.schedule());
-    }, this.opts.tickSeconds * 1000);
+    }, this.nextDelayMs());
   }
 
   /** One pass: find what is due, claim what there is room for, run it. */
   private async tick(): Promise<void> {
     if (this.stopping) return;
+
+    // Start-up may have found the database down. Until the catalogue is
+    // written there is nothing for a tick to claim, so the first tick that can
+    // reach the database does the registration the start never managed.
+    if (!this.registered) {
+      await this.register();
+      this.registered = true;
+      this.opts.log?.(`scheduler: ${this.byName.size} jobs registered, `
+        + `runner ${this.opts.runner}`);
+    }
+
     const room = this.opts.maxParallel - this.running.size;
     if (room <= 0) return;
 
