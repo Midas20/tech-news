@@ -120,7 +120,18 @@ if (ROLE === 'all' || ROLE === 'worker') {
     }),
     worker,
     owner,
-    tickSeconds: num('SCHEDULER_TICK_SECONDS', 5),
+    // FIFTEEN, NOT FIVE.
+    //
+    // The tick asks "is anything due" and the fastest job in the catalogue runs
+    // every thirty seconds, so a five-second tick was six times more often than
+    // any job could use -- 17,280 round trips a day to learn nothing, against a
+    // database billed by data transfer. At fifteen it is 5,760, and the worst
+    // case a job waits beyond its cadence is fifteen seconds, which no job here
+    // can tell the difference about.
+    //
+    // Still an environment variable, because a deployment with a faster job
+    // than any of these needs a faster tick and should not need a patch.
+    tickSeconds: num('SCHEDULER_TICK_SECONDS', 15),
     maxParallel: num('SCHEDULER_MAX_PARALLEL', 3),
     log: (line) => console.log(`${stamp()} ${line}`),
   });

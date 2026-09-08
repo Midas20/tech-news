@@ -62,8 +62,10 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
     "@neondatabase/serverless": "^0.10.4",
+    "@types/pg": "^8.23.1",
     "fast-xml-parser": "^4.5.0",
-    "linkedom": "^0.18.5"
+    "linkedom": "^0.18.5",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241127.0",

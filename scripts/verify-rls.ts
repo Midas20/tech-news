@@ -19,7 +19,7 @@
 //
 // Probe rows are left in place; nothing is ever deleted.
 
-import { Pool } from '@neondatabase/serverless';
+import { makePool } from '../src/db/driver.ts';
 import { loadDotEnv } from '../src/lib/dotenv.ts';
 
 await loadDotEnv();
@@ -42,8 +42,8 @@ function check(label: string, pass: boolean, detail = ''): void {
   console.log(`${pass ? 'PASS' : 'FAIL'}  ${label}${detail ? `  ${detail}` : ''}`);
 }
 
-const ownerPool = new Pool({ connectionString: ownerUrl });
-const appPool = new Pool({ connectionString: appUrl });
+const ownerPool = makePool(ownerUrl);
+const appPool = makePool(appUrl);
 const owner = await ownerPool.connect();
 const app = await appPool.connect();
 

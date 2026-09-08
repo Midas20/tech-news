@@ -8,7 +8,7 @@
 // and typing them into a seed file produces the confident undated claim that
 // schema exists to prevent.
 
-import { Pool } from '@neondatabase/serverless';
+import { makePool } from '../src/db/driver.ts';
 import { loadDotEnv } from '../src/lib/dotenv.ts';
 import { mapWithConcurrency } from '../src/lib/pool.ts';
 import { PLATFORMS } from '../seeds/platforms.ts';
@@ -23,7 +23,7 @@ if (!url) {
 
 const check = !process.argv.includes('--no-check');
 
-const pool = new Pool({ connectionString: url });
+const pool = makePool(url);
 const client = await pool.connect();
 
 try {

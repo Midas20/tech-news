@@ -8,7 +8,7 @@
 // The admin views are the exception and say so on the page: they use the owner
 // connection because seeing every tenant is the whole point of an admin surface.
 
-import { Pool } from '@neondatabase/serverless';
+import { makePool, type AnyPool } from '../db/driver.ts';
 
 /**
  * A pooled connection emits 'error' when the database drops it -- a failover, an
@@ -16,15 +16,15 @@ import { Pool } from '@neondatabase/serverless';
  * fatal, so without this listener a transient database blip takes the whole web
  * server down. The request that hits it still fails; the process survives.
  */
-function guard(pool: Pool, label: string): Pool {
+function guard(pool: AnyPool, label: string): AnyPool {
   pool.on('error', (err: Error) => {
     console.error(`[db:${label}] pool error: ${err.message}`);
   });
   return pool;
 }
 
-let readerPool: Pool | null = null;
-let ownerPool: Pool | null = null;
+let readerPool: AnyPool | null = null;
+let ownerPool: AnyPool | null = null;
 
 function must(name: string, value: string | undefined): string {
   if (!value) throw new Error(`${name} is not set`);
@@ -63,12 +63,12 @@ export function ownerUrl(): string {
  * first place.
  */
 export async function q<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
-  if (!readerPool) readerPool = guard(new Pool({ connectionString: readerUrl() }), 'reader');
+  if (!readerPool) readerPool = guard(makePool(readerUrl()), 'reader');
   return (await readerPool.query(sql, params)).rows as T[];
 }
 
 export async function qOwner<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
-  if (!ownerPool) ownerPool = guard(new Pool({ connectionString: ownerUrl() }), 'owner');
+  if (!ownerPool) ownerPool = guard(makePool(ownerUrl()), 'owner');
   return (await ownerPool.query(sql, params)).rows as T[];
 }
 

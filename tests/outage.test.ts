@@ -112,6 +112,33 @@ describe('an error page shown to a stranger', () => {
   });
 });
 
+describe('the scheduler asks no more often than a job can use', () => {
+  const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+  const jobs = readFileSync(new URL('../src/run/jobs.ts', import.meta.url), 'utf8');
+
+  const tick = Number(main.match(/SCHEDULER_TICK_SECONDS', (\d+)\)/)?.[1]);
+  const cadences = [...jobs.matchAll(/everySeconds: ([^,]+),/g)]
+    // eslint-disable-next-line no-eval
+    .map((m) => Number(eval(m[1]!)));
+
+  it('reads a tick and some cadences at all', () => {
+    expect(tick).toBeGreaterThan(0);
+    expect(cadences.length).toBeGreaterThan(5);
+  });
+
+  it('does not poll faster than the quickest job could possibly need', () => {
+    // Five seconds against a thirty-second job is 17,280 round trips a day to
+    // learn nothing, on a database billed by data transfer.
+    expect(tick).toBeLessThanOrEqual(Math.min(...cadences));
+  });
+
+  it('still polls often enough to serve that job', () => {
+    // A tick slower than the fastest cadence turns "every 30s" into "whenever".
+    expect(tick).toBeLessThanOrEqual(Math.min(...cadences));
+    expect(tick).toBeGreaterThanOrEqual(10);
+  });
+});
+
 describe('the browser poll finds a warm cache', () => {
   const rail = readFileSync(new URL('../src/ui/rail.ts', import.meta.url), 'utf8');
   const theme = readFileSync(new URL('../src/ui/theme.ts', import.meta.url), 'utf8');

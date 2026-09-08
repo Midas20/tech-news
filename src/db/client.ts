@@ -8,8 +8,9 @@
 //                RLS reads that setting, so anything tenant-scoped MUST go
 //                through here. There is no application-level WHERE tenant_id.
 
-import { neon, Pool, neonConfig } from '@neondatabase/serverless';
+import { neonConfig } from '@neondatabase/serverless';
 import { countSubrequest } from '../lib/subrequests.ts';
+import { makePool, makeQuerier, isNeon, type AnyPool } from './driver.ts';
 
 export interface Db {
   query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]>;
@@ -29,14 +30,16 @@ export function resetDbStats(): void {
 }
 
 export function createDb(connectionString: string): Db {
-  const sql = neon(connectionString);
+  // Neon's HTTP driver where the host is Neon's, a pooled `pg` where it is a
+  // real Postgres server. See ./driver.ts -- the connection string decides.
+  const sql = makeQuerier(connectionString);
+  const metered = isNeon(connectionString);
   return {
     async query<T>(text: string, params: unknown[] = []): Promise<T[]> {
-      // neon() is callable directly with a parameterized string; `.query` is a
-      // pg-Pool method, not an HTTP-driver one.
       const started = Date.now();
-      // Over the HTTP driver every query is its own subrequest.
-      countSubrequest();
+      // Over the HTTP driver every query is its own subrequest. A local
+      // Postgres has no such allowance to spend.
+      if (metered) countSubrequest();
       try {
         const rows = await sql(text, params as unknown[]);
         return rows as T[];
@@ -59,15 +62,13 @@ export function createDb(connectionString: string): Db {
  * The caller must close it (ctx.waitUntil(closeWorkerDb())) or the invocation
  * hangs until the runtime reaps it.
  */
-let workerPool: Pool | null = null;
+let workerPool: AnyPool | null = null;
 
 export function createWorkerDb(connectionString: string): Db {
   if (!workerPool) {
-    // Workers provide a global WebSocket; Node does not until the driver is told.
-    if (typeof WebSocket !== 'undefined') neonConfig.webSocketConstructor = WebSocket;
     neonConfig.poolQueryViaFetch = false;
-    workerPool = new Pool({ connectionString, max: 1 });
-    countSubrequest(); // the connection itself
+    workerPool = makePool(connectionString, { max: 1 });
+    if (isNeon(connectionString)) countSubrequest(); // the connection itself
   }
   const pool = workerPool;
   return {
@@ -117,7 +118,7 @@ export interface PooledDb extends Db {
 }
 
 export function createPoolDb(connectionString: string, label = 'db'): PooledDb {
-  const p = new Pool({ connectionString });
+  const p = makePool(connectionString);
   p.on('error', (err: Error) => {
     console.error(`[db:${label}] pool error: ${err.message}`);
   });
@@ -138,10 +139,13 @@ export function createPoolDb(connectionString: string, label = 'db'): PooledDb {
   };
 }
 
-let pool: Pool | null = null;
+// withTenant() checks a session OUT rather than using a pooled query:
+// set_config and the SELECT relying on it must land on the same connection, or
+// RLS reads a setting that was never applied.
+let pool: AnyPool | null = null;
 
-function getPool(connectionString: string): Pool {
-  if (!pool) pool = new Pool({ connectionString });
+function getPool(connectionString: string): AnyPool {
+  if (!pool) pool = makePool(connectionString);
   return pool;
 }
 

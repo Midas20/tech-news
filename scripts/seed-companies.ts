@@ -11,7 +11,7 @@
 // Existing sources are linked too: several company blogs were already seeded by
 // name in sources.ts, and re-adding them under a new URL would duplicate the feed.
 
-import { Pool } from '@neondatabase/serverless';
+import { makePool } from '../src/db/driver.ts';
 import { COMPANY_SEEDS } from '../seeds/companies.ts';
 import { loadDotEnv } from '../src/lib/dotenv.ts';
 
@@ -29,7 +29,7 @@ if (!url) {
   process.exit(1);
 }
 
-const pool = new Pool({ connectionString: url });
+const pool = makePool(url);
 const client = await pool.connect();
 
 let linked = 0;

@@ -36,7 +36,7 @@
 //   and on that collision the hand-written row wins, always. The guard is
 //   `WHERE sources.curated IS NOT TRUE` on the upsert, not an ordering trick.
 
-import { Pool } from '@neondatabase/serverless';
+import { makePool } from '../src/db/driver.ts';
 import { loadDotEnv } from '../src/lib/dotenv.ts';
 
 await loadDotEnv();
@@ -67,7 +67,7 @@ const flag = (name: string, fallback: number): number => {
 const months = flag('months', 12);
 const limit = flag('limit', 0);
 
-const pool = new Pool({ connectionString: url });
+const pool = makePool(url);
 const db = await pool.connect();
 const done = async (code = 0): Promise<never> => {
   db.release();

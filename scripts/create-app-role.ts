@@ -15,7 +15,7 @@
 //
 // The generated password is written to .env and never printed.
 
-import { Pool } from '@neondatabase/serverless';
+import { makePool } from '../src/db/driver.ts';
 import { readFile, writeFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { loadDotEnv } from '../src/lib/dotenv.ts';
@@ -40,7 +40,7 @@ const roleName = wantWorker
   : (process.env.DATABASE_APP_ROLE || 'app_user');
 const password = randomBytes(24).toString('base64url');
 
-const pool = new Pool({ connectionString: adminUrl });
+const pool = makePool(adminUrl);
 const client = await pool.connect();
 
 try {

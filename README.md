@@ -7877,6 +7877,63 @@ TTL is now 30 seconds, which is inside the honesty of a badge that already says
 1000` is `Infinity`, and an infinite delay fires immediately), the role gate, and
 an assertion that the counts cache outlives the interval that asks for it.
 
+## The archive can now live somewhere that does not bill by the byte
+
+Asked on 2026-09-08, three days into the outage: *"I want the site work
+forever."* No change to this code makes a metered service unmetered, so the
+answer was to stop requiring one.
+
+**What made it impossible before.** Every connection went through
+`@neondatabase/serverless`. That driver does not speak to a Postgres server --
+it speaks to Neon's proxy, over HTTP or a WebSocket. It is the right driver in a
+Cloudflare Worker, where there are no TCP sockets, and it was the *only* driver
+here. So the archive could only ever live on one metered hosted service, and
+when the meter ran out the site went with it.
+
+`src/db/driver.ts` is the whole change: `pg` for a real Postgres server, Neon's
+driver for a Neon host, chosen by looking at the hostname.
+
+**Detected, not configured.** A flag is a thing to get wrong — set it while
+pointing at Neon and every query fails with a socket error nobody expects. The
+connection string already says where it goes, and `.neon.tech` is the only case
+where the specialised driver is *required* rather than merely possible. The
+check is on the suffix, so `neon.tech.example.com` is treated as the ordinary
+server it is. Moving between the two is a change of URL and nothing else, which
+is what keeps the Worker deployment working.
+
+The two drivers are API-compatible where this project touches them --
+`pool.query(text, params)` resolving to `{ rows, rowCount }`, an `'error'`
+event, `connect()`, `end()` — because Neon's Pool is deliberately modelled on
+node-postgres. That is what made this a choice of constructor across 15 files
+rather than a rewrite.
+
+### Standing it up locally
+
+PostgreSQL 17 via `winget`, then a database and the three extensions the schema
+uses (`pg_trgm`, `pgcrypto`, `unaccent` — all bundled). `scripts/migrate.ts`
+applies all 73 migrations; 0069 needs the login roles to exist first, so
+`scripts/create-app-role.ts` runs between 0068 and 0069, twice, once with
+`--worker`. Then the seeds, in an order that matters: `seed` before
+`seed:companies` leaves a foreign key unsatisfied and drops a handful of
+sources, so companies go first or `seed` runs twice.
+
+Result: **473 sources, all healthy; 2,460 technologies; 141 platforms**, and 269
+stories in the first collection cycle. No quota, no meter, no monthly bill, and
+queries over a loopback interface instead of the public internet.
+
+### What is still in Neon
+
+The old archive — 38,578 stories and every daily report — is only there, and
+cannot be copied out while the transfer quota is exhausted, because a dump is a
+read like any other. The Neon URLs are kept in `.env` as `NEON_DATABASE_URL`
+and friends, read by nothing, so that when the billing period rolls over the
+history can be copied across.
+
+`.gitignore` was widened from `.env` to `.env.*` in the same pass. Taking a
+backup called `.env.neon-backup` before a database move is the obvious thing to
+do, `.env` does not match it, and that is exactly how a file holding every API
+key in a project ends up in a public repository.
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.

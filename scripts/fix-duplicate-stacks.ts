@@ -24,7 +24,7 @@
 //   node --experimental-strip-types scripts/fix-duplicate-stacks.ts          (dry run)
 //   node --experimental-strip-types scripts/fix-duplicate-stacks.ts --apply
 
-import { Pool } from '@neondatabase/serverless';
+import { makePool } from '../src/db/driver.ts';
 import { loadDotEnv } from '../src/lib/dotenv.ts';
 
 await loadDotEnv();
@@ -89,7 +89,7 @@ function pickCanonical(a: Row, b: Row): { keep: Row; drop: Row; why: string } {
     : { keep: b, drop: a, why: 'shorter slug' };
 }
 
-const pool = new Pool({ connectionString: url });
+const pool = makePool(url);
 const client = await pool.connect();
 
 try {

@@ -7,7 +7,7 @@
 //   node --experimental-strip-types scripts/seed.ts
 //   node --experimental-strip-types scripts/seed.ts --dry-run
 
-import { Pool } from '@neondatabase/serverless';
+import { makePool } from '../src/db/driver.ts';
 import { stackSeeds } from '../seeds/stacks.ts';
 import { SOURCE_SEEDS, shardFor, type SourceSeed } from '../seeds/sources.ts';
 import { loadDotEnv } from '../src/lib/dotenv.ts';
@@ -31,7 +31,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const pool = new Pool({ connectionString: url });
+  const pool = makePool(url);
   const client = await pool.connect();
 
   try {

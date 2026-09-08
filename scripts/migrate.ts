@@ -8,7 +8,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Pool } from '@neondatabase/serverless';
+import { makePool } from '../src/db/driver.ts';
 import { loadDotEnv } from '../src/lib/dotenv.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -34,7 +34,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const pool = new Pool({ connectionString: url });
+  const pool = makePool(url);
   const client = await pool.connect();
 
   try {

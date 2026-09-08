@@ -13,7 +13,7 @@
 // refuses to overwrite a curated row, and that is what stops the derived Kafka
 // tag feed from clobbering the hand-resolved one.
 
-import { Pool } from '@neondatabase/serverless';
+import { makePool } from '../src/db/driver.ts';
 import { loadDotEnv } from '../src/lib/dotenv.ts';
 import { PRIMARY_SOURCES } from '../seeds/primary.ts';
 import { shardFor } from '../seeds/sources.ts';
@@ -23,7 +23,7 @@ const url = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
 if (!url) { console.error('DATABASE_URL is not set.'); process.exit(1); }
 const apply = process.argv.includes('--apply');
 
-const pool = new Pool({ connectionString: url });
+const pool = makePool(url);
 const db = await pool.connect();
 const done = async (code = 0): Promise<never> => {
   db.release();

@@ -1,5 +1,11 @@
 node_modules/
 .env
+# Every .env variant, not just the one. A backup taken before a migration holds
+# exactly the same secrets as the original, and ".env" does not match
+# ".env.neon-backup" -- which is how a file full of API keys ends up in a public
+# repository during a database move.
+.env.*
+!.env.example
 .env.local
 .dev.vars
 dist/

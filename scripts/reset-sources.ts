@@ -36,7 +36,7 @@
 // a failure halfway would have left the registry half-deleted. The one script
 // that genuinely needs all-or-nothing is the one script that has to hold a
 // connection open.
-import { Pool } from '@neondatabase/serverless';
+import { makePool } from '../src/db/driver.ts';
 import { loadDotEnv } from '../src/lib/dotenv.ts';
 import { NEWS_SOURCES } from '../seeds/news.ts';
 import { shardFor } from '../seeds/sources.ts';
@@ -46,7 +46,7 @@ const url = process.env.DATABASE_DIRECT_URL ?? process.env.DATABASE_URL;
 if (!url) { console.error('DATABASE_URL is not set.'); process.exit(1); }
 const apply = process.argv.includes('--apply');
 
-const pool = new Pool({ connectionString: url });
+const pool = makePool(url);
 const db = await pool.connect();
 
 const n = (v: unknown) => Number(v ?? 0).toLocaleString('en-US');

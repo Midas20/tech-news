@@ -21,7 +21,7 @@
 // under Tooling. That is a real answer, and a hand-written parent can always
 // replace it later without this pass undoing the change.
 
-import { Pool } from '@neondatabase/serverless';
+import { makePool } from '../src/db/driver.ts';
 import { loadDotEnv } from '../src/lib/dotenv.ts';
 
 await loadDotEnv();
@@ -62,7 +62,7 @@ const ROOT_FOR_CATEGORY: Record<string, { slug: string; name: string; blurb: str
   domain: { slug: 'domains', name: 'Domains', blurb: 'Fields of application: fintech, gaming, science.' },
 };
 
-const pool = new Pool({ connectionString: url });
+const pool = makePool(url);
 const client = await pool.connect();
 
 try {
