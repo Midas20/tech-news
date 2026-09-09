@@ -45,7 +45,7 @@ export const LOOKBACK_DAYS = 180;
  * outweighs the present produces a retrospective, which is not what was asked
  * for either.
  */
-export const HISTORY_CAP = 24;
+export const HISTORY_CAP = 40;
 
 /**
  * The stories that came before today's, on today's subjects.

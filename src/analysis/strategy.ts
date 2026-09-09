@@ -35,6 +35,15 @@ export const MIN_HISTORY = 4;
 export interface Direction {
   claim: string;
   reasoning: string;
+  /**
+   * What would show this claim wrong.
+   *
+   * Required by the prompt and kept even when empty, because an unfalsifiable
+   * claim should be visibly unfalsifiable rather than quietly indistinguishable
+   * from a testable one. It is also what the standing section reports against
+   * as later news arrives.
+   */
+  falsifier: string;
   /** Indices into the prior corpus, 1-based, as shown to the model. */
   then: number[];
   /** Indices into today's corpus, 1-based. */
@@ -49,6 +58,30 @@ export interface Positioning {
   firstParty: boolean;
 }
 
+/**
+ * Work one person could take on, which is what this whole archive is for.
+ *
+ * The reader is one person deciding what to learn, build and quote for. An
+ * opening that can only be taken by a vendor is not a finding for them, so
+ * this is kept separate from  rather than folded into it: they
+ * answer different questions and only one of them pays.
+ */
+export interface Work {
+  what: string;
+  why: string;
+  skills: string;
+  /** now = the work exists today; months = when the change lands; watch = unproven. */
+  horizon: 'now' | 'months' | 'watch';
+  evidence: number[];
+}
+
+/** Where the evidence points two ways, which is a finding rather than a flaw. */
+export interface Tension {
+  what: string;
+  sides: string;
+  evidence: number[];
+}
+
 export interface Opening {
   what: string;
   why: string;
@@ -58,8 +91,10 @@ export interface Opening {
 
 export interface Strategy {
   read: string;
+  work: Work[];
   direction: Direction[];
   positioning: Positioning[];
+  tensions: Tension[];
   openings: Opening[];
   limits: string;
   /** The span of earlier coverage this was drawn against. */
@@ -76,8 +111,10 @@ export type StrategyOutcome =
 
 interface RawStrategy {
   read?: unknown;
+  work?: unknown[];
   direction?: unknown[];
   positioning?: unknown[];
+  tensions?: unknown[];
   openings?: unknown[];
   limits?: unknown;
 }
@@ -116,6 +153,7 @@ export function validateStrategy(
       return {
         claim: text(item.claim),
         reasoning: text(item.reasoning),
+        falsifier: text(item.falsifier),
         then: ids(item.then, priorSize),
         now: ids(item.now, todaySize),
       };
@@ -137,6 +175,38 @@ export function validateStrategy(
     })
     .filter((p) => p.who && p.bet && p.evidence.length > 0);
 
+  const HORIZONS = ['now', 'months', 'watch'] as const;
+  const work = (Array.isArray(raw.work) ? raw.work : [])
+    .map((w) => {
+      const item = w as Record<string, unknown>;
+      const horizon = String(item.horizon ?? '');
+      return {
+        what: text(item.what),
+        why: text(item.why),
+        skills: text(item.skills),
+        // An unrecognised horizon becomes "watch" rather than being dropped.
+        // Overstating how ready a piece of work is costs the reader a week;
+        // understating it costs them a second look.
+        horizon: (HORIZONS as readonly string[]).includes(horizon)
+          ? horizon as Work['horizon'] : 'watch',
+        evidence: ids(item.evidence, todaySize),
+      };
+    })
+    .filter((w) => w.what && w.why && w.evidence.length > 0);
+
+  // A tension is read from today alone -- it is a disagreement between the
+  // sources in front of you -- so it cites today and needs no earlier end.
+  const tensions = (Array.isArray(raw.tensions) ? raw.tensions : [])
+    .map((t) => {
+      const item = t as Record<string, unknown>;
+      return {
+        what: text(item.what),
+        sides: text(item.sides),
+        evidence: ids(item.evidence, todaySize),
+      };
+    })
+    .filter((t) => t.what && t.sides && t.evidence.length > 0);
+
   const openings = (Array.isArray(raw.openings) ? raw.openings : [])
     .map((o) => {
       const item = o as Record<string, unknown>;
@@ -150,7 +220,8 @@ export function validateStrategy(
     })
     .filter((o) => o.what && o.evidence.length > 0);
 
-  return { read: text(raw.read), direction, positioning, openings, limits: text(raw.limits) };
+  return { read: text(raw.read), work, direction, positioning, tensions, openings,
+    limits: text(raw.limits) };
 }
 
 /**
@@ -212,8 +283,10 @@ export async function analyseField(
   // Nothing survived the pairing rule. The model answered and every claim it
   // made was unsupportable -- which is a fault in the writing, not in the
   // evidence, and must not be reported as "no strategic change".
-  if (kept.direction.length === 0
+  if (kept.work.length === 0
+    && kept.direction.length === 0
     && kept.positioning.length === 0
+    && kept.tensions.length === 0
     && kept.openings.length === 0) {
     return { status: 'unwritten', why: 'no claim survived its own citations' };
   }
@@ -227,8 +300,10 @@ export async function analyseField(
 /** One line for a job log or /admin. */
 export function summariseStrategy(s: Strategy): string {
   const bits = [
+    `${s.work.length} work`,
     `${s.direction.length} direction`,
     `${s.positioning.length} positioning`,
+    `${s.tensions.length} tension`,
     `${s.openings.length} opening`,
   ];
   if (s.history) bits.push(`against ${s.history.n} earlier stories from ${s.history.from}`);

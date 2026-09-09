@@ -40,7 +40,7 @@ import { FIELDS, fieldLabel } from '../vocab/fields.ts';
 import {
   archiveFor, briefingFor, latestForField, daysForField, reportIndex, reportDay,
   type StoredField, type StoredArchive, type StoredTheme, type FieldDay, type ReportDay,
-  type StoredStrategy, type Citation,
+  type StoredStrategy, type Citation, type Standing, type StoredWork, standingFor,
 } from '../analysis/briefing.ts';
 import { describeFigure, type PublicFigure } from '../analysis/public.ts';
 
@@ -309,6 +309,11 @@ export async function renderFieldBriefing(
   const crumbs = crumbsFor(`/field/${slug}/report`, field.label);
   const b = await (day ? briefingFor(slug, day) : latestForField(slug)).catch(() => null);
   const history = await daysForField(slug, 30).catch((): FieldDay[] => []);
+  // Everything this field has concluded before today. Null when there is only
+  // one reading, which is the honest state for a young archive.
+  const standing = b
+    ? await standingFor(slug, b.day, 30).catch((): Standing | null => null)
+    : null;
 
   if (!b) {
     return wrap(`
@@ -329,28 +334,57 @@ export async function renderFieldBriefing(
     ${pageHead(b.headline || `${field.label}: briefing`,
     `${field.label}, ${niceDay(b.day)}`, { crumbs })}
     <p class="note">${coverNote({ coveredFrom: b.coveredFrom, coveredTo: b.coveredTo })}</p>
-    <p class="mv-lede">${escapeHtml(b.summary)}</p>
+
+    ${/* ONE LEDE, NOT TWO. The page opened with the briefing's summary and then
+        the reading's own one-liner directly underneath, two serif paragraphs
+        saying overlapping things before any heading -- the single biggest cause
+        of the page reading as a wall. The reading wins when there is one,
+        because it is the conclusion rather than the recap; the briefing summary
+        moves down to introduce the stories it actually describes. */
+      b.strategy?.read
+        ? `<p class="mv-lede">${escapeHtml(b.strategy.read)}</p>`
+        : `<p class="mv-lede">${escapeHtml(b.summary)}</p>`}
 
     ${b.strategy ? strategyBlock(b.strategy)
     : noStrategy(b.strategyGap ?? 'none was written')}
 
-    <h2 class="sect">What happened, in full</h2>
-    <p class="note">The stories the reading above was drawn from. Everything here
-      is an event, cited; nothing here is a conclusion.</p>
+    <h2 class="sect">The stories this was read from</h2>
+    <p class="note">${b.strategy?.read ? `${escapeHtml(b.summary)} ` : ''}Everything
+      here is an event, cited; nothing here is a conclusion.</p>
     ${b.themes.map(themeBlock).join('')}
 
-    <h2 class="sect">What is actually known about size</h2>
-    ${figuresBlock(b.figures ?? [])}
+    ${(b.figures ?? []).length === 0 ? '' : `
+      <h2 class="sect">What is actually known about size</h2>
+      ${figuresBlock(b.figures ?? [])}`}
 
     ${b.watch.length === 0 ? '' : `<h2 class="sect">What to watch</h2>${watchBlock(b.watch)}`}
 
+    ${/* EVERY CAVEAT IN ONE BLOCK. They used to be scattered: a note under the
+        reading, another under the history line, a third under the provider, and
+        a bulleted list of its own down here. Sprinkled hedging reads as evasion
+        and is skipped; gathered, it reads as a limit and gets read. */''}
     <h2 class="sect">What this cannot tell you</h2>
-    <ul class="mv-list">
-      ${b.gaps ? `<li><b>In the writer's own words.</b> ${escapeHtml(b.gaps)}</li>` : ''}
-      <li><b>${escapeHtml(readLine(b))}</b> Nothing above counts stories to make a point:
-        what this archive happens to catch is a fact about its feed list, not about
-        ${escapeHtml(field.label)}.</li>
-    </ul>
+    <div class="mv-caveat">
+      ${b.strategy?.limits ? `<p><b>On the reading.</b>
+        ${escapeHtml(b.strategy.limits)}</p>` : ''}
+      ${b.gaps ? `<p><b>On the stories.</b> ${escapeHtml(b.gaps)}</p>` : ''}
+      <p><b>${escapeHtml(readLine(b))}</b> Nothing above counts stories to make a
+        point: what this archive happens to catch is a fact about its feed list,
+        not about ${escapeHtml(field.label)}.</p>
+      ${b.strategy?.history ? `<p>The reading was set against
+        ${b.strategy.history.n} earlier ${b.strategy.history.n === 1 ? 'story' : 'stories'}
+        on the same subjects, published between
+        ${escapeHtml(b.strategy.history.from)} and
+        ${escapeHtml(b.strategy.history.to)}.</p>` : ''}
+      ${b.strategy?.provider ? `<p>The reading was written by
+        ${escapeHtml(b.strategy.provider)}.</p>` : ''}
+    </div>
+
+    ${standing ? standingBlock(standing, field.label)
+    : `<h2 class="sect">What the recent readings have established</h2>
+      <p class="note">Nothing yet. This is the first reading written for
+      ${escapeHtml(field.label)}, so there is no run of earlier claims to set it
+      against. This section fills as the readings accumulate.</p>`}
 
     <h2 class="sect">Earlier briefings for ${escapeHtml(field.label)}</h2>
     ${fieldHistory(slug, history, b.day)}
@@ -505,6 +539,28 @@ function strategyBlock(s: StoredStrategy): string {
          class="${c.independent ? '' : 'fp'}">${escapeHtml(truncate(c.title, 60))}</a>`
     ).join('')}</span>`;
 
+  // WHERE THE WORK IS, FIRST. This archive exists so one person can find
+  // remote work they could take; a page that puts vendor strategy above that
+  // is answering a question its reader did not ask.
+  const HORIZON: Record<StoredWork['horizon'], string> = {
+    now: 'the work exists now',
+    months: 'as the change lands',
+    watch: 'plausible, unproven',
+  };
+  const work = !s.work?.length ? '' : `
+    <h2 class="sect">Where the work is</h2>
+    <p class="note">Things one person could start on remotely, with the
+      evidence from today that somebody would pay for it.</p>
+    ${s.work.map((w) => `<section class="mv-op">
+      <h3>${escapeHtml(w.what)}</h3>
+      <p>${escapeHtml(w.why)}</p>
+      <dl>
+        ${w.skills ? `<dt>Needs</dt><dd>${escapeHtml(w.skills)}</dd>` : ''}
+        <dt>Timing</dt><dd>${escapeHtml(HORIZON[w.horizon] ?? w.horizon)}</dd>
+      </dl>
+      ${cites(w.evidence)}
+    </section>`).join('')}`;
+
   const direction = s.direction.length === 0 ? '' : `
     <h2 class="sect">Where this is going</h2>
     ${s.direction.map((d) => `<section class="mv-find">
@@ -516,6 +572,8 @@ function strategyBlock(s: StoredStrategy): string {
         summarised in the reasoning above rather than linked, because retention
         deletes them and a dead link is worse than a description. Today's end:</p>
       ${cites(d.now)}
+      ${d.falsifier ? `<p class="note"><b>What would show this wrong.</b>
+        ${escapeHtml(d.falsifier)}</p>` : ''}
     </section>`).join('')}`;
 
   const positioning = s.positioning.length === 0 ? '' : `
@@ -529,6 +587,16 @@ function strategyBlock(s: StoredStrategy): string {
       ${cites(p.evidence)}
     </section>`).join('')}`;
 
+  const tensions = s.tensions?.length ? `
+    <h2 class="sect">Where the evidence argues with itself</h2>
+    <p class="note">Two sources pointing different ways is a finding, not a
+      flaw in the reading. These are the places the stories do not agree.</p>
+    ${s.tensions.map((t) => `<section class="mv-find">
+      <h3>${escapeHtml(t.what)}</h3>
+      <p>${escapeHtml(t.sides)}</p>
+      ${cites(t.evidence)}
+    </section>`).join('')}` : '';
+
   const openings = s.openings.length === 0 ? '' : `
     <h2 class="sect">What nobody has taken</h2>
     ${s.openings.map((o) => `<section class="mv-find">
@@ -539,15 +607,11 @@ function strategyBlock(s: StoredStrategy): string {
     </section>`).join('')}`;
 
   return `
-    ${s.read ? `<p class="mv-lede">${escapeHtml(s.read)}</p>` : ''}
-    ${direction}${positioning}${openings}
-    ${s.limits ? `<p class="note"><b>What this reading cannot settle.</b>
-      ${escapeHtml(s.limits)}</p>` : ''}
-    ${s.history ? `<p class="note">Read against ${s.history.n} earlier
-      ${s.history.n === 1 ? 'story' : 'stories'} on the same subjects, published
-      between ${escapeHtml(s.history.from)} and ${escapeHtml(s.history.to)}.</p>` : ''}
-    ${s.provider ? `<p class="note">This reading was written by
-      ${escapeHtml(s.provider)}.</p>` : ''}`;
+
+    ${work}${direction}${positioning}${tensions}${openings}
+
+
+`;
 }
 
 /** Said plainly when there is no reading, so an absence is never a finding. */
@@ -555,4 +619,49 @@ function noStrategy(why: string): string {
   return `<p class="note"><b>No strategic reading for this field today.</b>
     ${escapeHtml(why)}. That is a statement about what this archive holds, not a
     statement that nothing changed.</p>`;
+}
+
+/**
+ * What the recent readings have established, at the end of the report.
+ *
+ * Asked for on 2026-09-09: "at the end of report add report that show the
+ * analysis result that earn from recent news". One morning is a reading; a
+ * fortnight of mornings is a position. Each day was previously written and then
+ * never referred to again, so the archive accumulated evidence and forgot its
+ * own conclusions.
+ *
+ * Every claim here was validated and cited on the day it was made, so this
+ * paraphrases nothing -- it lists them with their dates and their falsifiers and
+ * lets the reader judge which have held. The falsifier is the point: a claim
+ * from three weeks ago whose falsifier has since fired is the most useful line
+ * on the page, and the reader can only see that if it is still written down.
+ */
+function standingBlock(st: Standing, label: string): string {
+  const claims = st.claims.length === 0 ? '' : `
+    <ul class="mv-list">
+      ${st.claims.map((c) => `<li>
+        <b>${escapeHtml(c.claim)}</b>
+        <span class="muted">— read on ${escapeHtml(niceDay(c.day))}</span>
+        ${c.falsifier ? `<div class="note">Would be shown wrong by:
+          ${escapeHtml(c.falsifier)}</div>` : ''}
+      </li>`).join('')}
+    </ul>`;
+
+  const openings = st.openings.length === 0 ? '' : `
+    <h3 class="sect">Gaps named and still open</h3>
+    <ul class="mv-list">
+      ${st.openings.map((o) => `<li>${escapeHtml(o.what)}
+        ${o.who ? `<span class="muted">— ${escapeHtml(o.who)}</span>` : ''}
+        <span class="muted">(${escapeHtml(niceDay(o.day))})</span></li>`).join('')}
+    </ul>`;
+
+  return `
+    <h2 class="sect">What the recent readings have established</h2>
+    <p class="note">Every claim made about ${escapeHtml(label)} in the
+      ${st.readings} earlier reading${st.readings === 1 ? '' : 's'} between
+      ${escapeHtml(niceDay(st.from))} and ${escapeHtml(niceDay(st.to))}, with
+      what would show each one wrong. Nothing here is re-summarised: these are
+      the claims as they were written and cited on the day, so a reading that
+      has since been overtaken is visible rather than quietly dropped.</p>
+    ${claims}${openings}`;
 }

@@ -6334,7 +6334,98 @@ hand earns no exemption from the pairing rule.
 The page says so: *"This reading was written by claude-opus-5 (hand-written, not
 the model chain)."* A reader must never mistake a stand-in for the pipeline.
 
+## Who the report is for
+
+Stated on 2026-09-09: *"the purpose of this project is detect IT market changes
+and find opportunity that I can attend to work remotely and create income as
+freelancer."*
+
+Everything before that was built as market intelligence in the abstract. It is
+not. The reader is **one person deciding what to learn, what to build and what
+contract to chase**, so a finding is only useful if a single person with a laptop
+can act on it. An analysis naming *"EDA vendors"* as the party who could take an
+opening has failed that reader.
+
+### `work` leads the reading
+
+Each item is something one person could start on remotely, with the evidence from
+today that somebody would pay for it, and an honest `horizon`:
+
+| | |
+|---|---|
+| `now` | the work exists today |
+| `months` | it will as the change lands |
+| `watch` | plausible, unproven |
+
+An unrecognised horizon is downgraded to `watch` rather than dropped: overstating
+how ready a piece of work is costs the reader a week of their life, understating
+it costs them a second look.
+
+The prompt names where these come from, in order of reliability: **a forced
+migration with a deadline** (every team on the product must move, and most cannot
+spare the people), **a tool shipped with no ecosystem**, **a gap between what is
+sold and what is needed**, and **a skill going scarce**. It is told explicitly
+that "learn AI" is not work.
+
+What the first run produced, across four fields: Jira Data Center migrations as a
+contract service; Postgres PII pseudonymisation for teams facing a data-protection
+review; model cost-and-accuracy evaluation for teams choosing a provider;
+independent Snowflake-versus-ClickHouse cost assessments; workload re-evaluation
+as models reach GA on Bedrock. Five marked `now`, four `months`, three `watch`.
+
+### Richer, and falsifiable
+
+Counts raised — direction 3–5, positioning 2–6, openings 2–4 — and two things
+added that were missing:
+
+- **`falsifier`** on every directional claim: the specific, checkable thing that
+  would show it wrong. A hedge is explicitly not a falsifier. A claim you cannot
+  say how to disprove is a claim you should not be making.
+- **`tensions[]`**: where two sources point different ways, or a vendor claim the
+  independent coverage does not support. A disagreement is a finding, not a flaw
+  to be smoothed over — but the model is told to leave the array empty rather
+  than manufacture one.
+
+History raised from 24 stories to 40, and the token ceiling from 4,000 to 8,000.
+
+### What the recent readings have established
+
+At the end of every field report: every claim made about that field in the last
+30 days, with its date and its falsifier. **Not a model call** — each claim was
+already validated and cited on the day it was made, and re-summarising would put
+an uncitable layer of paraphrase between the reader and the evidence, on every
+page view. It excludes today, which sits directly above it.
+
+The falsifiers are the point. A claim from three weeks ago whose falsifier has
+since fired is the most useful line on the page, and the reader can only see that
+if it is still written down.
+
+### Why the page looked messy
+
+Reported as *"the current report display style is messy"*, and it had a specific,
+findable cause: **`mv-find` and `mv-cites` were used four times by the reading and
+defined nowhere.** The most important section on the site rendered as unstyled
+headings with the citation links running into one another. Every test passed,
+because the HTML was perfectly valid.
+
+Fixed, along with three structural faults:
+
+- **Two ledes.** The briefing summary and the reading's one-liner were stacked as
+  consecutive serif paragraphs before any heading — the single biggest reason the
+  page read as a wall. The reading wins when there is one; the summary moved down
+  to introduce the stories it actually describes.
+- **Sprinkled caveats.** A note under the reading, another under the history line,
+  a third under the provider, and a bulleted list of its own. Scattered hedging
+  reads as evasion and gets skipped; one `.mv-caveat` block reads as a limit and
+  gets read.
+- **Citations as prose.** Now chips on one line, so the evidence reads as sources
+  attached to a claim rather than as a paragraph of links.
+
+`tests/report-shape.test.ts` asserts that **every class the page uses has CSS
+defined** — the test that would have caught the original bug.
+
 ## Deploying it
+
 
 ```
 npm start                 web server and scheduler in one process

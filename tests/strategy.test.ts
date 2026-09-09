@@ -244,8 +244,10 @@ describe('the page leads with the reading', () => {
   it('puts the analysis above the retelling', () => {
     // A reader who has to scroll past the news to reach the analysis is reading
     // a news summary with an appendix, which is what was complained about.
+    // The heading was "What happened, in full" until the section was demoted to
+    // supporting evidence and renamed to say so.
     const readingAt = page.indexOf('strategyBlock(b.strategy)');
-    const newsAt = page.indexOf('What happened, in full');
+    const newsAt = page.indexOf('The stories this was read from');
     expect(readingAt).toBeGreaterThan(0);
     expect(newsAt).toBeGreaterThan(0);
     expect(readingAt).toBeLessThan(newsAt);
@@ -261,6 +263,10 @@ describe('the page leads with the reading', () => {
   });
 
   it('shows how far back the reading was drawn', () => {
-    expect(page).toMatch(/Read against \$\{s\.history\.n\} earlier/);
+    // Moved out of the reading block and into the single caveat block, with the
+    // rest of the provenance -- the scattered notes were the reason the page
+    // read as messy.
+    expect(page).toMatch(/The reading was set against/);
+    expect(page).toMatch(/b\.strategy\.history\.n/);
   });
 });

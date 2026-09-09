@@ -1689,6 +1689,61 @@ ul.reasons a{color:var(--link)}
 h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
   border-bottom:1px solid var(--line);font:600 var(--t-17)/1.2 var(--serif);color:var(--ink)}
 
+/* THE READING. These four classes were used by the strategy section and never
+   defined, which is why it rendered as a wall of unstyled headings with the
+   citation links running into each other. The section is the reason the page
+   exists, so it gets the strongest structure on it. */
+
+/* One finding: a claim, the argument for it, its evidence. The left rule makes
+   the boundary between findings visible without a horizontal line for each,
+   which at four or five findings turns the page into a ladder. */
+.mv-find{margin:0 0 var(--s-5);padding-left:var(--s-4);
+  border-left:2px solid var(--line)}
+.mv-find h3{margin:0 0 var(--s-2);font:600 var(--t-15)/1.35 var(--sans);
+  color:var(--ink);max-width:68ch}
+.mv-find p{margin:0 0 var(--s-2);font:400 var(--t-14)/1.7 var(--serif);
+  color:var(--ink-2);max-width:74ch}
+.mv-find .note{font:400 var(--t-12)/1.6 var(--sans);color:var(--ink-4);max-width:74ch}
+.mv-find .note b{color:var(--ink-3);font-weight:600}
+
+/* Citations as chips on one line rather than as a paragraph of links. Anything
+   longer wraps; the point is that the evidence reads as a row of sources
+   attached to the claim, not as prose. */
+.mv-cites{display:flex;flex-wrap:wrap;gap:var(--s-2);margin:var(--s-2) 0 0}
+.mv-cites a{display:inline-block;max-width:34ch;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;
+  padding:2px var(--s-2);border:1px solid var(--line);border-radius:3px;
+  font:500 var(--t-11)/1.5 var(--sans);color:var(--ink-3);text-decoration:none}
+.mv-cites a:hover{border-color:var(--ink-4);color:var(--ink)}
+/* First-party: the source speaking for the thing it describes. Same rule as
+   .bf-fp, and the only colour on the page. */
+.mv-cites a.fp{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
+
+/* WHERE THE WORK IS. The section a reader is here for, so it is the one block
+   that does not look like the rest of the page. */
+.mv-op{margin:0 0 var(--s-4);padding:var(--s-4);border:1px solid var(--line);
+  border-radius:4px;background:var(--bg-2,transparent)}
+.mv-op h3{margin:0 0 var(--s-2);font:600 var(--t-15)/1.35 var(--sans);color:var(--ink);
+  max-width:68ch}
+.mv-op p{margin:0 0 var(--s-2);font:400 var(--t-14)/1.7 var(--serif);color:var(--ink-2);
+  max-width:74ch}
+.mv-op dl{display:grid;grid-template-columns:auto 1fr;gap:2px var(--s-3);margin:var(--s-3) 0 0}
+.mv-op dt{font:600 var(--t-11)/1.6 var(--sans);letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-4)}
+.mv-op dd{margin:0;font:400 var(--t-13)/1.6 var(--sans);color:var(--ink-2)}
+@media (max-width:560px){.mv-op dl{grid-template-columns:1fr;gap:0}
+  .mv-op dt{margin-top:var(--s-2)}}
+
+/* The caveats, gathered into one block instead of sprinkled between sections.
+   Scattered notes read as hedging; one honest block reads as a limit. */
+.mv-caveat{margin:var(--s-5) 0 0;padding:var(--s-3) var(--s-4);
+  border-left:2px solid var(--line);background:transparent}
+.mv-caveat p{margin:0 0 var(--s-2);font:400 var(--t-12)/1.65 var(--sans);color:var(--ink-4);
+  max-width:78ch}
+.mv-caveat p:last-child{margin-bottom:0}
+.mv-caveat b{color:var(--ink-3);font-weight:600}
+
+
 /* A field, as one block a reader can take in before deciding to open it. */
 .bf-field{margin:0 0 var(--s-6);padding-left:var(--s-4);border-left:2px solid var(--line)}
 .bf-h{margin:0 0 var(--s-2);display:flex;align-items:center;gap:var(--s-2);

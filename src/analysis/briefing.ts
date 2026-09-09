@@ -545,15 +545,24 @@ export async function saveArchiveReport(
     // of what survives four months.
     strategy: b.strategy ? {
       read: b.strategy.read,
+      work: b.strategy.work.map((w) => ({
+        what: w.what, why: w.why, skills: w.skills, horizon: w.horizon,
+        evidence: w.evidence.map((n) => cite(b, n)).filter(Boolean),
+      })),
       direction: b.strategy.direction.map((d) => ({
         claim: d.claim,
         reasoning: d.reasoning,
+        falsifier: d.falsifier,
         now: d.now.map((n) => cite(b, n)).filter(Boolean),
         thenCount: d.then.length,
       })),
       positioning: b.strategy.positioning.map((pz) => ({
         who: pz.who, bet: pz.bet, firstParty: pz.firstParty,
         evidence: pz.evidence.map((n) => cite(b, n)).filter(Boolean),
+      })),
+      tensions: b.strategy.tensions.map((t) => ({
+        what: t.what, sides: t.sides,
+        evidence: t.evidence.map((n) => cite(b, n)).filter(Boolean),
       })),
       openings: b.strategy.openings.map((o) => ({
         what: o.what, why: o.why, ...(o.who ? { who: o.who } : {}),
@@ -652,6 +661,16 @@ export interface StoredTheme {
  */
 export interface StoredDirection {
   claim: string; reasoning: string; now: Citation[]; thenCount: number;
+  /** What would show it wrong. Also what the standing section reports against. */
+  falsifier?: string;
+}
+export interface StoredWork {
+  what: string; why: string; skills: string;
+  horizon: 'now' | 'months' | 'watch';
+  evidence: Citation[];
+}
+export interface StoredTension {
+  what: string; sides: string; evidence: Citation[];
 }
 export interface StoredPositioning {
   who: string; bet: string; firstParty: boolean; evidence: Citation[];
@@ -661,8 +680,10 @@ export interface StoredOpening {
 }
 export interface StoredStrategy {
   read: string;
+  work: StoredWork[];
   direction: StoredDirection[];
   positioning: StoredPositioning[];
+  tensions: StoredTension[];
   openings: StoredOpening[];
   limits: string;
   history: { from: string; to: string; n: number } | null;
@@ -907,4 +928,87 @@ export function summariseReport(
   return `${r.day}: ${r.fields} fields briefed, ${r.themes} findings, `
     + `written from ${r.read} stories read`
     + (r.days ? ` over ${r.days} day${r.days === 1 ? '' : 's'}` : '');
+}
+
+// ---------------------------------------------------------------------------
+// What the recent readings have established
+// ---------------------------------------------------------------------------
+
+/**
+ * The claims this field has accumulated, newest first.
+ *
+ * Asked for on 2026-09-09: "at the end of report add report that show the
+ * analysis result that earn from recent news". A single morning is a reading;
+ * a fortnight of mornings is a position, and until now each day was written and
+ * then never referred to again.
+ *
+ * DELIBERATELY NOT A MODEL CALL. Every claim here has already been written,
+ * validated and cited on the day it was made; re-summarising them would put a
+ * second, unciteable layer of paraphrase between the reader and the evidence,
+ * and it would cost a model call on every page view. What a reader needs is to
+ * see the run of claims together with the dates and the falsifiers, and decide
+ * for themselves which have held.
+ *
+ * EXCLUDES TODAY. Today is on the page directly above this; repeating it here
+ * would make the standing section look like corroboration of itself.
+ */
+export interface StandingClaim {
+  day: string;
+  claim: string;
+  falsifier?: string;
+  /** How many of today-of-that-day stories backed it. Provenance, not a score. */
+  cited: number;
+}
+
+export interface StandingOpening {
+  day: string;
+  what: string;
+  who?: string;
+}
+
+export interface Standing {
+  /** Days in the window that actually carried a reading. */
+  readings: number;
+  from: string;
+  to: string;
+  claims: StandingClaim[];
+  openings: StandingOpening[];
+}
+
+export async function standingFor(
+  field: string, before: string, days = 30, query: Query = q,
+): Promise<Standing | null> {
+  const rows = await query<{ day: string; strategy: StoredStrategy }>(
+    `SELECT day::text AS day, strategy
+       FROM field_briefings
+      WHERE field = $1
+        AND strategy IS NOT NULL
+        AND day < $2::date
+        AND day > $2::date - make_interval(days => $3)
+      ORDER BY day DESC`,
+    [field, before, days]);
+
+  if (rows.length === 0) return null;
+
+  const claims: StandingClaim[] = [];
+  const openings: StandingOpening[] = [];
+  for (const r of rows) {
+    for (const d of r.strategy?.direction ?? []) {
+      claims.push({ day: r.day, claim: d.claim,
+        ...(d.falsifier ? { falsifier: d.falsifier } : {}),
+        cited: d.now?.length ?? 0 });
+    }
+    for (const o of r.strategy?.openings ?? []) {
+      openings.push({ day: r.day, what: o.what, ...(o.who ? { who: o.who } : {}) });
+    }
+  }
+
+  const days_ = rows.map((r) => r.day).sort();
+  return {
+    readings: rows.length,
+    from: days_[0]!,
+    to: days_[days_.length - 1]!,
+    claims,
+    openings,
+  };
 }
