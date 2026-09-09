@@ -557,7 +557,12 @@ function strategyBlock(s: StoredStrategy): string {
       <p class="mv-moved">${escapeHtml(s.shift.moved)}</p>
       <div class="mv-then-now">
         <div>
-          <h3>Then${s.history ? ` · from ${escapeHtml(s.history.from)}` : ''}</h3>
+          <h3>Then${s.shift.then.length
+    // The date of the EARLIEST STORY ACTUALLY CITED, not the start of the
+    // history span. They are usually days apart and occasionally weeks, and a
+    // heading that dates this column to a story it does not show is the kind of
+    // small wrongness that makes a reader stop trusting the large things.
+    ? ` · ${escapeHtml(s.shift.then.map((c) => c.when).sort()[0]!)}` : ''}</h3>
           <p>${escapeHtml(s.shift.before)}</p>
           ${cites(s.shift.then)}
         </div>
