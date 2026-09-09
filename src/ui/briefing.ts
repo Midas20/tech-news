@@ -539,7 +539,37 @@ function strategyBlock(s: StoredStrategy): string {
          class="${c.independent ? '' : 'fp'}">${escapeHtml(truncate(c.title, 60))}</a>`
     ).join('')}</span>`;
 
-  // WHERE THE WORK IS, FIRST. This archive exists so one person can find
+  // THE SHIFT, AHEAD OF EVERYTHING, INCLUDING THE WORK.
+  //
+  // Reported on 2026-09-09: "still you focus on only current news, you don't
+  // analysis the relationship between past and current of the fields, and I
+  // still can't find the market change." Both halves were true of this page.
+  // Every section rendered today's citations and nothing else, so the past
+  // existed only as the sentence "the earlier end of this comparison is 4
+  // stories" -- a reader had no way to see what the earlier end said, which
+  // makes a claim about change unreadable as a claim about change.
+  //
+  // So the change goes first, in the reader's own terms: the field then, the
+  // field now, and one line naming what moved, with real stories under both.
+  const shift = !s.shift ? '' : `
+    <section class="mv-shift">
+      <h2 class="sect">What has changed in this field</h2>
+      <p class="mv-moved">${escapeHtml(s.shift.moved)}</p>
+      <div class="mv-then-now">
+        <div>
+          <h3>Then${s.history ? ` · from ${escapeHtml(s.history.from)}` : ''}</h3>
+          <p>${escapeHtml(s.shift.before)}</p>
+          ${cites(s.shift.then)}
+        </div>
+        <div>
+          <h3>Now${s.shift.now[0] ? ` · ${escapeHtml(s.shift.now[0].when)}` : ''}</h3>
+          <p>${escapeHtml(s.shift.after)}</p>
+          ${cites(s.shift.now)}
+        </div>
+      </div>
+    </section>`;
+
+  // WHERE THE WORK IS, SECOND. This archive exists so one person can find
   // remote work they could take; a page that puts vendor strategy above that
   // is answering a question its reader did not ask.
   const HORIZON: Record<StoredWork['horizon'], string> = {
@@ -566,12 +596,14 @@ function strategyBlock(s: StoredStrategy): string {
     ${s.direction.map((d) => `<section class="mv-find">
       <h3>${escapeHtml(d.claim)}</h3>
       <p>${escapeHtml(d.reasoning)}</p>
-      <p class="note">The earlier end of this comparison is
+      ${d.then?.length ? `<div class="mv-then-now">
+        <div><h3>Then · ${escapeHtml(d.then[0]!.when)}</h3>${cites(d.then)}</div>
+        <div><h3>Now</h3>${cites(d.now)}</div>
+      </div>` : `<p class="note">The earlier end of this comparison is
         ${d.thenCount} ${d.thenCount === 1 ? 'story' : 'stories'}${s.history
-    ? ` of the ${s.history.n} read from before the window` : ''}; those are
-        summarised in the reasoning above rather than linked, because retention
-        deletes them and a dead link is worse than a description. Today's end:</p>
-      ${cites(d.now)}
+    ? ` of the ${s.history.n} read from before the window` : ''}. This reading
+        was written before the earlier end was stored, so only today's is
+        linked. Today's end:</p>${cites(d.now)}`}
       ${d.falsifier ? `<p class="note"><b>What would show this wrong.</b>
         ${escapeHtml(d.falsifier)}</p>` : ''}
     </section>`).join('')}`;
@@ -608,7 +640,7 @@ function strategyBlock(s: StoredStrategy): string {
 
   return `
 
-    ${work}${direction}${positioning}${tensions}${openings}
+    ${shift}${work}${direction}${positioning}${tensions}${openings}
 
 
 `;

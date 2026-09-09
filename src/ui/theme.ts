@@ -1719,6 +1719,27 @@ h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
    .bf-fp, and the only colour on the page. */
 .mv-cites a.fp{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
 
+/* WHAT HAS CHANGED. The first thing on a field report and the reason the page
+   exists: the field then, the field now, side by side so the comparison is a
+   comparison rather than a paragraph claiming to be one. Reported on
+   2026-09-09 as "I still can't find the market change" -- it was findable only
+   by reading three claims and trusting each one's summary of a past the page
+   never showed. */
+.mv-shift{margin:0 0 var(--s-6);padding:var(--s-4) 0 0;border-top:2px solid var(--ink)}
+.mv-moved{margin:0 0 var(--s-4);font:500 var(--t-17)/1.5 var(--serif);color:var(--ink);
+  max-width:70ch}
+.mv-then-now{display:grid;grid-template-columns:1fr 1fr;gap:var(--s-4)}
+.mv-then-now>div{padding:var(--s-3);border:1px solid var(--line);border-radius:4px;
+  min-width:0}
+/* The earlier column reads as background and the later one as the point, so the
+   eye lands on "now" without either being hidden. */
+.mv-then-now>div:first-child{background:var(--bg-2,transparent);border-style:dashed}
+.mv-then-now h3{margin:0 0 var(--s-2);font:600 var(--t-11)/1.6 var(--sans);
+  letter-spacing:.06em;text-transform:uppercase;color:var(--ink-4)}
+.mv-then-now p{margin:0 0 var(--s-3);font:400 var(--t-14)/1.7 var(--serif);
+  color:var(--ink-2)}
+@media(max-width:720px){.mv-then-now{grid-template-columns:1fr}}
+
 /* WHERE THE WORK IS. The section a reader is here for, so it is the one block
    that does not look like the rest of the page. */
 .mv-op{margin:0 0 var(--s-4);padding:var(--s-4);border:1px solid var(--line);

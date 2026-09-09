@@ -8395,6 +8395,228 @@ backup called `.env.neon-backup` before a database move is the obvious thing to
 do, `.env` does not match it, and that is exactly how a file holding every API
 key in a project ends up in a public repository.
 
+## The past was being read and never shown
+
+Reported on 2026-09-09, after the strategy pass had already shipped: *"still you
+focus on only current news, you don't analysis the relationship between past and
+current of the fields, and I still can't find the market change."*
+
+The strategy pass **was** reading history. Three separate faults made that
+invisible, and each is worth writing down because none of them would have shown
+up in a test that only asked whether the page rendered.
+
+### 1. The history was not history
+
+`priorContext` took the top 40 stories by importance, ties broken by date
+descending, out of an archive that holds 557 stories from August and 93 from
+March. Recency won twice: once because recent months are simply busier, and
+again in the tiebreak. Measured for `practice` on the day this was reported:
+
+| | Mar | Apr | May | Jun | Jul | Aug | Sep |
+|---|---|---|---|---|---|---|---|
+| before | 0 | 1 | 3 | 0 | 5 | 14 | 17 |
+| after | 6 | 4 | 7 | 6 | 7 | 9 | 1 |
+
+Thirty-one of forty stories from the last five weeks, four from before July. A
+model asked how six months changed, holding one month of stories, writes about
+one month and calls it a trend. **The report was not ignoring history; it was
+being handed last week and told it was six months.**
+
+The lookback is now cut into `PERIODS` equal spans, each diversified on its own
+so that no publisher defines what any one month looked like, and then drawn from
+in rotation. An empty period costs nothing — the rotation skips it and the
+others take its share, so a field that genuinely went quiet in April is not
+padded.
+
+Returned **oldest first**, which is not cosmetic: the packet numbers stories in
+array order, so the numbering now runs forwards through time and a claim citing
+P3 against P37 is visibly a claim about a span. The packet groups them under
+month headings for the same reason. Forty stories in a flat list are forty
+stories; under month headings they are a sequence, and "what is different
+between the top and the bottom of this list" is a question with a shape.
+
+### 2. The earlier end of every claim was invisible
+
+Storage kept `now` as resolved citations and reduced `then` to `thenCount`. The
+page then said, under every claim about change:
+
+> The earlier end of this comparison is 4 stories; those are summarised in the
+> reasoning above rather than linked, because retention deletes them and a dead
+> link is worse than a description.
+
+The reasoning given was that retention deletes those stories within four months,
+so an index would rot into a pointer at nothing. **That is true of the index and
+false of the copy.** `emerging_sightings` has copied its citations — title,
+source, date, url — for exactly this reason since 0074, and a copy survives
+retention precisely as well as a number does while telling the reader what the
+earlier end actually said.
+
+So both ends are copied at write time and both are rendered, side by side.
+`thenCount` is kept as well, for the readings written before this, whose pages
+would otherwise lose their only indication that an earlier end had existed.
+
+### 3. Nothing said what changed
+
+`direction` was already the past-to-present relationship, but it arrived as
+three separate claims some way down the page. Nowhere did the report say, in one
+line, what is different now from before.
+
+So there is now a **`shift`** at the top of every reading — `before`, `after`,
+and one sentence naming what moved — held to the same pairing rule as
+`direction`: `before` is drawn from the earlier corpus, `after` from today's,
+and a shift missing either citation is discarded. It is the most prominent
+paragraph on the page, which makes it the one most worth inventing and the one a
+reader is least likely to check, so it is the one checked hardest.
+
+The prompt asks for it as a change of subject, never a change of volume: *"In
+March the argument was whether these models could do the work; today it is what
+a run costs and who is liable when it is wrong"* is a shift, and "there is more
+activity in this space" is a count, which rule 2 already forbids. And it is told
+that a field standing still is a real finding — inventing motion in one is the
+worst thing this can do to a reader deciding where to spend six months.
+
+## "The number of news is very low"
+
+Reported the same day, quoting the analysis page back: *"you said '1,633 stories
+analysed across 144 months, 2010-10 to 2026-09', it means you don't analysis
+news, for 144 months, you only get 1633 news, it is big fuck."*
+
+The arithmetic was the only part of that which was not a fault. Three things
+were wrong and one of them was large.
+
+### The parser could not read half of Atom
+
+RFC 4287 gives `<content>` two forms. `type="html"` carries escaped markup and
+arrives as a string. `type="xhtml"` carries **real nested XML** — a `<div>` with
+paragraphs inside it — and arrives as a parsed object tree with no `#text` of
+its own. `text()` looks for a string or a `#text`, found neither, and returned
+null.
+
+Vercel's feed carries 1,563 entries with paragraphs of prose in every one. All
+1,563 arrived with an empty body, and 1,103 of them were refused by the
+400-character length bar — on every poll, every thirty minutes, for as long as
+the collector had been running. ClickHouse, Hugging Face, Shopify and Stripe
+were failing the same way. Between them, 92,000 of the 97,302 `too_short`
+refusals in three days.
+
+Exactly the mistake the walled-announcement comment in `ingest.ts` already
+names — *"the shortness was ours, not theirs"* — except that here nothing was
+even walled. The tree is now walked and rebuilt into markup, so `stripHtml`
+makes prose of it and `extractLinks` can still see the anchors.
+
+Measured on the same feed in the same hour, before and after: **Vercel went from
+5 stories kept in a poll to 781.**
+
+One honest limit, stated in the code: fast-xml-parser does not preserve document
+order between an element's `#text` and its children unless `preserveOrder` is
+set, and setting it would rewrite every accessor in `feed.ts`. So a sentence with
+a link in the middle can come back with the link's words moved to the end. Every
+word survives, the anchors survive, and the order within any run of text
+survives. For a length gate, a classifier and a summariser that is the right
+trade; for quoting a sentence verbatim it is not, which is why the reader still
+links to the source.
+
+### A refusal left no trace
+
+Only kept stories get a row, so dedup could recognise what was accepted and
+nothing else. A refused item arrived on the next poll indistinguishable from a
+new one, and was fetched, extracted, gated and refused again.
+
+The waste was not mainly the gate call. `ingest.ts` allows **25 article fetches
+per source per poll**, and an item whose page cannot be read took one of those 25
+on every poll and never gave it back. As unreadable items accumulate at the head
+of a feed the budget fills with them and the number of new stories that source
+can contribute falls towards zero. Hugging Face publishes a title-only feed of
+860 entries against a budget of 25.
+
+So `refused_items` (0077) remembers what the gate refused and skips it before a
+fetch slot is spent — **with an expiry, because the reasons are not all
+permanent**. `retry_after` is how the difference is expressed: `too_short` waits
+21 days because publishers do not go back and lengthen posts, `page_blocked`
+waits 3 because a 403 often stops, and the wait grows linearly with attempts up
+to a 120-day ceiling. Nothing is ever permanent, and the Atom fix in this same
+commit is the argument for that: it turned 1,103 of those refusals into readable
+stories, and a permanent refusal would have kept every one of them out.
+
+This defers **one item**, for a bounded time. It never defers a source — the
+distinction the registry has held since *"I want to filter articles not block
+sources"*.
+
+### The page conflated two spans
+
+`archive_history` buckets stories by the month they were **published**, and a
+feed serves its back catalogue as well as its latest post. Collecting on a
+Tuesday puts one story in 2010-10 and two in 2011-06, and the min-to-max of the
+result reads as the age of the archive.
+
+It was nine days old. Every story in the database had been collected on
+2026-09-08 or later.
+
+The sentence was wrong in the way that is hardest to catch, because every number
+in it was correct. Both facts are now shown and named as different things:
+collecting since — taken from `fetch_log`, not from the oldest surviving story,
+because retention would otherwise report the archive getting younger every
+month — and, separately, the span of publication dates, with the reason a feed
+produces one.
+
+## Developer communities, which is where the work is
+
+Asked for on 2026-09-09: *"expand the source list that collect news"*, then *"the
+developer's community site is very important."*
+
+Both are right, and the second is the more useful instruction. The strategy
+prompt names four things that make billable work: a forced migration with a
+deadline, a tool shipped with no ecosystem, a gap between what is sold and what
+is needed, and a skill going scarce. A vendor blog is the wrong place to look for
+any of them — a vendor announces the migration and never mentions who is stuck
+with it. A project's own forum is where the people who are stuck say so, in their
+own words, with the version numbers attached.
+
+"How do I get workflows across in the Data Center move" is not news, and it is
+the most direct evidence in this archive that somebody would pay for that
+afternoon of work.
+
+**Discourse turned out to be the whole story.** `/latest.rss` is a standard
+endpoint on every Discourse instance and it carries the opening post in full:
+median body between 600 and 2,900 characters, every item dated — better
+structured than most vendor feeds already in the registry. Twenty-two forums
+probed, twenty-two parsed, and the median kept 28 of 30 against the gates
+actually in force.
+
+Thirty sources added, measured rather than estimated:
+
+| kept/sampled | source |
+|---|---|
+| 30/30 | Grafana Community |
+| 29/30 | Rust internals, Elastic Discuss, Temporal, Home Assistant |
+| 28/30 | Python Discourse, Go Forum, Swift Forums, LLVM, PyTorch, Hugging Face, OpenAI Developer Community, NixOS, Streamlit, Julia, Hugo, Plotly |
+| 26–27/30 | Rust users, Kubernetes Discourse, Django, n8n, Auth0 |
+| 25/30 | HashiCorp Discuss |
+| 12/12, 17/17 | DEV Community, Ray Discuss |
+| 19–23/30 | GitLab Forum, CircleCI, Discourse Meta |
+| 12–20/30 | Stack Overflow Blog, The Pragmatic Engineer newsletter |
+
+Filed as **articles**, deliberately. A forum thread is never a release, so with
+`EVENTS_ONLY` on and `tech_only` off, all twenty-two forums would have been
+admitted and would then have contributed exactly nothing. That is the same
+finding `measured-breadth.ts` recorded for publications whose value is the
+essay, reached from the other direction. It is one column and reversible per row.
+
+`primary` is false on every forum even though they sit on the projects' own
+domains. The Rust project speaks for Rust; the people posting on
+users.rust-lang.org do not, and marking these primary would let a user's
+complaint about a release be read as the project's position on it — the exact
+confusion `firstParty` exists in the strategy reading to prevent.
+
+`seeds/communities.ts` also records the six refusals with their reasons, so
+nobody probes them again. Reddit is the one worth knowing about: HTTP 429 on
+fourteen of fifteen subreddit `.rss` endpoints, both in parallel and serialised
+at one request every 2.5 seconds. Reddit rate-limits anonymous RSS from
+datacentre ranges, so adding them would have added fifteen sources that report
+themselves failing. It needs an OAuth application credential, which is separate
+work and not yet done.
+
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.

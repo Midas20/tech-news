@@ -152,7 +152,7 @@ export function parseAtomEntriesRaw(body: string): RawEntry[] {
   if (!doc?.feed?.entry) return [];
   return arrayOf(doc.feed.entry).map((entry: Record<string, any>) => ({
     title: normalize(stripHtml(text(entry.title) ?? '')),
-    html: text(entry.content) ?? text(entry.summary) ?? '',
+    html: bodyText(entry.content) || bodyText(entry.summary),
     publishedAt: parseDate(text(entry.published) ?? text(entry.updated)),
   }));
 }
@@ -182,8 +182,8 @@ function atomEntry(entry: Record<string, any>, feedUrl: string): FeedItem {
   const links = arrayOf(entry.link);
   const alternate =
     links.find((l) => (l?.['@rel'] ?? 'alternate') === 'alternate' && l?.['@href']) ?? links[0];
-  const contentRaw = text(entry.content) ?? '';
-  const summaryRaw = text(entry.summary) ?? '';
+  const contentRaw = bodyText(entry.content);
+  const summaryRaw = bodyText(entry.summary);
 
   return {
     title: normalize(stripHtml(text(entry.title) ?? '')),
@@ -252,6 +252,76 @@ function text(value: unknown): string | null {
     return inner != null ? String(inner).trim() || null : null;
   }
   return null;
+}
+
+/**
+ * Atom's OTHER content form, which this parser could not read.
+ *
+ * Measured on 2026-09-09, chasing "the number of news is very low": Vercel's
+ * feed carries 1,563 entries and 1,103 of them were refused as `too_short` on
+ * every single poll, forever, while the raw XML plainly contained paragraphs of
+ * prose. ClickHouse, Hugging Face, Shopify and Stripe were failing the same
+ * way. Between them that is 92,000 refusals in three days against 5,199 stories
+ * kept in total.
+ *
+ * The cause is RFC 4287 section 4.1.3.  may be `type="html"`, where
+ * the body is escaped markup and arrives as a string, or `type="xhtml"`, where
+ * the body is REAL NESTED XML --  --
+ * and arrives as a parsed object tree with no `#text` of its own. `text()`
+ * looks for a string or a `#text` and finds neither, so it returns null, so the
+ * body is empty, so the length gate refuses an item whose emptiness was ours.
+ * Exactly the mistake the walled-announcement comment in ingest.ts names: "the
+ * shortness was ours, not theirs" -- except here nothing was even walled.
+ *
+ * So the tree is walked and turned back into markup. `stripHtml` then makes
+ * prose of it and `extractLinks` can still see the anchors, which is why this
+ * rebuilds tags rather than merely concatenating the text leaves.
+ *
+ * ONE HONEST LIMIT: fast-xml-parser does not preserve document order between an
+ * element's `#text` and its child elements unless `preserveOrder` is set, and
+ * setting it would rewrite every accessor in this file. So a sentence with a
+ * link in the middle of it can come back with the link's words moved to the
+ * end. Every word survives, the anchors survive, and the order within any one
+ * run of text survives. For a length gate, a classifier and a summariser that
+ * is the right trade; for quoting a sentence verbatim it is not, which is why
+ * the reader still links to the source.
+ */
+function markupFrom(node: unknown, depth = 0): string {
+  if (node == null || depth > 12) return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map((n) => markupFrom(n, depth + 1)).join(' ');
+  if (typeof node !== 'object') return '';
+
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (key === '#text') { parts.push(String(value)); continue; }
+    // Attributes of THIS node; the ones worth keeping are read off the child
+    // below, where the tag they belong to is known.
+    if (key.startsWith('@')) continue;
+    // Namespace prefixes are dropped:  is  once
+    // stripHtml is through with it, and keeping the prefix only risks a tag
+    // name the stripper does not recognise.
+    const tag = key.includes(':') ? key.slice(key.indexOf(':') + 1) : key;
+    for (const child of Array.isArray(value) ? value : [value]) {
+      const href = child && typeof child === 'object'
+        ? (child as Record<string, unknown>)['@href'] : undefined;
+      const open = tag === 'a' && typeof href === 'string'
+        ? `<a href="${href}">` : `<${tag}>`;
+      parts.push(`${open}${markupFrom(child, depth + 1)}</${tag}>`);
+    }
+  }
+  return parts.join(' ');
+}
+
+/**
+ * An entry body, whichever of the two Atom forms it arrived in.
+ *
+ * Used only for content and summary. Titles and dates stay on `text()`, which
+ * is right for them: a title that parsed as a tree is a broken feed, and
+ * rebuilding markup into one would put tag names in a headline.
+ */
+function bodyText(node: unknown): string {
+  return text(node) ?? markupFrom(node);
 }
 
 function resolveLink(raw: string | null, base: string): string | null {

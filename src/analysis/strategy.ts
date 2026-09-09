@@ -50,6 +50,36 @@ export interface Direction {
   now: number[];
 }
 
+/**
+ * What the field looked like at the far end of the history, and what it looks
+ * like today. The change itself, stated once, before anything else.
+ *
+ * Added on 2026-09-09 after a second reading of the same complaint: "still you
+ * focus on only current news, you don't analysis the relationship between past
+ * and current of the fields, and I still can't find the market change."
+ *
+ * `direction` was already the past-to-present relationship, but it arrived as
+ * three separate claims some way down the page, each with its earlier end
+ * reduced to a count. Nowhere did the report say, in one line, what is
+ * different now from before -- so a reader scanning the page saw today's
+ * stories and today's conclusions, which is what they said they saw.
+ *
+ * Held to the same pairing rule as `direction`: `before` is drawn from the
+ * earlier corpus, `after` from today's, and both must cite. A "shift" written
+ * from today alone is the exact invention this whole module exists to refuse,
+ * and it would be the most prominent paragraph on the page.
+ */
+export interface Shift {
+  /** The field at the earlier end of the history. */
+  before: string;
+  /** The field today. */
+  after: string;
+  /** What moved between them, in one sentence a reader can disagree with. */
+  moved: string;
+  then: number[];
+  now: number[];
+}
+
 export interface Positioning {
   who: string;
   bet: string;
@@ -91,6 +121,8 @@ export interface Opening {
 
 export interface Strategy {
   read: string;
+  /** What is different now from before. Null when the model would not say. */
+  shift: Shift | null;
   work: Work[];
   direction: Direction[];
   positioning: Positioning[];
@@ -100,6 +132,22 @@ export interface Strategy {
   /** The span of earlier coverage this was drawn against. */
   history: { from: string; to: string; n: number } | null;
   provider?: string;
+  /**
+   * The earlier stories themselves, so `then` indexes can be resolved into
+   * citations before they are stored.
+   *
+   * Not persisted. It exists because the earlier end of every comparison used
+   * to be thrown away at write time -- the reasoning given was that retention
+   * deletes those stories, so an index would rot into a pointer at nothing.
+   * True of the index, and the wrong conclusion: the emerging ledger had
+   * already solved this by COPYING the title, source, date and url at write
+   * time, which survives retention exactly as well as a number does and tells
+   * the reader what the earlier end actually was. The result of throwing it
+   * away was a page whose every claim about change showed only the present,
+   * which is what "you don't analysis the relationship between past and
+   * current" describes.
+   */
+  priorCorpus?: Item[];
 }
 
 export type StrategyOutcome =
@@ -111,6 +159,7 @@ export type StrategyOutcome =
 
 interface RawStrategy {
   read?: unknown;
+  shift?: unknown;
   work?: unknown[];
   direction?: unknown[];
   positioning?: unknown[];
@@ -160,6 +209,22 @@ export function validateStrategy(
     })
     // Both ends, or it is not a claim about change.
     .filter((d) => d.claim && d.then.length > 0 && d.now.length > 0);
+
+  // THE SHIFT, HELD TO THE PAIRING RULE. This is the most prominent paragraph
+  // on the page, which makes it the one most worth inventing and the one a
+  // reader is least likely to check. So it is checked here: no earlier
+  // citation, no shift, and the page says plainly that none was written.
+  const rawShift = (raw.shift ?? {}) as Record<string, unknown>;
+  const shiftDraft = {
+    before: text(rawShift.before),
+    after: text(rawShift.after),
+    moved: text(rawShift.moved),
+    then: ids(rawShift.then, priorSize),
+    now: ids(rawShift.now, todaySize),
+  };
+  const shift = shiftDraft.before && shiftDraft.after && shiftDraft.moved
+    && shiftDraft.then.length > 0 && shiftDraft.now.length > 0
+    ? shiftDraft : null;
 
   const positioning = (Array.isArray(raw.positioning) ? raw.positioning : [])
     .map((p) => {
@@ -220,8 +285,8 @@ export function validateStrategy(
     })
     .filter((o) => o.what && o.evidence.length > 0);
 
-  return { read: text(raw.read), work, direction, positioning, tensions, openings,
-    limits: text(raw.limits) };
+  return { read: text(raw.read), shift, work, direction, positioning, tensions,
+    openings, limits: text(raw.limits) };
 }
 
 /**
@@ -284,6 +349,7 @@ export async function analyseField(
   // made was unsupportable -- which is a fault in the writing, not in the
   // evidence, and must not be reported as "no strategic change".
   if (kept.work.length === 0
+    && kept.shift === null
     && kept.direction.length === 0
     && kept.positioning.length === 0
     && kept.tensions.length === 0
@@ -293,7 +359,12 @@ export async function analyseField(
 
   return {
     status: 'written',
-    strategy: { ...kept, history: historySpan(prior), provider: res.provider },
+    strategy: {
+      ...kept,
+      history: historySpan(prior),
+      provider: res.provider,
+      priorCorpus: prior,
+    },
   };
 }
 

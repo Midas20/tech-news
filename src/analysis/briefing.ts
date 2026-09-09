@@ -520,6 +520,17 @@ export async function saveArchiveReport(
     } : null;
   };
 
+  // The same copy, taken from the earlier corpus. Curried because it is used as
+  // a `.map` argument in four places and the alternative is four closures that
+  // have to agree with each other.
+  const priorCite = (b: Briefing) => (n: number) => {
+    const it = b.strategy?.priorCorpus?.[n - 1];
+    return it ? {
+      id: it.id, title: it.title, url: it.url, source: it.source,
+      kind: it.kind, when: it.when, independent: it.independent,
+    } : null;
+  };
+
   const shaped = report.fields.map((b) => ({
     b,
     read: provenance(b.corpus),
@@ -536,15 +547,27 @@ export async function saveArchiveReport(
       // rendering an absence as though the field had not moved.
       ...(b.strategyGap ? { strategyGap: b.strategyGap } : {}),
     },
-    // THE READING, WITH ITS CITATIONS RESOLVED -- same reason as the themes
-    // above. `now` indexes today's corpus, which `cite` resolves. `then` indexes
-    // the PRIOR corpus, which is not stored: it was a query over stories that
-    // retention will delete, so the numbers are dropped and the earlier span is
-    // kept instead. A reader checking a "then and now" claim gets the recent end
-    // as links and the earlier end as a dated range, which is the honest limit
-    // of what survives four months.
+    // THE READING, WITH BOTH ENDS OF EVERY COMPARISON RESOLVED.
+    //
+    // `now` indexes today's corpus and `then` indexes the earlier one, and both
+    // are copied out as title, source, date and url rather than kept as
+    // numbers. The earlier end used to be reduced to a count here, on the
+    // grounds that retention deletes those stories within four months and an
+    // index would rot into a pointer at nothing. That is true of the index and
+    // false of the copy -- `emerging_sightings` has copied its citations for
+    // exactly this reason since 0074 -- and the cost of dropping it was a page
+    // on which every claim about change displayed only the present. A reader
+    // cannot check a then-and-now claim with the "then" missing, and this
+    // archive exists to be checked.
     strategy: b.strategy ? {
       read: b.strategy.read,
+      shift: b.strategy.shift ? {
+        before: b.strategy.shift.before,
+        after: b.strategy.shift.after,
+        moved: b.strategy.shift.moved,
+        then: b.strategy.shift.then.map(priorCite(b)).filter(Boolean),
+        now: b.strategy.shift.now.map((n) => cite(b, n)).filter(Boolean),
+      } : null,
       work: b.strategy.work.map((w) => ({
         what: w.what, why: w.why, skills: w.skills, horizon: w.horizon,
         evidence: w.evidence.map((n) => cite(b, n)).filter(Boolean),
@@ -553,7 +576,11 @@ export async function saveArchiveReport(
         claim: d.claim,
         reasoning: d.reasoning,
         falsifier: d.falsifier,
+        then: d.then.map(priorCite(b)).filter(Boolean),
         now: d.now.map((n) => cite(b, n)).filter(Boolean),
+        // Kept alongside `then` for the readings written before the earlier end
+        // was stored, whose pages would otherwise lose their only indication
+        // that there had been an earlier end at all.
         thenCount: d.then.length,
       })),
       positioning: b.strategy.positioning.map((pz) => ({
@@ -660,9 +687,25 @@ export interface StoredTheme {
  * the dated span in `history`, which is the honest limit of what lasts.
  */
 export interface StoredDirection {
-  claim: string; reasoning: string; now: Citation[]; thenCount: number;
+  claim: string; reasoning: string; now: Citation[];
+  /**
+   * The earlier end, copied at write time.
+   *
+   * Optional only because readings written before 2026-09-09 do not have it;
+   * `thenCount` is the fallback those pages fall back to. Every reading written
+   * from now on carries the stories themselves, because a claim about change
+   * with an invisible past is indistinguishable from a claim about today.
+   */
+  then?: Citation[];
+  thenCount: number;
   /** What would show it wrong. Also what the standing section reports against. */
   falsifier?: string;
+}
+
+/** What the field looked like then, what it looks like now, cited both ends. */
+export interface StoredShift {
+  before: string; after: string; moved: string;
+  then: Citation[]; now: Citation[];
 }
 export interface StoredWork {
   what: string; why: string; skills: string;
@@ -680,6 +723,8 @@ export interface StoredOpening {
 }
 export interface StoredStrategy {
   read: string;
+  /** What is different now from before. Absent on readings written before 0077. */
+  shift?: StoredShift | null;
   work: StoredWork[];
   direction: StoredDirection[];
   positioning: StoredPositioning[];

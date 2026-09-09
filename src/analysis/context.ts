@@ -48,6 +48,25 @@ export const LOOKBACK_DAYS = 180;
 export const HISTORY_CAP = 40;
 
 /**
+ * How many periods the history is split into before anything is chosen.
+ *
+ * THIS IS THE FIX FOR THE COMPLAINT "you don't analysis the relationship
+ * between past and current of the fields". Measured on 2026-09-09, the history
+ * for `practice` held 31 of its 40 stories from the last five weeks and four
+ * from before July. The cause is that recency wins twice: the archive simply
+ * holds more recent stories (557 in August against 93 in March), and the query
+ * then breaks importance ties by date descending. A model handed that packet is
+ * being asked how six months changed while looking almost entirely at the last
+ * month, so it writes about the last month and calls it a trend -- which is
+ * precisely the report that was complained about.
+ *
+ * Six periods over the lookback is roughly a month each, which is coarse enough
+ * that a quiet month still contributes and fine enough that a shift has
+ * somewhere to show up.
+ */
+export const PERIODS = 6;
+
+/**
  * The stories that came before today's, on today's subjects.
  *
  * SUBJECT-LED, NOT FIELD-LED. Pulling the whole field's last six months would
@@ -101,9 +120,67 @@ export async function priorContext(
     [subjects, win.from, lookbackDays],
   );
 
-  // The same diversity rules as the daily corpus: no single source or subject
-  // gets to define what the past looked like either.
-  return diversify(rows.map(shape), { ...CAPS, total: cap }, [field]);
+  // Stratified, THEN diversified, and returned oldest first. Taking the top 40
+  // by importance would hand back five weeks of stories with a six-month label
+  // on them; see PERIODS.
+  return stratify(rows.map(shape), win.from, lookbackDays, cap, field);
+}
+
+/**
+ * Spread a choice of stories evenly across the months they came from.
+ *
+ * The lookback is cut into PERIODS equal spans and each period is diversified on
+ * its own -- so no single source or subject defines what any one month looked
+ * like -- and then the periods are drawn from in rotation until the cap is
+ * reached. A period holding nothing costs nothing: the rotation simply skips it
+ * and the others take its share, so a field that genuinely went quiet in April
+ * is not padded and a field that was busy does not swallow the packet.
+ *
+ * Returned OLDEST FIRST, which is not cosmetic. The packet numbers stories in
+ * array order, so oldest-first makes the numbering itself run forwards through
+ * time: a claim citing P3 against P37 is visibly a claim about a span, and the
+ * model can see the arc in the order it reads.
+ */
+export function stratify(
+  items: Item[], before: string, lookbackDays: number, cap: number, field: string,
+): Item[] {
+  if (items.length === 0) return [];
+
+  const end = Date.parse(before);
+  const start = end - lookbackDays * 86_400_000;
+  const width = (end - start) / PERIODS;
+
+  const periods: Item[][] = Array.from({ length: PERIODS }, () => []);
+  for (const it of items) {
+    const at = Date.parse(it.when);
+    // Anything unparseable or out of range lands in the period nearest to it
+    // rather than being dropped: a story with a bad date is still evidence.
+    const i = Number.isNaN(at) ? PERIODS - 1
+      : Math.min(PERIODS - 1, Math.max(0, Math.floor((at - start) / width)));
+    periods[i]!.push(it);
+  }
+
+  // Each period diversified against a generous share, so that the rotation has
+  // something to fall back on when a neighbouring period is empty.
+  const share = Math.max(2, Math.ceil(cap / PERIODS) * 2);
+  const pools = periods.map((p) => diversify(p, { ...CAPS, total: share }, [field]));
+
+  const picked: Item[] = [];
+  const seen = new Set<string>();
+  for (let round = 0; picked.length < cap && round < share; round += 1) {
+    let took = false;
+    for (const pool of pools) {
+      const it = pool[round];
+      if (!it || seen.has(it.id)) continue;
+      seen.add(it.id);
+      picked.push(it);
+      took = true;
+      if (picked.length >= cap) break;
+    }
+    if (!took) break;
+  }
+
+  return picked.sort((a, b) => a.when.localeCompare(b.when));
 }
 
 /**
@@ -128,21 +205,43 @@ export async function withHistory(
  * either set is a citation that proves nothing, which defeats the point of
  * making the model cite both.
  */
+const NL = String.fromCharCode(10);
+
 export function historyPacket(prior: Item[]): string {
   if (prior.length === 0) {
     return 'EARLIER COVERAGE: none. This archive holds no earlier stories on '
       + 'these subjects, so you cannot say anything about how they have changed. '
       + 'Say so in `limits` and make no claim about direction.';
   }
-  return [
-    `EARLIER COVERAGE (${prior.length} stories on the same subjects, before this `
-      + `window). Cite these as P1, P2, ... :`,
-    ...prior.map((it, i) => [
+
+  // GROUPED BY MONTH, OLDEST FIRST. The same forty stories in one flat list are
+  // forty stories; under month headings they are a sequence, and the question
+  // "what is different between the top of this list and the bottom" has a shape
+  // the model can answer. The numbering stays a single ascending series across
+  // the groups, because it is the index into the array and a per-group
+  // numbering would make P3 ambiguous.
+  const months = new Map<string, string[]>();
+  prior.forEach((it, i) => {
+    const key = it.when.slice(0, 7);
+    const line = [
       `P${i + 1}. [${it.when}] ${it.title}`,
       `    ${it.source}${it.independent ? '' : ' (first-party)'} · ${it.kind}`,
       it.summary ? `    ${it.summary.slice(0, 300)}` : '',
-    ].filter(Boolean).join('\n')),
-  ].join('\n');
+    ].filter(Boolean).join(NL);
+    const bucket = months.get(key);
+    if (bucket) bucket.push(line); else months.set(key, [line]);
+  });
+
+  const span = historySpan(prior)!;
+  return [
+    `EARLIER COVERAGE: ${prior.length} stories on the same subjects, from `
+      + `${span.from} to ${span.to}, ALL OF THEM BEFORE THIS WINDOW. They are `
+      + 'grouped by month and run oldest first, so the difference between the '
+      + 'earliest group and the latest group IS the change you are being asked '
+      + 'to describe. Cite these as P1, P2, ... :',
+    ...[...months.entries()].map(([month, lines]) =>
+      `${NL}--- ${month} ---${NL}${lines.join(NL)}`),
+  ].join(NL);
 }
 
 /**

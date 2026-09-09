@@ -27,6 +27,7 @@ import { classifyEvent, isEvent } from './eventful.ts';
 import { fetchConditional, type PolitenessGate } from './fetcher.ts';
 import { extractArticle } from './extract.ts';
 import { mapWithConcurrency } from '../lib/pool.ts';
+import { stillRefused, remember, type Refusal } from './refused.ts';
 import { contentHash, sha256, normalizeForHash } from '../lib/hash.ts';
 import { simhash, simhashBands, toSigned64 } from '../lib/simhash.ts';
 import { canonicalizeUrl, domainOf } from '../lib/url.ts';
@@ -67,6 +68,13 @@ export interface IngestOptions {
   topicFilter?: boolean;
   /** Override EVENTS_ONLY for this one call. */
   eventsOnly?: boolean;
+  /**
+   * Skip and record items the gate has already refused. On by default.
+   *
+   * Off for backfills and for tests that mean to re-examine everything: a
+   * backfill exists precisely to reconsider what a previous pass concluded.
+   */
+  rememberRefusals?: boolean;
 }
 
 export interface IngestResult {
@@ -235,6 +243,8 @@ export async function ingestItems(
   const members: stories.MemberRow[] = [];
   let articleFetches = 0;
   let deadlineSkipped = 0;
+  /** What this poll refused, flushed once at the end rather than per item. */
+  const refusals: Refusal[] = [];
   const deadline = Date.now() + (opts.deadlineMs ?? DEFAULT_SOURCE_DEADLINE_MS);
 
   // The months that have already been reduced to monthly analysis. Read once
@@ -386,10 +396,26 @@ export async function ingestItems(
   const urlHashes = await Promise.all(staged.map((s) => sha256(s.canonicalUrl)));
   const known = await stories.findManyByUrl(db, urlHashes);
 
+  // WHAT WAS ALREADY REFUSED, so it does not spend one of this poll's 25
+  // article fetches proving the same thing again. See ./refused.ts: without
+  // this, an unreadable item at the head of a feed takes a fetch slot on every
+  // poll for ever and the source's capacity to contribute NEW stories falls
+  // towards zero. The refusal expires; the source is never skipped.
+  const refused = opts.rememberRefusals === false
+    ? new Set<string>() : await stillRefused(db, urlHashes);
+
   const unknown: Candidate[] = [];
   staged.forEach((s, i) => {
     const hash = urlHashes[i]!;
     const existing = known.get(toHex(hash));
+    if (!existing && refused.has(toHex(hash))) {
+      // Counted under its own name rather than folded into the reason it was
+      // originally refused for -- a drop chart that cannot tell "we looked and
+      // said no" from "we said no last month" hides exactly the growth this
+      // table exists to stop.
+      drops.record('refused_before');
+      return;
+    }
     if (existing) {
       // Already held. No page fetch, no extraction, no hashing -- just a
       // membership row. This is the majority of every poll after the first.
@@ -499,9 +525,26 @@ export async function ingestItems(
       { ...c.item, link: c.canonicalUrl, title: c.title }, c.bodyText,
       minOverride === undefined ? {} : { minLengthOverride: minOverride },
     );
-    if (!gate.keep) { drops.record(gate.reason!); continue; }
+    if (!gate.keep) {
+      drops.record(gate.reason!);
+      // `page_blocked` rather than `too_short` when the page was asked for and
+      // refused: the two want very different waits, and calling a 403 a short
+      // article would sit on it for three weeks over a fault that is often gone
+      // by tomorrow.
+      refusals.push({
+        urlHash: c.urlHash,
+        url: c.canonicalUrl,
+        reason: gate.reason === 'too_short' && c.pageBlocked === true
+          ? 'page_blocked' : gate.reason!,
+      });
+      continue;
+    }
     gated.push({ c, lang: gate.lang!, contentHash: await contentHash(c.title, c.bodyText) });
   }
+
+  // One flush for the whole poll, here rather than at each return below, so
+  // that the two exits cannot disagree about what was remembered.
+  if (opts.rememberRefusals !== false) await remember(db, source.id, refusals);
 
   if (gated.length === 0) {
     await stories.addMembersBatch(db, members);

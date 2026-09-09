@@ -36,6 +36,7 @@
     "live": "node --experimental-strip-types scripts/live.ts",
     "bench": "node --experimental-strip-types scripts/bench-collect.ts",
     "backfill": "node --experimental-strip-types scripts/backfill.ts",
+    "seed:communities": "node --experimental-strip-types scripts/seed-communities.ts",
     "seed:companies": "node --experimental-strip-types scripts/seed-companies.ts",
     "tag:companies": "node --experimental-strip-types scripts/tag-companies.ts",
     "discover": "node --experimental-strip-types scripts/discover.ts",

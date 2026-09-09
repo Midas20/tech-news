@@ -15,6 +15,14 @@ export type DropReason =
   | 'media_enclosure'
   | 'podcast_feed'
   | 'too_short'
+  /**
+   * Refused on an earlier poll and still inside its wait.
+   *
+   * Its own reason rather than a repeat of the original one: a drop chart that
+   * cannot tell "we looked and said no" from "we said no last month" hides the
+   * growth that refused_items exists to stop.
+   */
+  | 'refused_before'
   | 'lang_gate'
   | 'blocked_host'
   | 'duplicate_url'

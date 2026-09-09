@@ -95,9 +95,29 @@ async function monthly(stack: string | null, months = MONTHS): Promise<Point[]> 
 }
 
 
-/** How far back the analysis reaches, and how much of it is aggregate now. */
+/**
+ * How far back the analysis reaches, how much of it is aggregate, and -- kept
+ * strictly apart from both -- how long this archive has actually been running.
+ *
+ * THE HEADLINE USED TO READ "1,635 stories analysed across 144 months, 2010-10
+ * to 2026-09", and on 2026-09-09 a reader did the only arithmetic that sentence
+ * invites: 1,635 stories in twelve years. Which would indeed be nothing.
+ *
+ * The sentence was wrong in the way that is hardest to catch, because every
+ * number in it was correct. `archive_history` buckets stories by the month they
+ * were PUBLISHED, and feeds do not serve only this week -- Vercel's carries
+ * 1,563 entries going back years, Shopify's 428. Collecting those on a Tuesday
+ * puts one story in 2010-10 and two in 2011-06, and the min-to-max span of the
+ * result reads as the age of the archive. It is not. It is the age of the
+ * oldest thing somebody left in a feed.
+ *
+ * So the two facts are now separated and both are shown. Collecting since is a
+ * fact about us and the honest measure of how much this archive can yet be
+ * expected to hold; the published span is a fact about the feeds.
+ */
 async function span(): Promise<{ first: string | null; last: string | null;
-  months: number; archived: number; stories: number }> {
+  months: number; archived: number; stories: number;
+  collectingSince: string | null; collectedDays: number }> {
   const r = await one<{ first: string; last: string; months: string;
     archived: string; stories: string }>(
     `SELECT to_char(min(month), 'YYYY-MM') AS first,
@@ -106,10 +126,19 @@ async function span(): Promise<{ first: string | null; last: string | null;
             count(*) FILTER (WHERE archived)::text AS archived,
             sum(stories)::text AS stories
        FROM archive_history`);
+  // Not from `stories`, whose oldest row is only the oldest SURVIVING row --
+  // retention deletes, and after the first deletion that column would report
+  // the archive getting younger. fetch_log is never pruned by the retention
+  // contract, so the first fetch is the first fetch.
+  const c = await one<{ since: string; days: string }>(
+    `SELECT to_char(min(fetched_at), 'YYYY-MM-DD') AS since,
+            greatest(1, (now()::date - min(fetched_at)::date))::text AS days
+       FROM fetch_log`);
   return {
     first: r?.first ?? null, last: r?.last ?? null,
     months: Number(r?.months ?? 0), archived: Number(r?.archived ?? 0),
     stories: Number(r?.stories ?? 0),
+    collectingSince: c?.since ?? null, collectedDays: Number(c?.days ?? 0),
   };
 }
 
@@ -286,9 +315,20 @@ export async function renderTrends(): Promise<string> {
 
   return wrap(`
     ${pageHead('Technology trends',
-      `${reach.stories.toLocaleString('en-US')} stories analysed across `
-      + `${reach.months} months${reach.first ? `, ${escapeHtml(reach.first)} to `
-        + `${escapeHtml(reach.last ?? '')}` : ''}`)}
+      `${reach.stories.toLocaleString('en-US')} stories analysed`
+      + (reach.collectingSince
+        ? `, collected over ${reach.collectedDays === 1 ? 'one day'
+          : `${reach.collectedDays} days`} since ${escapeHtml(reach.collectingSince)}`
+        : ''))}
+
+    <p class="note"><b>Two different spans, and only one of them is about this
+      archive.</b> It has been collecting since
+      ${escapeHtml(reach.collectingSince ?? 'its first fetch')}; that is how much
+      time it has had. The stories in it carry publication dates spread across
+      ${reach.months} months${reach.first ? `, ${escapeHtml(reach.first)} to
+        ${escapeHtml(reach.last ?? '')}` : ''}, because a feed serves its back
+      catalogue as well as its latest post &mdash; one story dated 2010 means one
+      feed still lists a post from 2010, not that anything was watching then.</p>
 
     <p class="note">${reach.archived} of these months are held as monthly analysis rather
       than as whole stories — per technology: how many stories, how many distinct outlets,
