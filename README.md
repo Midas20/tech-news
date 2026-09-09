@@ -6231,6 +6231,96 @@ top of this README, and the one the collection target asks for: *new stacks, too
 and platforms plus market moves; articles are noise*. It is by far the largest
 lever on volume and it is deliberate. Nothing here changed it.
 
+## Strategy, not retelling
+
+Asked for on 2026-09-09, holding up a briefing that had repeated a Databricks
+conference post almost verbatim:
+
+> *"This report is only repeat of some news content... you have to collect past
+> news that related to the news and analysis all news that are related to same
+> field today, and then you can find the trend or fashion or new opportunity or
+> new direction, the company's thought... I need strategy info in report not
+> repeat of news, The news is only data that prove your analysis result."*
+
+**The complaint was right and the prompt was not the cause.** `fieldCorpus` is
+bounded at both ends by the report window — deliberately, since 0073, because
+that is what made a daily report actually daily. But a corpus holding one day
+cannot support a claim about direction. The model was asked what is going on
+while holding a single day's stories; its two options were to repeat the post or
+to invent a trend, and repeating is the better of them.
+
+### Two passes, because they want opposite things
+
+`field_briefing` must **not** generalise — v2 abstracted real events up into
+categories and every title became a filing label, and the rules that fixed it
+are rules against abstraction. Strategy **is** abstraction, done deliberately and
+against evidence. One prompt asked for both produces the average: a news summary
+with an adjective in front of it.
+
+So `field_strategy` is a second call over the same stories plus
+`src/analysis/context.ts` — the **six months before the window**, on the subjects
+today's stories actually name. Subject-led, not field-led: six months of a
+field's general background *is* background, and a model asked to find a trend in
+background will find one.
+
+### The rule that makes it analysis rather than opinion
+
+**A claim about direction must cite an earlier story AND a recent one.**
+`then` must land inside the prior corpus, `now` inside today's, and
+`validateStrategy()` drops any claim that cannot fill both — in code, not by the
+prompt asking nicely.
+
+A model with nothing to compare reaches for two of today's stories and writes a
+sentence that sounds like a trend and is a restatement. That sentence is
+indistinguishable from a real finding unless something checks the indices, so
+something checks the indices. Claims that fail are **dropped, not softened**: a
+strategic paragraph a reader cannot check is worse than none, because it reads
+exactly like one they can.
+
+### What comes out
+
+| | |
+|---|---|
+| `read` | one sentence — the useful thing to take from today |
+| `direction[]` | what moved between then and now, both ends cited |
+| `positioning[]` | what a **named** company appears to be betting on |
+| `openings[]` | a gap between what is sold and what the evidence shows is solved |
+| `limits` | what this evidence cannot settle |
+
+`positioning` may be read from today alone — what a company ships and chooses to
+talk about is visible in one post — but it carries a `firstParty` flag, and the
+page says so out loud: *"Read from what they say about themselves. Good evidence
+of what they have decided to sell, and none at all that anybody bought it."*
+That is exactly the Databricks case: a booth schedule is strong evidence of
+intent and no evidence of adoption.
+
+The rule against counting our own stories carries over unchanged. Convergence is
+shown by **naming the parties** — "Databricks, Snowflake and Microsoft each
+shipped X" is evidence; "vendors are increasingly shipping X" is not.
+
+### Where it sits, and what survives
+
+The reading renders **above** the findings. A reader who has to scroll past the
+retelling to reach the analysis is reading a news summary with an appendix.
+
+`now` citations are resolved into real stories and stored; `then` indexes are
+**not**. The earlier corpus is a query over stories retention deletes, so keeping
+indexes into it would leave a footnote pointing at a page that no longer exists.
+The recent end survives as links, the earlier end as a dated span — the honest
+limit of what lasts four months.
+
+### The job that starved the analysis
+
+Adding `names` at five-minute cadence over a 1,800-story backlog exhausted every
+free provider on its first cycle and kept them there — `names: 10 batches
+deferred` every five minutes while the briefing and the strategy pass got
+nothing. **The job that runs constantly starved the jobs that run once.**
+
+Fixed twice over: the per-run limit dropped from 120 stories to 24, and the scan
+now stops after two consecutive refusals rather than working through a backlog
+against a chain that is already down. Yielding costs minutes on a one-off
+backlog; continuing costs the analysis its budget permanently.
+
 ## Deploying it
 
 ```

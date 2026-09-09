@@ -31,8 +31,13 @@ import { q } from '../ui/db.ts';
 import { llmCall, type LlmContext } from '../llm/router.ts';
 import { FIELDS, fieldLabel } from '../vocab/fields.ts';
 import {
-  fieldCorpus, provenance, subjectsOf, type Item, type Query, type Window,
+  fieldCorpus, provenance, subjectsOf, corpusPacket,
+  type Item, type Query, type Window,
 } from './corpus.ts';
+// Re-exported: it used to be defined here, and the tests and the report
+// renderer import it from this module.
+export { corpusPacket };
+import { analyseField, type Strategy, type StrategyOutcome } from './strategy.ts';
 
 export type { Window };
 import { publicFigures, describeFigure, bySize, type PublicFigure } from './public.ts';
@@ -117,26 +122,6 @@ export function windowDays(win: Window): number {
 // What the writer is given
 // ---------------------------------------------------------------------------
 
-/**
- * Render the corpus for reading.
- *
- * Numbered, because the numbers are the citation mechanism: the model answers
- * with story indexes and the page turns them back into links, which is what
- * makes every paragraph openable. Summaries are truncated rather than dropped
- * -- 400 characters is enough to know what happened and short enough that forty
- * stories fit in one call.
- */
-export function corpusPacket(items: Item[]): string {
-  return items.map((it, i) => {
-    const voice = it.independent ? 'independent' : 'first-party (speaks for the subject)';
-    const named = [...it.stacks, ...it.companies, ...it.platforms].slice(0, 6);
-    return `[${i + 1}] ${it.title}\n`
-      + `    ${(it.summary ?? '').replace(/\s+/g, ' ').slice(0, 400)}\n`
-      + `    source: ${it.source} (${voice}); kind: ${it.kind}; date: ${it.when}`
-      + (named.length ? `; tagged: ${named.join(', ')}` : '');
-  }).join('\n');
-}
-
 /** The public figures block, or an explicit statement that there is none. */
 export function figuresPacket(figures: PublicFigure[]): string {
   if (figures.length === 0) {
@@ -196,6 +181,17 @@ export interface Briefing {
   /** The stories it was written from, in the order the citations index. */
   corpus: Item[];
   figures: PublicFigure[];
+  /**
+   * What the stories MEAN, read against the months before them.
+   *
+   * Optional, and absent for a good reason more often than for a bad one: a
+   * field with no earlier coverage on today's subjects cannot support a claim
+   * about direction, and saying nothing is the correct output. See
+   * src/analysis/strategy.ts.
+   */
+  strategy?: Strategy;
+  /** Why there is no reading, when there is none. Never rendered as "no change". */
+  strategyGap?: string;
 }
 
 /**
@@ -289,6 +285,23 @@ export async function briefField(
       why: 'the briefing cited no story that exists' };
   }
 
+  // THE SECOND PASS: what it means, read against the months before it.
+  //
+  // Separate call, separate prompt, and deliberately after the briefing rather
+  // than instead of it. The two want opposite things from the same stories --
+  // field_briefing must NOT generalise, because v2 abstracted real events into
+  // filing labels and the rules that fixed it are rules against abstraction.
+  // Strategy is abstraction done on purpose and against evidence. One prompt
+  // asked for both produces the average: a news summary with an adjective in
+  // front of it, which is the thing that was complained about.
+  //
+  // Never fatal. A briefing that exists is worth keeping whether or not a
+  // reading could be drawn from it, and the reason it could not is recorded so
+  // the page can say which of the two it is.
+  const read = await analyseField(ctx, field, win, corpus, figures, query)
+    .catch((e: unknown): StrategyOutcome =>
+      ({ status: 'unwritten', why: (e as Error)?.message ?? 'threw' }));
+
   return { status: 'written', briefing: {
     field,
     label: fieldLabel(field),
@@ -300,6 +313,12 @@ export async function briefField(
     provider: res.provider,
     corpus,
     figures,
+    ...(read.status === 'written'
+      ? { strategy: read.strategy }
+      : { strategyGap: read.status === 'no_history'
+          ? `no earlier coverage of these subjects in this archive `
+            + `(${read.prior} prior ${read.prior === 1 ? 'story' : 'stories'})`
+          : read.why }),
   } };
 }
 
@@ -512,7 +531,38 @@ export async function saveArchiveReport(
         evidence: t.evidence.map((n) => cite(b, n)).filter(Boolean),
       })),
       watch: b.watch,
+      // Why there is no reading, when there is none. Kept beside the report so
+      // the page can say "no earlier coverage to compare against" rather than
+      // rendering an absence as though the field had not moved.
+      ...(b.strategyGap ? { strategyGap: b.strategyGap } : {}),
     },
+    // THE READING, WITH ITS CITATIONS RESOLVED -- same reason as the themes
+    // above. `now` indexes today's corpus, which `cite` resolves. `then` indexes
+    // the PRIOR corpus, which is not stored: it was a query over stories that
+    // retention will delete, so the numbers are dropped and the earlier span is
+    // kept instead. A reader checking a "then and now" claim gets the recent end
+    // as links and the earlier end as a dated range, which is the honest limit
+    // of what survives four months.
+    strategy: b.strategy ? {
+      read: b.strategy.read,
+      direction: b.strategy.direction.map((d) => ({
+        claim: d.claim,
+        reasoning: d.reasoning,
+        now: d.now.map((n) => cite(b, n)).filter(Boolean),
+        thenCount: d.then.length,
+      })),
+      positioning: b.strategy.positioning.map((pz) => ({
+        who: pz.who, bet: pz.bet, firstParty: pz.firstParty,
+        evidence: pz.evidence.map((n) => cite(b, n)).filter(Boolean),
+      })),
+      openings: b.strategy.openings.map((o) => ({
+        what: o.what, why: o.why, ...(o.who ? { who: o.who } : {}),
+        evidence: o.evidence.map((n) => cite(b, n)).filter(Boolean),
+      })),
+      limits: b.strategy.limits,
+      history: b.strategy.history,
+      provider: b.strategy.provider,
+    } : null,
   }));
 
   // ONE ROW PER FIELD PER DAY, which is the grain the reader navigates: down the
@@ -524,9 +574,10 @@ export async function saveArchiveReport(
     await query(
       `INSERT INTO field_briefings
          (day, field, generator, provider, covered_from, covered_to,
-          headline, summary, gaps, stories_read, sources, independent, themes, payload)
+          headline, summary, gaps, stories_read, sources, independent, themes, payload,
+          strategy, history_read, history_from)
        VALUES ($1::date, $2, $3, $4, $5::timestamptz, $6::timestamptz,
-               $7, $8, $9, $10, $11, $12, $13, $14::jsonb)
+               $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16, $17::date)
        ON CONFLICT (day, field) DO UPDATE SET
          generated_at = now(), generator = EXCLUDED.generator,
          provider = EXCLUDED.provider,
@@ -534,12 +585,18 @@ export async function saveArchiveReport(
          headline = EXCLUDED.headline, summary = EXCLUDED.summary,
          gaps = EXCLUDED.gaps, stories_read = EXCLUDED.stories_read,
          sources = EXCLUDED.sources, independent = EXCLUDED.independent,
-         themes = EXCLUDED.themes, payload = EXCLUDED.payload`,
+         themes = EXCLUDED.themes, payload = EXCLUDED.payload,
+         strategy = EXCLUDED.strategy,
+         history_read = EXCLUDED.history_read,
+         history_from = EXCLUDED.history_from`,
       [report.day, s.b.field, report.generator, s.b.provider ?? null,
         report.window.from, report.window.to,
         s.b.headline, s.b.summary, s.b.gaps || null,
         s.read.read, s.read.sources, s.read.independent, s.payload.themes.length,
-        JSON.stringify(s.payload)]);
+        JSON.stringify(s.payload),
+        s.strategy ? JSON.stringify(s.strategy) : null,
+        s.strategy?.history?.n ?? null,
+        s.strategy?.history?.from ?? null]);
   }
 
   const themes = shaped.reduce((n, s) => n + s.payload.themes.length, 0);
@@ -584,6 +641,34 @@ export interface StoredTheme {
   title: string; body: string; evidence: Citation[];
 }
 
+/**
+ * The reading, as the page reads it back.
+ *
+ * `now` is resolved into real citations; `thenCount` is a number and not a list
+ * because the earlier corpus was a query over stories retention will delete.
+ * Keeping indexes into it would leave a footnote pointing at a page that no
+ * longer exists -- so the recent end survives as links and the earlier end as
+ * the dated span in `history`, which is the honest limit of what lasts.
+ */
+export interface StoredDirection {
+  claim: string; reasoning: string; now: Citation[]; thenCount: number;
+}
+export interface StoredPositioning {
+  who: string; bet: string; firstParty: boolean; evidence: Citation[];
+}
+export interface StoredOpening {
+  what: string; why: string; who?: string; evidence: Citation[];
+}
+export interface StoredStrategy {
+  read: string;
+  direction: StoredDirection[];
+  positioning: StoredPositioning[];
+  openings: StoredOpening[];
+  limits: string;
+  history: { from: string; to: string; n: number } | null;
+  provider?: string;
+}
+
 /** One field on one day, as the page reads it. */
 export interface StoredField {
   day: string;
@@ -599,6 +684,10 @@ export interface StoredField {
   themes: StoredTheme[];
   watch: string[];
   figures: PublicFigure[];
+  /** What it means, when there was enough history to say. */
+  strategy?: StoredStrategy;
+  /** Why there is no reading. Never rendered as "nothing changed". */
+  strategyGap?: string;
 }
 
 interface FieldRow {
@@ -606,7 +695,11 @@ interface FieldRow {
   covered_from: string; covered_to: string;
   headline: string; summary: string; gaps: string | null;
   stories_read: number; sources: number; independent: number;
-  payload: { themes?: StoredTheme[]; watch?: string[]; figures?: PublicFigure[] };
+  payload: {
+    themes?: StoredTheme[]; watch?: string[]; figures?: PublicFigure[];
+    strategyGap?: string;
+  };
+  strategy: StoredStrategy | null;
 }
 
 function toStored(r: FieldRow): StoredField {
@@ -621,12 +714,14 @@ function toStored(r: FieldRow): StoredField {
     themes: r.payload?.themes ?? [],
     watch: r.payload?.watch ?? [],
     figures: r.payload?.figures ?? [],
+    ...(r.strategy ? { strategy: r.strategy } : {}),
+    ...(r.payload?.strategyGap ? { strategyGap: r.payload.strategyGap } : {}),
   };
 }
 
 const FIELD_COLS = `day::text AS day, field, provider,
   covered_from::text AS covered_from, covered_to::text AS covered_to,
-  headline, summary, gaps, stories_read, sources, independent, payload`;
+  headline, summary, gaps, stories_read, sources, independent, payload, strategy`;
 
 /** Every field briefed on one day, in the taxonomy's reading order. */
 export async function briefingsOn(day: string, query: Query = q): Promise<StoredField[]> {

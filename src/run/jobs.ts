@@ -405,13 +405,18 @@ export function buildJobs(opts: JobOptions = {}): Job[] {
         leaseSeconds: 900,
         async run({ worker }) {
           const ctx: LlmContext = { db: worker, env: process.env as Record<string, string> };
-          const found = await scanForNames(ctx, 120);
+          // TWENTY-FOUR, NOT 120. Steady state is 30-90 stories a day, which
+          // is two to eight batches -- this only looks small against the
+          // one-off backlog, and draining that greedily is what starved every
+          // other model job of budget. See scanForNames() for the rest.
+          const found = await scanForNames(ctx, 24);
           const bits: string[] = [];
           if (found.discovered) bits.push(`${found.discovered} new names`);
           if (found.corroborated) bits.push(`${found.corroborated} corroborated`);
           if (found.promoted) bits.push(`${found.promoted} passed the second-source gate`);
           const deferred = Object.values(found.deferReasons).reduce((a, b) => a + b, 0);
           if (deferred) bits.push(`${deferred} batches deferred`);
+          if (found.yielded) bits.push('yielded the model budget');
           return bits.join(', ');
         },
       },

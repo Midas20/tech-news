@@ -261,3 +261,27 @@ export function subjectsOf(items: Item[], limit = 20): string[] {
   for (const it of items) for (const s of it.stacks) n.set(s, (n.get(s) ?? 0) + 1);
   return [...n.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([s]) => s);
 }
+
+/**
+ * Render the corpus for reading.
+ *
+ * Numbered, because the numbers are the citation mechanism: the model answers
+ * with story indexes and the page turns them back into links, which is what
+ * makes every paragraph openable. Summaries are truncated rather than dropped
+ * -- 400 characters is enough to know what happened and short enough that forty
+ * stories fit in one call.
+ *
+ * Lives here rather than in briefing.ts because two callers now need it and the
+ * second one is strategy.ts, which briefing.ts imports -- leaving it there made
+ * an import cycle out of a pure function over Item[].
+ */
+export function corpusPacket(items: Item[]): string {
+  return items.map((it, i) => {
+    const voice = it.independent ? 'independent' : 'first-party (speaks for the subject)';
+    const named = [...it.stacks, ...it.companies, ...it.platforms].slice(0, 6);
+    return `[${i + 1}] ${it.title}\n`
+      + `    ${(it.summary ?? '').replace(/\s+/g, ' ').slice(0, 400)}\n`
+      + `    source: ${it.source} (${voice}); kind: ${it.kind}; date: ${it.when}`
+      + (named.length ? `; tagged: ${named.join(', ')}` : '');
+  }).join('\n');
+}

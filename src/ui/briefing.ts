@@ -40,6 +40,7 @@ import { FIELDS, fieldLabel } from '../vocab/fields.ts';
 import {
   archiveFor, briefingFor, latestForField, daysForField, reportIndex, reportDay,
   type StoredField, type StoredArchive, type StoredTheme, type FieldDay, type ReportDay,
+  type StoredStrategy, type Citation,
 } from '../analysis/briefing.ts';
 import { describeFigure, type PublicFigure } from '../analysis/public.ts';
 
@@ -330,7 +331,12 @@ export async function renderFieldBriefing(
     <p class="note">${coverNote({ coveredFrom: b.coveredFrom, coveredTo: b.coveredTo })}</p>
     <p class="mv-lede">${escapeHtml(b.summary)}</p>
 
-    <h2 class="sect">The findings</h2>
+    ${b.strategy ? strategyBlock(b.strategy)
+    : noStrategy(b.strategyGap ?? 'none was written')}
+
+    <h2 class="sect">What happened, in full</h2>
+    <p class="note">The stories the reading above was drawn from. Everything here
+      is an event, cited; nothing here is a conclusion.</p>
     ${b.themes.map(themeBlock).join('')}
 
     <h2 class="sect">What is actually known about size</h2>
@@ -477,4 +483,72 @@ export async function renderReportIndex(): Promise<string> {
 
     <h2 class="sect">Every report, by day</h2>
     ${days.map((d, i) => dayBlock(d, i === 0)).join('')}`);
+}
+
+/**
+ * The reading: what the stories mean, above what they say.
+ *
+ * PLACED FIRST ON THE PAGE, and that is the whole point of the section. The
+ * complaint on 2026-09-09 was that a briefing repeated a Databricks conference
+ * post -- "I need strategy info in report not repeat of news, The news is only
+ * data that prove your analysis result". A reader who has to scroll past the
+ * retelling to reach the reading is reading a news summary with an appendix.
+ *
+ * Every claim carries its citations inline, so the evidence is one click away
+ * from the sentence it supports rather than in a list at the bottom.
+ */
+function strategyBlock(s: StoredStrategy): string {
+  const cites = (cs: Citation[]): string => cs.length === 0 ? '' :
+    `<span class="mv-cites">${cs.map((c) =>
+      `<a href="${escapeHtml(c.url)}" rel="noreferrer noopener" target="_blank"
+         title="${escapeHtml(c.source)} — ${escapeHtml(c.when)}"
+         class="${c.independent ? '' : 'fp'}">${escapeHtml(truncate(c.title, 60))}</a>`
+    ).join('')}</span>`;
+
+  const direction = s.direction.length === 0 ? '' : `
+    <h2 class="sect">Where this is going</h2>
+    ${s.direction.map((d) => `<section class="mv-find">
+      <h3>${escapeHtml(d.claim)}</h3>
+      <p>${escapeHtml(d.reasoning)}</p>
+      <p class="note">Compared against ${d.thenCount}
+        earlier ${d.thenCount === 1 ? 'story' : 'stories'} on the same subjects.
+        Today's end of the comparison:</p>
+      ${cites(d.now)}
+    </section>`).join('')}`;
+
+  const positioning = s.positioning.length === 0 ? '' : `
+    <h2 class="sect">What each company appears to be betting on</h2>
+    ${s.positioning.map((p) => `<section class="mv-find">
+      <h3>${escapeHtml(p.who)}</h3>
+      <p>${escapeHtml(p.bet)}</p>
+      ${p.firstParty ? `<p class="note"><b>Read from what they say about
+        themselves.</b> Good evidence of what they have decided to sell, and none
+        at all that anybody bought it.</p>` : ''}
+      ${cites(p.evidence)}
+    </section>`).join('')}`;
+
+  const openings = s.openings.length === 0 ? '' : `
+    <h2 class="sect">What nobody has taken</h2>
+    ${s.openings.map((o) => `<section class="mv-find">
+      <h3>${escapeHtml(o.what)}</h3>
+      <p>${escapeHtml(o.why)}</p>
+      ${o.who ? `<p class="note">Who could take it: ${escapeHtml(o.who)}</p>` : ''}
+      ${cites(o.evidence)}
+    </section>`).join('')}`;
+
+  return `
+    ${s.read ? `<p class="mv-lede">${escapeHtml(s.read)}</p>` : ''}
+    ${direction}${positioning}${openings}
+    ${s.limits ? `<p class="note"><b>What this reading cannot settle.</b>
+      ${escapeHtml(s.limits)}</p>` : ''}
+    ${s.history ? `<p class="note">Read against ${s.history.n} earlier
+      ${s.history.n === 1 ? 'story' : 'stories'} on the same subjects, published
+      between ${escapeHtml(s.history.from)} and ${escapeHtml(s.history.to)}.</p>` : ''}`;
+}
+
+/** Said plainly when there is no reading, so an absence is never a finding. */
+function noStrategy(why: string): string {
+  return `<p class="note"><b>No strategic reading for this field today.</b>
+    ${escapeHtml(why)}. That is a statement about what this archive holds, not a
+    statement that nothing changed.</p>`;
 }

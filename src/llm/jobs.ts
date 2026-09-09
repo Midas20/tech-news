@@ -461,6 +461,159 @@ export const JOBS: Record<string, JobSpec> = {
     },
   },
 
+  // What the news MEANS, as opposed to what it says.
+  //
+  // Asked for on 2026-09-09, holding up a briefing that had repeated a
+  // Databricks conference post: "I need strategy info in report not repeat of
+  // news, The news is only data that prove your analysis result."
+  //
+  // WHY A SECOND CALL AND NOT A LONGER field_briefing PROMPT. The two jobs want
+  // opposite things from the same stories. field_briefing must not generalise --
+  // v2 abstracted real events up into categories and every title became a filing
+  // label, and the rules that fixed it are rules against abstraction. Strategy
+  // is abstraction, done deliberately and against evidence. Asking one prompt
+  // for both produces the average of the two, which is a news summary with an
+  // adjective in front of it.
+  //
+  // The mechanic that makes this analysis rather than opinion is the citation
+  // rule: a claim about direction must cite BOTH an earlier story and a recent
+  // one. A model cannot satisfy that by rewording a press release, and a reader
+  // can check the two ends against each other. Claims that cannot be paired are
+  // dropped by validateStrategy() rather than softened.
+  field_strategy: {
+    // gemini-flash-lite last rather than not at all. It is the weakest reader
+    // here and a thin analysis that cites its evidence still beats no analysis;
+    // the pairing rule in validateStrategy() throws out what it cannot support.
+    chain: ['claude', 'gemini-flash', 'cerebras', 'groq', 'gemini-flash-lite'],
+    promptVersion: 'v1',
+    maxTokens: 4000,
+    system: [
+      'You are a strategy analyst reading a technology archive. You have TODAY\'S',
+      'stories in one field and EARLIER stories on the same subjects. Your job is',
+      'to say what is going on -- not what happened.',
+      '',
+      'THE READER ALREADY HAS THE NEWS. A sentence that tells them a company',
+      'announced a thing they can read in the story above is wasted. Tell them',
+      'what it indicates: where this is heading, what somebody is betting on,',
+      'what is now possible that was not, what nobody has taken yet.',
+      '',
+      'RULES, in order of importance:',
+      '',
+      '1. EVERY CLAIM ABOUT CHANGE CITES BOTH ENDS. `then` is one or more P',
+      '   numbers from the earlier stories; `now` is one or more numbers from',
+      '   today. A claim you can only support from one side is not a trend, it is',
+      '   a headline, and it will be discarded. If the earlier coverage is empty,',
+      '   make no directional claim at all -- say so in `limits`.',
+      '',
+      '2. NEVER COUNT THE STORIES, AND NEVER IMPLY A COUNT. Banned: "most',
+      '   vendors", "a wave of", "increasingly", "everyone is", "the majority",',
+      '   "dominant", "growing". You were given a capped selection from an',
+      '   incomplete archive; the quantities in front of you measure a feed list,',
+      '   not an industry. Convergence is shown by NAMING the parties: "Databricks,',
+      '   Snowflake and Microsoft each shipped X" is evidence. "Vendors are',
+      '   increasingly shipping X" is not.',
+      '',
+      '3. A VENDOR TALKING ABOUT ITSELF IS POSITIONING, NOT ADOPTION. A booth',
+      '   schedule, a conference session, a customer-story blog and a launch post',
+      '   are all first-party. They are excellent evidence of what a company has',
+      '   decided to sell and worthless as evidence that anybody bought it. Say',
+      '   which you have. "Databricks is making auditability its wedge into',
+      '   regulated finance" is supportable from its own marketing; "banks are',
+      '   adopting it" is not.',
+      '',
+      '4. THE ONLY NUMBERS YOU MAY USE are those inside a story\'s text, attributed',
+      '   to whoever published them, and the public figures block. Quote a survey',
+      '   figure only with the surveyor\'s name. If a figure comes from a company',
+      '   describing its own market, say so in the same sentence.',
+      '',
+      '5. NAME THINGS. A product, a company, a version, a price, a named customer.',
+      '   Abstraction without a name attached is where analysis turns into',
+      '   horoscope.',
+      '',
+      'WHAT TO LOOK FOR, in rough order of value to a reader:',
+      '',
+      '  DIRECTION   what has moved between the earlier stories and today. The',
+      '              strongest form is a change in what a company talks about:',
+      '              last year the pitch was capability, this year it is control.',
+      '  POSITIONING what a named company appears to be betting on, read from',
+      '              what it ships and what it chooses to talk about. This is the',
+      '              company\'s own thinking, and first-party sources are the RIGHT',
+      '              evidence for it.',
+      '  OPENING     something the stories show is now possible, needed or',
+      '              unclaimed -- a gap between what is being sold and what the',
+      '              evidence says is solved. Be concrete about who would do it.',
+      '  LIMITS      what this evidence cannot settle, and what would change your',
+      '              reading. A named falsifier is worth more than a hedge.',
+      '',
+      'Return JSON only:',
+      '{"read":"...","direction":[{"claim":"...","reasoning":"...","then":[1],',
+      '"now":[2]}],"positioning":[{"who":"...","bet":"...","evidence":[1],',
+      '"firstParty":true}],"openings":[{"what":"...","why":"...","who":"...",',
+      '"evidence":[1]}],"limits":"..."}',
+      '',
+      'read: one sentence, under 240 characters -- the single most useful thing a',
+      '  strategist should take from today in this field. Not a summary of the',
+      '  news; a reading of it.',
+      'direction: 2 to 4. `then` and `now` are both required and both non-empty.',
+      '  `reasoning` says why the two ends amount to a change, in one or two',
+      '  sentences.',
+      'positioning: 1 to 4. `who` is a named company. `firstParty` is true when',
+      '  your evidence is that company talking about itself.',
+      'openings: 1 to 3. `who` names the kind of party that could take it.',
+      'limits: two or three sentences. What the evidence cannot show.',
+      '',
+      'Fewer, well-evidenced items beat more. An empty array is a valid and',
+      'honest answer when the stories do not support that kind of claim.',
+    ].join('\n'),
+    schema: {
+      type: 'object',
+      required: ['read', 'direction', 'positioning', 'openings', 'limits'],
+      properties: {
+        read: { type: 'string', maxLength: 400 },
+        direction: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['claim', 'reasoning', 'then', 'now'],
+            properties: {
+              claim: { type: 'string', maxLength: 240 },
+              reasoning: { type: 'string', maxLength: 1200 },
+              then: { type: 'array', items: { type: 'integer' } },
+              now: { type: 'array', items: { type: 'integer' } },
+            },
+          },
+        },
+        positioning: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['who', 'bet', 'evidence'],
+            properties: {
+              who: { type: 'string', maxLength: 120 },
+              bet: { type: 'string', maxLength: 800 },
+              evidence: { type: 'array', items: { type: 'integer' } },
+              firstParty: { type: 'boolean' },
+            },
+          },
+        },
+        openings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['what', 'why', 'evidence'],
+            properties: {
+              what: { type: 'string', maxLength: 240 },
+              why: { type: 'string', maxLength: 800 },
+              who: { type: 'string', maxLength: 160 },
+              evidence: { type: 'array', items: { type: 'integer' } },
+            },
+          },
+        },
+        limits: { type: 'string', maxLength: 800 },
+      },
+    },
+  },
+
   // Names, so that a new one can be noticed the second time it appears.
   //
   // WHY A SEPARATE JOB AND NOT PART OF classify. classify decides what a story

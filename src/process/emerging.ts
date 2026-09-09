@@ -60,6 +60,8 @@ export interface EmergingReport {
   /** Candidates that crossed the evidence gate on this pass. */
   promoted: number;
   deferReasons: Record<string, number>;
+  /** True when the run stopped early to leave model budget for everything else. */
+  yielded?: boolean;
 }
 
 /**
@@ -81,6 +83,19 @@ export async function scanForNames(
 
   const known = await knownNames(ctx.db);
 
+  // STOP ON A REFUSAL, RATHER THAN WORKING THROUGH THE WHOLE BACKLOG.
+  //
+  // The first version took ten batches per run and, with a 1,800-story backlog,
+  // exhausted every free provider on its first cycle and kept them there: the
+  // log showed "names: 10 batches deferred" every five minutes while the daily
+  // briefing and the strategy pass got nothing. The provider budgets never left
+  // cooldown, so the job that runs constantly starved the jobs that run once.
+  //
+  // Two consecutive refusals means the chain is down, and every further call
+  // this run is a request that will be refused and a retry that deepens the
+  // cooldown. Yielding costs a few minutes on a backlog that is a one-off;
+  // continuing costs the analysis its budget, every day, permanently.
+  let refusals = 0;
   for (let i = 0; i < pending.length; i += BATCH) {
     const batch = pending.slice(i, i + BATCH);
     const ok = await scanBatch(ctx, batch, known, report);
@@ -88,8 +103,12 @@ export async function scanForNames(
     // not a reading, and stamping it would silently lose those stories for
     // good. The next pass picks them up.
     if (ok) {
+      refusals = 0;
       await stamp(ctx.db, batch.map((s) => s.id));
       report.read += batch.length;
+    } else if (++refusals >= 2) {
+      report.yielded = true;
+      break;
     }
   }
 
