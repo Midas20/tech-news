@@ -510,9 +510,11 @@ function strategyBlock(s: StoredStrategy): string {
     ${s.direction.map((d) => `<section class="mv-find">
       <h3>${escapeHtml(d.claim)}</h3>
       <p>${escapeHtml(d.reasoning)}</p>
-      <p class="note">Compared against ${d.thenCount}
-        earlier ${d.thenCount === 1 ? 'story' : 'stories'} on the same subjects.
-        Today's end of the comparison:</p>
+      <p class="note">The earlier end of this comparison is
+        ${d.thenCount} ${d.thenCount === 1 ? 'story' : 'stories'}${s.history
+    ? ` of the ${s.history.n} read from before the window` : ''}; those are
+        summarised in the reasoning above rather than linked, because retention
+        deletes them and a dead link is worse than a description. Today's end:</p>
       ${cites(d.now)}
     </section>`).join('')}`;
 
@@ -543,7 +545,9 @@ function strategyBlock(s: StoredStrategy): string {
       ${escapeHtml(s.limits)}</p>` : ''}
     ${s.history ? `<p class="note">Read against ${s.history.n} earlier
       ${s.history.n === 1 ? 'story' : 'stories'} on the same subjects, published
-      between ${escapeHtml(s.history.from)} and ${escapeHtml(s.history.to)}.</p>` : ''}`;
+      between ${escapeHtml(s.history.from)} and ${escapeHtml(s.history.to)}.</p>` : ''}
+    ${s.provider ? `<p class="note">This reading was written by
+      ${escapeHtml(s.provider)}.</p>` : ''}`;
 }
 
 /** Said plainly when there is no reading, so an absence is never a finding. */

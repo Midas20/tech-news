@@ -6321,6 +6321,19 @@ now stops after two consecutive refusals rather than working through a backlog
 against a chain that is already down. Yielding costs minutes on a one-off
 backlog; continuing costs the analysis its budget permanently.
 
+### Reading it before paying for a key
+
+Every free provider is rate-limited and `ANTHROPIC_API_KEY` is unset, so
+`field_strategy` has never once answered. To make the feature judgeable rather
+than described, the readings for 2026-09-09 were **written by hand into
+`field_briefings.strategy`** — same shape, same validator, citations resolved
+from the real corpus so a wrong index crashes instead of producing a plausible
+wrong link. Every claim passed `validateStrategy()` unchanged; writing one by
+hand earns no exemption from the pairing rule.
+
+The page says so: *"This reading was written by claude-opus-5 (hand-written, not
+the model chain)."* A reader must never mistake a stand-in for the pipeline.
+
 ## Deploying it
 
 ```
