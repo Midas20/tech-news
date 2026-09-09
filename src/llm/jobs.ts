@@ -461,6 +461,93 @@ export const JOBS: Record<string, JobSpec> = {
     },
   },
 
+  // Names, so that a new one can be noticed the second time it appears.
+  //
+  // WHY A SEPARATE JOB AND NOT PART OF classify. classify decides what a story
+  // IS, against a closed vocabulary, and that closedness is the whole problem
+  // this exists to solve: a tool the taxonomy has never heard of is exactly the
+  // one worth knowing about, and every vocabulary-matching step in this system
+  // is blind to it by construction.
+  //
+  // Cheap chain on purpose. This runs over every story that arrives, which is
+  // the only way to catch a name on its FIRST appearance rather than after it
+  // is already big enough to reach a curated feed. Naming things in a headline
+  // is not a task that needs judgment; deciding what the names mean is, and
+  // that happens in the briefing, which is on the expensive chain.
+  entity_extraction: {
+    chain: ['gemini-flash-lite', 'cerebras', 'groq', 'gemini-flash'],
+    promptVersion: 'v1',
+    maxTokens: 2000,
+    effort: 'low',
+    system: [
+      'List the named products, tools, platforms, models and companies that each',
+      'story is ABOUT. Nothing else.',
+      '',
+      'FOR EACH NAME, SAY WHAT IT DOES, in the words of the story. A name on its',
+      'own is useless here: "Booley" means nothing, "an open-source IDE for',
+      'agentic chip design in SystemVerilog" is a category a reader can judge.',
+      'If the story does not say what a thing does, leave it out — you have not',
+      'been told enough about it to be worth recording.',
+      '',
+      'INCLUDE things you have never heard of. That is the point of this task.',
+      'An unfamiliar name attached to a clear claim is the most valuable thing',
+      'you can return; do not drop it because you cannot corroborate it.',
+      '',
+      'EXCLUDE:',
+      '  - categories and disciplines: AI, machine learning, DevOps, cloud,',
+      '    security, open source, agents, databases',
+      '  - where the story was published or hosted: GitHub, Reddit, Hacker News,',
+      '    arXiv, npm, PyPI, the publication itself',
+      '  - standards and formats older than the story: HTTP, JSON, CVE, OAuth',
+      '  - people, job titles, places, funding-round names, conference names',
+      '  - a thing mentioned only in passing as background or comparison',
+      '',
+      'kind is one of: tool, platform, model, company, standard, format.',
+      'Use the name as the story writes it, including capitalisation. Do not',
+      'append version numbers to the name; the version is not the identity.',
+      '',
+      'Return JSON only:',
+      '{"results":[{"index":0,"entities":[{"name":"Booley","kind":"tool",',
+      '"what":"open-source IDE for agentic chip design in SystemVerilog"}]}]}',
+      '',
+      'Return an entry for every story index you were given, with an empty',
+      'entities array when a story names nothing that qualifies. Most stories',
+      'name one or two things. A story naming more than six is a roundup, and',
+      'you should return only the ones it is actually about.',
+    ].join('\n'),
+    schema: {
+      type: 'object',
+      required: ['results'],
+      properties: {
+        results: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['index', 'entities'],
+            properties: {
+              index: { type: 'integer', minimum: 0 },
+              entities: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  required: ['name', 'kind', 'what'],
+                  properties: {
+                    name: { type: 'string', maxLength: 80 },
+                    kind: {
+                      type: 'string',
+                      enum: ['tool', 'platform', 'model', 'company', 'standard', 'format'],
+                    },
+                    what: { type: 'string', maxLength: 200 },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
   // Structured extraction from forum posts and issue threads.
   experience_claims: {
     chain: ['groq', 'gemini-flash-lite'],

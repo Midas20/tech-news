@@ -19,6 +19,9 @@
 //   adoption    15m   how many public projects carry each technology's topic.
 //                     Paced by GitHub's SEARCH quota, which is 30 a MINUTE and
 //                     counted separately from the 5,000-an-hour core quota.
+//   names        5m   read new stories for named tools and platforms the closed
+//                     vocabulary cannot represent. The only step that can see a
+//                     name nobody has heard of yet.
 //   discover     6h   propose vocabulary entries from what arrived, then refresh
 //                     the rarity table the niche queries read.
 //   releases     6h   make the release feeds match Settings, both directions.
@@ -46,6 +49,7 @@ import { tagStacks } from '../process/tagstacks.ts';
 import { tagPlatforms } from '../process/platforms.ts';
 import { tagCompanies } from '../process/companies.ts';
 import { discoverStacks } from '../process/discover.ts';
+import { scanForNames } from '../process/emerging.ts';
 import { dedupRecent } from '../process/dedup.ts';
 import { refreshAdoption, summariseAdoption } from '../collect/adoption.ts';
 import { refreshReferences, summariseReferences } from '../collect/reference.ts';
@@ -380,6 +384,34 @@ export function buildJobs(opts: JobOptions = {}): Job[] {
           if (classify.classified) bits.push(`${classify.classified} classified`);
           if (classify.deferred) bits.push(`${classify.deferred} deferred`);
           if (score.scored) bits.push(`${score.scored} scored`);
+          return bits.join(', ');
+        },
+      },
+      {
+        name: 'names',
+        what: 'Read new stories for named tools and platforms the taxonomy does not have.',
+        // FASTER THAN `process`, AND THAT IS THE POINT. Everything else in this
+        // catalogue matches stories against a closed vocabulary of 2,460 things
+        // somebody already knew about, which is precisely why the reports found
+        // incumbents and missed new markets. This is the one step that can see
+        // a name nobody has heard of, and a name is only worth catching on its
+        // first appearance -- by the time it reaches a curated feed the market
+        // it belongs to is not new any more.
+        //
+        // Five minutes against ~30-90 stories a day is comfortably ahead of
+        // collection, so the backlog stays at zero and first_seen_at means the
+        // day the story arrived rather than the day the queue drained.
+        everySeconds: 300,
+        leaseSeconds: 900,
+        async run({ worker }) {
+          const ctx: LlmContext = { db: worker, env: process.env as Record<string, string> };
+          const found = await scanForNames(ctx, 120);
+          const bits: string[] = [];
+          if (found.discovered) bits.push(`${found.discovered} new names`);
+          if (found.corroborated) bits.push(`${found.corroborated} corroborated`);
+          if (found.promoted) bits.push(`${found.promoted} passed the second-source gate`);
+          const deferred = Object.values(found.deferReasons).reduce((a, b) => a + b, 0);
+          if (deferred) bits.push(`${deferred} batches deferred`);
           return bits.join(', ');
         },
       },

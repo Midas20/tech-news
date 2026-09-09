@@ -43,6 +43,7 @@ import {
 import { renderLogin, renderSignup, renderMe } from './signin.ts';
 import { FIELDS } from '../vocab/fields.ts';
 import { renderSearch, suggest } from './search.ts';
+import { renderEmerging, renderEmergingName } from './emerging.ts';
 import { renderFields, renderField } from './fields.ts';
 
 import { renderCompanies, renderCompany } from './companies.ts';
@@ -859,6 +860,27 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
       if (Number(held?.n ?? 0) === 0) return missing({ path, story: true });
       const [body, rail] = await Promise.all([renderStory(account!.id, id, from), keepRail()]);
       return render('Story', body, 200, rail);
+    }
+
+    // WHAT'S NEW, and the order of these three matters.
+    //
+    // '/emerging/name/<slug>' before '/emerging/<field>', or a name whose slug
+    // happens to be "name" is unreachable and every other name is read as a
+    // field that does not exist. The name segment is a fixed literal precisely
+    // so the two namespaces cannot collide: fields come from a closed list of
+    // fourteen and names come from the open world.
+    if (path === '/emerging') {
+      return render("What's new", await renderEmerging());
+    }
+    if (path.startsWith('/emerging/name/')) {
+      const slug = decodeURIComponent(path.slice('/emerging/name/'.length));
+      if (!slug) return missing({ path });
+      return render(slug, await renderEmergingName(slug));
+    }
+    if (path.startsWith('/emerging/')) {
+      const field = decodeURIComponent(path.slice('/emerging/'.length));
+      if (!field) return missing({ path });
+      return render(`What's new in ${field}`, await renderEmerging(field));
     }
 
     if (path === '/reports') {

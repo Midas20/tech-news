@@ -24,6 +24,10 @@ npm run live                          # continuous collection
 npm run ui                            # http://127.0.0.1:3000
 ```
 
+Or, on a PC with none of that installed: `npm run build:app -- --with-postgres`
+produces `dist\NewsTrack\NewsTrack.exe`, which sets itself up on the first run and
+opens the reader when it is ready. See **Running it on a PC**.
+
 Runs on **162.246.23.43:3000** — the durable scheduler in `job_runs` does the
 collecting, fourteen jobs, read-only to anyone off the host.
 
@@ -5963,6 +5967,201 @@ the owner **only** for the two jobs that genuinely need it — creating next mon
 partition, which is DDL, and deleting stories, which is not granted to the
 collecting role on purpose. A process that can collect should not also be able to
 erase what it collected. There is a test holding that too.
+
+## Running it on a PC
+
+```
+npm run build:app -- --with-postgres --with-env
+dist\NewsTrack\NewsTrack.exe
+```
+
+The output is a folder. There is no installer and nothing touches the registry:
+the folder **is** the program, deleting it uninstalls it, and replacing it with a
+newer one is the upgrade. Data lives in `%LOCALAPPDATA%\NewsTrack` — the cluster,
+the logs and the configuration — so an upgrade cannot delete the archive and the
+program folder never has to be writable.
+
+`NewsTrack.exe` is 4 KB of C# (`src/launcher/shim.cs`). It finds `runtime\node.exe`,
+hands it `src/launcher/launch.ts`, and returns its exit code. Every decision —
+which database, which port, when to migrate, when to seed — is in the TypeScript,
+where it can be read and changed without a compiler.
+
+### Why not a single executable
+
+Node 22 can bundle a script into a copy of `node.exe`, and that was the first
+attempt. `postject`, the tool that injects the blob, loads the whole 92 MB binary
+into a LIEF wasm heap and dies with `Fatal process out of memory: Zone` on a
+machine with 8 GB. `--max-old-space-size` does not help: the allocation that fails
+is wasm's, not V8's.
+
+`csc.exe` has shipped inside Windows since Vista. No download, no npm dependency,
+no toolchain, 4 KB instead of 190 MB — and the source stays readable in the folder
+rather than sealed inside a binary.
+
+### The order, which is not arbitrary
+
+| step | | skipped when |
+|---|---|---|
+| config | what the user chose beats anything invented | it exists |
+| database | a configured one is used **or fails** | — |
+| migrate | as the owner, before anything else connects | already applied |
+| roles | so the app half runs `NOBYPASSRLS`, as on a server | the config names them |
+| seed | the taxonomy and the source registry | `stacks` is not empty |
+| start | the whole system, one process, `ROLE=all` | — |
+| browser | only once `/healthz` answers | `--no-browser` |
+
+The second run is the first run minus the waiting.
+
+### A configured database is never replaced by an empty one
+
+If `DATABASE_URL` is set and the server behind it does not answer, that is an
+error to report — not a reason to start a fresh cluster. This machine has an
+archive in a PostgreSQL service, and an app that greets an outage by showing a
+working, **empty** archive has told the user their data is gone. The embedded
+cluster is reached only when nothing is configured at all.
+
+It also listens on **54329, not 5432**. 5432 is where the installed service is;
+binding there would either fail or, after somebody stopped that service, quietly
+serve a different database under the same name.
+
+### Two flags, both off by default
+
+- `--with-postgres` copies `bin`, `lib` and `share` from the newest PostgreSQL
+  under `C:\Program Files\PostgreSQL`. Not `data` — that is somebody's archive.
+  Without it the build needs a `DATABASE_URL`, and says so on first run.
+- `--with-env` includes this machine's `.env`, **API keys and database password
+  included**. For your own PC. The build prints a warning when you use it.
+
+### End task, and the job object
+
+`Ctrl+C` and closing the console reach every process on the console, so the
+launcher shuts down properly in both — the scheduler releases its job claims,
+then Postgres stops with `-m fast`. **End task** in Task Manager does not: it
+kills the shim alone and leaves `node.exe` serving on a port the next launch
+cannot bind, for a program the user believes they closed.
+
+The shim puts the child in a Job Object with `KILL_ON_JOB_CLOSE`. The handle is
+owned by the shim, so however it dies — cleanly, killed, or crashed — the kernel
+terminates the job. It is the only shutdown path that does not depend on this
+code getting a chance to run.
+
+### A password that went out of scope
+
+`create-app-role.ts` writes the generated password into a config file and never
+prints it. Its fallback for a file with no existing line inserted after
+`DATABASE_APP_ROLE=` — and the launcher's config file has no such line.
+`String.replace` with no match returns the string unchanged, so the role was
+created, the password generated, the file written back byte-identical, and the
+only copy of that password went out of scope. It now appends: a line at the end
+of the file is worth more than a tidy one that does not exist.
+
+## What's new — finding a market before it has a name
+
+Stated on 2026-09-09: *"The purpose of the project is to find new market that will
+appear in short period, but currently the project can't enough report that can
+find new market and tool and platform."*
+
+### The diagnosis, measured rather than assumed
+
+Every headline in that morning's four briefings named an incumbent:
+
+> AWS brings OpenAI GPT-6 Astra to Amazon Bedrock · Microsoft reaches GA for Azure
+> Virtual Desktop Hybrid · Databricks releases Instructed-Retriever-1
+
+And every genuinely new thing was present — in `watch`, the footnote at the bottom
+of the page, from which nothing durable happens:
+
+> **Booley**, an open-source IDE for agentic chip design in SystemVerilog ·
+> **aic-agent 1.0.2** · **scigantic-surechembl 0.3.0** · **PocketBase Cloud**
+
+The system was finding new tools and throwing them away. Three reasons:
+
+1. **The briefing prompt ranks by importance** — "the single most important thing
+   that happened". A new market has no big actor yet, by definition, so it can
+   never win that ranking against a hyperscaler.
+2. **The taxonomy is closed.** `stacks` has 2,460 rows and every step that turns a
+   story into structure matches against them. A tool that is not one of them gets
+   no row, no page, no trend line. "Booley" was a substring of a JSON blob.
+3. **Nothing tracked a name across days.** A new market *is* "a name that keeps
+   coming back from unrelated sources". Without somewhere to write the first
+   sighting down, the third sighting looks exactly like the first.
+
+### The ledger
+
+Migrations 0074 and 0075 add `emerging` and `emerging_sightings`. The `names` job
+reads **every** story — not a selected corpus — through a cheap model chain and
+records the tools, platforms, models and companies it names, together with one
+line on what each one does. Names already in `stacks` are dropped; the residue is
+the ledger.
+
+Five minutes, ahead of collection, because a name is only worth catching on its
+first appearance. `unscanned()` works **oldest first**: newest-first would record
+a name's last appearance as its first, inverting the one fact the table holds.
+
+A name with no claim about what it does is discarded. "Booley" is a string;
+"an open-source IDE for agentic chip design" is a category a reader can judge.
+
+### The gate, and why it is not two independent sources
+
+A name reaches a reader when **two separate publications** have carried it, or
+**one that does not speak for it** has. It was going to be two *independent*
+sources — the `source_type` ladder in `src/vocab/intel.ts`. Measured before
+shipping:
+
+| source type | stories | corroborates? |
+|---|---|---|
+| `PRIMARY_VENDOR` | 3,404 | no |
+| `PRIMARY_PROJECT` | 228 | no |
+| unclassified | 180 | no |
+| `PRIMARY_RESEARCH` | 178 | no |
+| `TECHNICAL_JOURNALISM` | 15 | **yes** |
+| `SPECIALIST_PUBLICATION` | 14 | **yes** |
+
+Twenty-nine stories out of 4,026, and 404 of 476 sources carry no type at all —
+`maintain/classify.ts` leaves them NULL on purpose. An independence-only gate on
+this archive opens for nothing, ever. **A page that is permanently empty because
+its threshold cannot be met reports "no new markets" when it means "I cannot
+tell".** Independence is still recorded and still shown; it is no longer the only
+way through.
+
+### One sighting per outlet, not per story
+
+0074 keyed sightings on `(slug, story_id)`, quietly assuming one story is one
+source. Deduplication makes that false in exactly the cases that matter: `dedup`
+merges one event from several outlets into one canonical story and puts the rest
+in `story_members`. A name carried by seven publications recorded as having one
+source — **the best-attested events in the archive scored lowest on the gate**.
+0075 fixes the grain to `(slug, story_id, source_id)`.
+
+The citation is **copied**, not referenced — title, URL and outlet written into
+the sighting row, with no foreign key to `stories`. Retention deletes stories and
+analysis outlives them, so a sighting holding only a `story_id` becomes
+uncitable exactly when it is most useful: a name first seen four months ago and
+still appearing is the strongest thing this table can say.
+
+### The gate is never an ordering
+
+`/emerging` lists by `first_seen_at DESC` and nothing else. The counts decide
+*whether* a name is shown; they never decide *which comes first*. Sorting by them
+would make "the fastest-growing new tool" mean "the one our sources happen to
+repeat" — the exact fake ranking the content-v2 rewrite exists to end. Magnitudes
+still come only from `stack_adoption`, quoted with the date they were measured.
+
+The evidence line says "3 sources", never "3 mentions", and prints the
+independent count only when it is above zero — a `0` beside every row trains a
+reader to read the number as a score that everything is failing.
+
+### What "new" honestly means
+
+New **to this archive's vocabulary**, and nothing more is claimed. That covers two
+different things the page cannot separate on its own: something genuinely just
+launched, and something long established the taxonomy never had a row for. The
+first pass returned Booley and aic-agent — and also Apache Iceberg and Google
+Kubernetes Engine, which are neither new nor obscure.
+
+Both are worth seeing, for opposite reasons: the first is the market appearing,
+the second is a gap in the vocabulary that ought to be filled. A name added to
+`stacks` leaves the page. The page says all of this, in the copy, under the list.
 
 ## Deploying it
 

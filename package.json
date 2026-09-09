@@ -57,7 +57,9 @@
     "seed:ai": "node --experimental-strip-types scripts/seed-ai.ts",
     "deploy:site": "wrangler deploy -c wrangler.site.toml",
     "dev:site": "wrangler dev -c wrangler.site.toml",
-    "seed:breadth": "node --experimental-strip-types scripts/seed-breadth.ts"
+    "seed:breadth": "node --experimental-strip-types scripts/seed-breadth.ts",
+    "build:app": "node --experimental-strip-types scripts/build-app.ts",
+    "app": "node --experimental-strip-types src/launcher/launch.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

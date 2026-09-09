@@ -72,7 +72,26 @@ export const SECTIONS: NavSection[] = [
     owns: ['/news', '/new', '/story/', '/read/', '/search',
       '/favourites', '/deleted'],
   },
-  // REPORTS SITS SECOND, AND IT USED TO BE AN ENTRY UNDER EXPLORE.
+  // WHAT'S NEW SITS SECOND, BECAUSE IT IS WHAT THE ARCHIVE IS FOR.
+  //
+  // Stated on 2026-09-09: "the purpose of the project is to find new market
+  // that will appear in short period". Every other section narrows a closed
+  // vocabulary of 2,460 things somebody already knew about, and a market that
+  // is about to appear is by definition not in it -- so the reports found AWS
+  // and Microsoft every morning while Booley, aic-agent and PocketBase Cloud
+  // went into a footnote and were forgotten. This section reads the ledger that
+  // migration 0074 added.
+  //
+  // A TAB AND NOT A RAIL ENTRY, despite this project's history with tabs -- one
+  // was added and removed on the same day in August, and the Reports tab below
+  // had to be asked for twice before it was found. Something described as the
+  // purpose of the product does not go two levels down.
+  {
+    id: 'new', label: "What's new", icon: 'spark', home: '/emerging',
+    blurb: 'Tools, platforms and companies that were not in the taxonomy last month.',
+    owns: ['/emerging'],
+  },
+  // REPORTS SITS THIRD, AND IT USED TO BE AN ENTRY UNDER EXPLORE.
   //
   // It was a tab on 2026-08-30, demoted the same day -- "this page isn't enough
   // to be individual menu" -- and the demotion was right at the time: it owned
@@ -96,7 +115,7 @@ export const SECTIONS: NavSection[] = [
     // Explore's '/field/' prefix and are not Explore's pages.
     claims: [/^\/field\/[^/]+\/report(\/|$)/],
   },
-  // ANALYSE SITS THIRD, AND THAT IS THE POINT OF THE WHOLE PRODUCT.
+  // ANALYSE SITS FOURTH, AND THAT IS THE POINT OF THE WHOLE PRODUCT.
   //
   // The retention contract deletes stories and keeps `stack_month` forever, so
   // the month-by-month series is the one artefact here that is not reproducible

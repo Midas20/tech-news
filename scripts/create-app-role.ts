@@ -113,17 +113,50 @@ try {
   appUrl.password = password;
 
   const varName = wantWorker ? 'DATABASE_WORKER_URL' : 'DATABASE_APP_URL';
-  const envText = await readFile('.env', 'utf8');
+
+  // WHICH FILE. The desktop launcher keeps its configuration in %LOCALAPPDATA%
+  // rather than in a .env beside the code -- the program folder is replaced on
+  // every upgrade and may not even be writable. It passes the path here rather
+  // than copying this logic, so there is one place that knows how to write a
+  // connection string and one file it lands in.
+  const envPath = process.env.NEWSTRACK_ENV_FILE || '.env';
+
+  let envText: string;
+  try {
+    envText = await readFile(envPath, 'utf8');
+  } catch {
+    // The role exists and the grants are applied -- that work is done, and
+    // saying otherwise would be wrong. What is missing is somewhere to write
+    // the password down, and the password is never printed, so the caller has
+    // to create the file and run this again.
+    console.error(`${roleName} was created, but ${envPath} does not exist, so `
+      + `${varName} could not be written. The generated password is now unrecoverable; `
+      + `create the file and run this again to rotate it.`);
+    process.exit(1);
+  }
   const line = `${varName}=${appUrl.toString()}`;
   const pattern = new RegExp(`^${varName}=.*$`, 'm');
-  const updated = pattern.test(envText)
-    ? envText.replace(pattern, line)
-    : envText.replace(
-        /^DATABASE_APP_ROLE=.*$/m,
-        (m) => `${m}\n\n# Runtime connection. Non-owner, NOBYPASSRLS -- this is the one RLS protects.\n${line}`,
-      );
-  await writeFile('.env', updated, 'utf8');
-  console.log(`${varName} written to .env (password not printed)`);
+  const note = '\n# Runtime connection. Non-owner, NOBYPASSRLS -- this is the one RLS protects.\n';
+
+  // Three cases, and the third one used to be missing. Replacing an existing
+  // line is the common one; inserting after DATABASE_APP_ROLE keeps the pair
+  // together in a .env written from .env.example. But a config file with
+  // neither -- which is exactly what the desktop launcher writes -- matched
+  // nothing, and String.replace with no match returns the string unchanged.
+  // The role would be created, the password generated, the file written back
+  // byte-identical, and the only copy of that password would go out of scope.
+  // Appending is the fallback, because a line at the end of the file is worth
+  // more than a tidy one that does not exist.
+  let updated: string;
+  if (pattern.test(envText)) {
+    updated = envText.replace(pattern, line);
+  } else if (/^DATABASE_APP_ROLE=.*$/m.test(envText)) {
+    updated = envText.replace(/^DATABASE_APP_ROLE=.*$/m, (m) => `${m}\n${note}${line}`);
+  } else {
+    updated = `${envText}${envText.endsWith('\n') ? '' : '\n'}${note}${line}\n`;
+  }
+  await writeFile(envPath, updated, 'utf8');
+  console.log(`${varName} written to ${envPath} (password not printed)`);
 } finally {
   client.release();
   await pool.end();

@@ -261,6 +261,21 @@ export async function renderRail(
     ].join('');
   }
 
+  if (section.id === 'new') {
+    // Every field, plus the fields themselves. The page carries its own subnav
+    // too; this is the rail because the section has a tab and a tab with no
+    // rail looks broken next to five that have one.
+    return [
+      railGroup("What's new", [toItem(state, {
+        href: '/emerging', label: 'Every field', icon: 'spark',
+        blurb: 'Names that entered the archive in the last 90 days.',
+      })]),
+      railGroup('By field', FIELDS.map((f) => toItem(state, {
+        href: `/emerging/${f.slug}`, label: f.label, icon: f.icon,
+      }))),
+    ].join('');
+  }
+
   if (section.id === 'analyse') {
     return railGroup('Analyse', ANALYSE_ITEMS.map((i) => toItem(state, i)));
   }

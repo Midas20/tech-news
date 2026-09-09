@@ -7,7 +7,15 @@
 //
 // Workers get their values from wrangler vars and secrets instead.
 
-export async function loadDotEnv(path = '.env'): Promise<void> {
+/**
+ * NEWSTRACK_ENV_FILE overrides the default, for a deployment whose
+ * configuration is not beside its code. The desktop launcher keeps it in
+ * %LOCALAPPDATA%, because the program folder is replaced on every upgrade and
+ * may not be writable at all.
+ */
+export async function loadDotEnv(
+  path = process.env.NEWSTRACK_ENV_FILE || '.env',
+): Promise<void> {
   const { readFile } = await import('node:fs/promises');
   let text: string;
   try {
