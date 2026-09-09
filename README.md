@@ -6163,6 +6163,74 @@ Both are worth seeing, for opposite reasons: the first is the market appearing,
 the second is a gap in the vocabulary that ought to be filled. A name added to
 `stacks` leaves the page. The page says all of this, in the copy, under the list.
 
+## Filtering items, not silencing sources
+
+Asked for on 2026-09-09: *"The news count is very low, I think you block many
+sources, I want to filter articles not block sources."*
+
+The premise was half right, and measuring it is what said which half. Of 477
+sources, **435 were healthy and 420 had been polled successfully in the previous
+24 hours** — almost nothing was blocked. But 42 produced nothing, for two reasons,
+neither of them a policy:
+
+| | | |
+|---|---|---|
+| 21 `paused` | "adapter not implemented yet" | arXiv, CISA, crates.io, Go package index, GitHub Security Advisories |
+| 21 `degraded` | "no feed could be discovered" | OpenAI, Anthropic, Google Cloud, HashiCorp, Grafana, Netflix, PostgreSQL, VentureBeat |
+
+Not blocked. **Unbuilt, and undiscovered.** The second group is the expensive one:
+those sites do publish feeds, and autodiscovery could not find them.
+
+Probing what each site actually serves recovered **15 of the 21**. The next poll
+cycle collected **237 stories against 0–37 before**:
+
+```
+19:46:19   collect: 9 due, 0 new
+19:47:12   collect: 25 due, 237 new, 1 err     <- the restored sources
+```
+
+OpenAI alone serves 1,181 items at `openai.com/news/rss.xml`; heise 151; AWS
+Security Bulletins 100; LowEndTalk 98. The six that stayed dark are honest
+failures — Anthropic serves no RSS at all, and a guessed URL there would 404 on
+every poll forever, which is worse than saying so.
+
+Those URLs are now in the seeds (`feedHint`, and `announce[].feed` for company
+channels), so a **fresh install does not have to rediscover them** — which matters
+now that the desktop build seeds a brand new database on first run. Autodiscovery
+stays the default for everything else: a hardcoded feed URL is a thing that rots
+silently, and these are exceptions rather than the rule.
+
+### The one rule that did silence a source for its articles
+
+`isPodcastFeed` paused the whole source when more than half its items carried a
+media enclosure, reasoning that dropping them one at a time "would still leave
+the source polled forever". That traded a few wasted polls for **every future post
+the source ever makes** — and `gate()` already refuses a media item on its own, so
+a feed mixing a podcast with written posts lost the posts too.
+
+It is gone. The ratio is still measured and reported as `mostly_media` on
+`/admin/sources`, where a person who has looked at the source can act on it. What
+stays untouched are the failure paths that are genuinely about the *source* — a
+404, an unparseable body, a missing feed. This change is not "never mark a source
+unhealthy".
+
+### What the volume is actually spent on
+
+The drop histogram over seven days, which is the real answer to "why so few":
+
+| refused | occurrences | what it is |
+|---|---|---|
+| `article` | 21,093 | **an article *about* technology rather than an event *in* it** |
+| `build:tag_page` | 6,136 | a re-pointed rolling tag, not a release |
+| `off_topic_host` | 4,843 | the link's host, per item — YouTube, Vimeo, Spotify |
+| `build:no_content` | 3,169 | a release with no notes |
+| politics, crime, sport, business, commerce | ~1,100 | not technology |
+
+**58% of everything refused is the `article` gate** — the "two gates" rule at the
+top of this README, and the one the collection target asks for: *new stacks, tools
+and platforms plus market moves; articles are noise*. It is by far the largest
+lever on volume and it is deliberate. Nothing here changed it.
+
 ## Deploying it
 
 ```

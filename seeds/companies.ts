@@ -55,7 +55,8 @@ export const COMPANY_SEEDS: CompanySeed[] = [
     homepage: 'https://aws.amazon.com/', stacks: ['aws', 'cloud'],
     announce: [
       { name: 'AWS News Blog', url: 'https://aws.amazon.com/blogs/aws/' },
-      { name: 'AWS Security Bulletins', url: 'https://aws.amazon.com/security/security-bulletins/' },
+      { name: 'AWS Security Bulletins', url: 'https://aws.amazon.com/security/security-bulletins/',
+        feed: 'https://aws.amazon.com/security/security-bulletins/feed/' },
     ],
   },
   {
@@ -267,7 +268,8 @@ export const COMPANY_SEEDS: CompanySeed[] = [
     slug: 'hashicorp', name: 'HashiCorp', category: 'vendor', country: 'US',
     aliases: ['hashicorp'], homepage: 'https://www.hashicorp.com/',
     stacks: ['terraform', 'vault', 'consul'], githubOrg: 'hashicorp',
-    announce: [{ name: 'HashiCorp Blog', url: 'https://www.hashicorp.com/blog' }],
+    announce: [{ name: 'HashiCorp Blog', url: 'https://www.hashicorp.com/blog',
+      feed: 'https://www.hashicorp.com/blog/feed.xml' }],
   },
   {
     slug: 'docker', name: 'Docker', category: 'vendor', country: 'US',
@@ -441,7 +443,8 @@ export const COMPANY_SEEDS: CompanySeed[] = [
     slug: 'grafana-labs', name: 'Grafana Labs', category: 'vendor', country: 'US',
     aliases: ['grafana labs'], homepage: 'https://grafana.com/',
     stacks: ['grafana', 'observability'],
-    announce: [{ name: 'Grafana Blog', url: 'https://grafana.com/blog/' }],
+    announce: [{ name: 'Grafana Blog', url: 'https://grafana.com/blog/',
+      feed: 'https://grafana.com/blog/index.xml' }],
   },
   {
     slug: 'datadog', name: 'Datadog', category: 'vendor', country: 'US', ticker: 'DDOG',

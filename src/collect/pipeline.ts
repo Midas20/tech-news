@@ -121,16 +121,23 @@ export async function collectSource(
     return empty('unparseable feed');
   }
 
-  // A podcast feed is not a broken feed; it is simply not this system's input.
-  if (isPodcastFeed(parsed.items)) {
-    await sources.pauseSource(db, source.id, 'podcast feed: majority of items carry media enclosures');
-    await sources.logFetch(db, {
-      sourceId: source.id, status: res.status, durationMs: res.durationMs, bytes: res.bytes,
-      itemsSeen: parsed.items.length, itemsKept: 0, notModified: false,
-      error: 'paused: podcast feed', dropReasons: { podcast_feed: parsed.items.length },
-    });
-    return empty('paused: podcast feed');
-  }
+  // A MIXED FEED IS FILTERED, NOT SILENCED.
+  //
+  // This used to pause the whole source when more than half its items carried a
+  // media enclosure, on the reasoning that dropping items one at a time "would
+  // still leave the source polled forever". That traded a few wasted polls for
+  // every future post the source ever makes, and the trade is not worth it:
+  // gate() at filters.ts already refuses an item with a media enclosure on its
+  // own, so a feed that mixes a podcast with written posts loses the episodes
+  // and keeps the posts. Pausing loses both, permanently, on the strength of
+  // one poll's worth of items.
+  //
+  // Removed on 2026-09-09, asked for as "I want to filter articles not block
+  // sources". The ratio is still measured, but it is now a fact recorded about
+  // a source rather than a sentence passed on it -- a source whose output is
+  // mostly media is visible on /admin/sources and can be paused by a person
+  // who has looked at it.
+  const mediaShare = isPodcastFeed(parsed.items);
 
   // One batched call for the whole feed. See ingest.ts for why: the per-item
   // path cost six round trips per story and fetched pages one at a time.
@@ -186,6 +193,10 @@ export async function collectSource(
       ...drops.toJSON(),
       duplicate: duplicates,
       ...(result.deadlineSkipped ? { deadline_skipped: result.deadlineSkipped } : {}),
+      // Recorded, not acted on. A source whose items are mostly audio or video
+      // is worth a person's attention on /admin/sources; it is not worth
+      // silencing on the evidence of one poll.
+      ...(mediaShare ? { mostly_media: parsed.items.length } : {}),
     },
   });
 
