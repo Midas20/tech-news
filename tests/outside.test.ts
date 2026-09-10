@@ -241,7 +241,7 @@ describe('the page shows the curve as a measurement, not as a claim', () => {
   });
 
   it('lists outside coverage without summarising it', () => {
-    expect(page).toContain('What was being discussed elsewhere');
+    expect(page).toMatch(/stories elsewhere that this archive/);
     expect(page).toMatch(/nothing here is\s*\n?\s*summarised/);
   });
 

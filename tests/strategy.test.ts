@@ -246,7 +246,7 @@ describe('the page leads with the reading', () => {
     // a news summary with an appendix, which is what was complained about.
     // The heading was "What happened, in full" until the section was demoted to
     // supporting evidence and renamed to say so.
-    const readingAt = page.indexOf('strategyBlock(b.strategy)');
+    const readingAt = page.indexOf('strategyBlock(b.strategy,');
     const newsAt = page.indexOf('The stories this was read from');
     expect(readingAt).toBeGreaterThan(0);
     expect(newsAt).toBeGreaterThan(0);
@@ -258,8 +258,11 @@ describe('the page leads with the reading', () => {
     expect(page).toMatch(/not a\s*\n?\s*statement that nothing changed/);
   });
 
-  it('marks a first-party bet on the page, not just in the data', () => {
-    expect(page).toMatch(/Read from what they say about/);
+  it('marks a first-party bet, on the card and again on its own page', () => {
+    // The tag is on the index and the sentence explaining it is on the detail
+    // page, which is where a reader has stopped to weigh the claim.
+    expect(page).toMatch(/says so itself/);
+    expect(page).toMatch(/Read from what they say\s+about themselves/);
   });
 
   it('shows how far back the reading was drawn', () => {

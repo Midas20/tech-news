@@ -113,8 +113,11 @@ describe('every directional claim says how to disprove itself', () => {
     expect(validateStrategy({ direction: [claim()] }, 10, 10).direction).toHaveLength(1);
   });
 
-  it('renders it under the claim it belongs to', () => {
-    expect(page).toContain('What would show this wrong');
+  it('renders it on the page where a reader stops to weigh the claim', () => {
+    // Moved to the per-finding page on 2026-09-09. A falsifier is the last
+    // thing a sceptic reads, and the index is not where anybody is sceptical
+    // yet -- it is where they are choosing what to be sceptical about.
+    expect(page).toMatch(/What would show this\s+wrong/);
   });
 
   it('tells the model that a hedge is not a falsifier', () => {
@@ -152,9 +155,12 @@ describe('the page is styled, not merely structured', () => {
     expect(missing, `classes used with no CSS: ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('styles the section the reader is here for differently from the rest', () => {
-    expect(theme).toMatch(/\.mv-op\{/);
-    expect(page).toContain('class="mv-op"');
+  it('styles the findings as cards a reader can scan and click', () => {
+    // Replaced .mv-op on 2026-09-09, when the report became an index: the
+    // whole card is the link, so the target is the size of the thought.
+    expect(theme).toMatch(/\.mv-item\{/);
+    expect(page).toContain('class="mv-item"');
+    expect(page).toMatch(/mv-items/);
   });
 });
 

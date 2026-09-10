@@ -236,7 +236,7 @@ describe('the earlier end of a claim survives into storage', () => {
   it('keeps thenCount as well, for the readings written before it', () => {
     // Dropping it would blank the earlier end on every report already stored.
     expect(store).toMatch(/thenCount: d\.then\.length/);
-    expect(page).toMatch(/written before the earlier end was stored/);
+    expect(page).toMatch(/written before the\s+earlier end was stored/);
   });
 
   it('resolves the shift citations the same way', () => {
@@ -244,6 +244,9 @@ describe('the earlier end of a claim survives into storage', () => {
   });
 
   it('renders the earlier stories as links when they are there', () => {
-    expect(page).toMatch(/d\.then\?\.length \? `<div class="mv-then-now">/);
+    // Moved to the per-finding page on 2026-09-09: the index carries the claim
+    // and this is the page a reader opens to check it, so both ends belong here.
+    expect(page).toMatch(/const bothEnds =/);
+    expect(page).toMatch(/mv-then-now/);
   });
 });

@@ -345,7 +345,8 @@ export async function renderFieldBriefing(
         ? `<p class="mv-lede">${escapeHtml(b.strategy.read)}</p>`
         : `<p class="mv-lede">${escapeHtml(b.summary)}</p>`}
 
-    ${b.strategy ? strategyBlock(b.strategy)
+    ${b.strategy
+    ? strategyBlock(b.strategy, `/field/${encodeURIComponent(slug)}/report/${b.day}`)
     : noStrategy(b.strategyGap ?? 'none was written')}
 
     <h2 class="sect">The stories this was read from</h2>
@@ -531,65 +532,95 @@ export async function renderReportIndex(): Promise<string> {
  * Every claim carries its citations inline, so the evidence is one click away
  * from the sentence it supports rather than in a list at the bottom.
  */
-function strategyBlock(s: StoredStrategy): string {
-  const cites = (cs: Citation[]): string => cs.length === 0 ? '' :
-    `<span class="mv-cites">${cs.map((c) =>
-      `<a href="${escapeHtml(c.url)}" rel="noreferrer noopener" target="_blank"
-         title="${escapeHtml(c.source)} — ${escapeHtml(c.when)}"
-         class="${c.independent ? '' : 'fp'}">${escapeHtml(truncate(c.title, 60))}</a>`
-    ).join('')}</span>`;
+/**
+ * The reading, as an INDEX rather than as the whole thing.
+ *
+ * Asked for on 2026-09-09: "the report have to simple with core content and
+ * when user click each content, show detail page."
+ *
+ * The page had grown to 41KB of prose for one field. Every section was worth
+ * having and all of them together were a wall, which is the failure mode of
+ * adding good sections one at a time -- each addition is defensible and the sum
+ * is unreadable. A reader arriving at a field report wants to know what changed
+ * and what work there is, in a shape they can scan in twenty seconds, and then
+ * to open the one item that matters to them.
+ *
+ * So this renders the CLAIM and one line of why, and nothing else. The
+ * reasoning, both ends of the evidence, the falsifier and the citations move to
+ * a page per item. Nothing is deleted and nothing is summarised by a model --
+ * the detail page shows the same stored text this page truncates.
+ */
+function strategyBlock(s: StoredStrategy, base: string): string {
+  const card = (
+    kind: string, i: number, title: string, line: string, tag = '',
+  ): string => `<a class="mv-item" href="${base}/${kind}/${i + 1}">
+      <h3>${escapeHtml(title)}${tag}</h3>
+      <p>${escapeHtml(truncate(line, 190))}</p>
+    </a>`;
 
-  // THE SHIFT, AHEAD OF EVERYTHING, INCLUDING THE WORK.
-  //
-  // Reported on 2026-09-09: "still you focus on only current news, you don't
-  // analysis the relationship between past and current of the fields, and I
-  // still can't find the market change." Both halves were true of this page.
-  // Every section rendered today's citations and nothing else, so the past
-  // existed only as the sentence "the earlier end of this comparison is 4
-  // stories" -- a reader had no way to see what the earlier end said, which
-  // makes a claim about change unreadable as a claim about change.
-  //
-  // So the change goes first, in the reader's own terms: the field then, the
-  // field now, and one line naming what moved, with real stories under both.
+  // WHAT CHANGED, FIRST AND IN ONE SENTENCE. `moved` is written to be exactly
+  // this: the change named in terms a reader can disagree with. The before and
+  // after paragraphs, and the stories at both ends, are on its own page.
   const shift = !s.shift ? '' : `
-    <section class="mv-shift">
-      <h2 class="sect">What has changed in this field</h2>
+    <h2 class="sect">What has changed in this field</h2>
+    <a class="mv-item mv-lead" href="${base}/shift/1">
       <p class="mv-moved">${escapeHtml(s.shift.moved)}</p>
-      <div class="mv-then-now">
-        <div>
-          <h3>Then${s.shift.then.length
-    // The date of the EARLIEST STORY ACTUALLY CITED, not the start of the
-    // history span. They are usually days apart and occasionally weeks, and a
-    // heading that dates this column to a story it does not show is the kind of
-    // small wrongness that makes a reader stop trusting the large things.
-    ? ` · ${escapeHtml(s.shift.then.map((c) => c.when).sort()[0]!)}` : ''}</h3>
-          <p>${escapeHtml(s.shift.before)}</p>
-          ${cites(s.shift.then)}
-        </div>
-        <div>
-          <h3>Now${s.shift.now[0] ? ` · ${escapeHtml(s.shift.now[0].when)}` : ''}</h3>
-          <p>${escapeHtml(s.shift.after)}</p>
-          ${cites(s.shift.now)}
-        </div>
-      </div>
-    </section>`;
+      <span class="mv-more">Then and now, with the stories at both ends</span>
+    </a>`;
 
-  // WHAT THE PUBLIC NUMBERS DID, and the only place on this page where a
-  // quantity appears without a story attached.
-  //
-  // Asked for on 2026-09-09: "I want to know trend of the tech, not summary of
-  // the news." A download curve is the one thing here that is a trend in the
-  // ordinary sense -- a measured series with two dated ends -- and it is
-  // measured by the registry rather than by us, which is what makes it
-  // quotable at all. See analysis/outside.ts on why a package is only accepted
-  // once its declared repository matches the taxonomy's.
-  const curves = !s.outside?.movements.length ? '' : `
+  const HORIZON: Record<StoredWork['horizon'], string> = {
+    now: 'the work exists now',
+    months: 'as the change lands',
+    watch: 'plausible, unproven',
+  };
+  const work = !s.work?.length ? '' : `
+    <h2 class="sect">Where the work is</h2>
+    <p class="note">Things one person could start on remotely, with the evidence
+      that somebody would pay for it.</p>
+    <div class="mv-items">${s.work.map((w, i) => card('work', i, w.what, w.why,
+    ` <span class="mv-tag ${w.horizon}">${escapeHtml(HORIZON[w.horizon] ?? w.horizon)}</span>`))
+    .join('')}</div>`;
+
+  const direction = s.direction.length === 0 ? '' : `
+    <h2 class="sect">Where this is going</h2>
+    <div class="mv-items">${s.direction.map((d, i) =>
+    card('direction', i, d.claim, d.reasoning)).join('')}</div>`;
+
+  const positioning = s.positioning.length === 0 ? '' : `
+    <h2 class="sect">What each company appears to be betting on</h2>
+    <div class="mv-items">${s.positioning.map((pz, i) =>
+    card('positioning', i, pz.who, pz.bet,
+      pz.firstParty ? ' <span class="mv-tag watch">says so itself</span>' : '')).join('')}</div>`;
+
+  const tensions = !s.tensions?.length ? '' : `
+    <h2 class="sect">Where the evidence argues with itself</h2>
+    <div class="mv-items">${s.tensions.map((t, i) =>
+    card('tension', i, t.what, t.sides)).join('')}</div>`;
+
+  const openings = s.openings.length === 0 ? '' : `
+    <h2 class="sect">What nobody has taken</h2>
+    <div class="mv-items">${s.openings.map((o, i) =>
+    card('opening', i, o.what, o.why)).join('')}</div>`;
+
+  return `${shift}${curvesBlock(s)}${work}${direction}${positioning}`
+    + `${tensions}${openings}${elsewhereBlock(s)}`;
+}
+
+/**
+ * What the public numbers did.
+ *
+ * Kept on the index rather than moved to a detail page, because it is already
+ * the compact form of itself: four rows with their dates. There is no longer
+ * version of it to click through to.
+ */
+function curvesBlock(s: StoredStrategy): string {
+  if (!s.outside?.movements.length) return '';
+  return `
     <h2 class="sect">What the public numbers did</h2>
     <p class="note">Mean installs per day at each end of the window, from the
       registry that publishes the package. Measured by them, not by us, and
       anybody can re-run the query. <b>Downloads are not users</b> &mdash; they
-      include continuous integration and mirrors, so read a move as a change in
-      how often something is installed and nothing more.</p>
+      include continuous integration and mirrors.</p>
     <table class="mv-curve">
       <thead><tr><th>Technology</th><th>Then</th><th>Now</th><th>Move</th></tr></thead>
       <tbody>${s.outside.movements.map((m) => `<tr>
@@ -603,98 +634,175 @@ function strategyBlock(s: StoredStrategy): string {
           ${m.changePct >= 0 ? '+' : ''}${m.changePct}%</td>
       </tr>`).join('')}</tbody>
     </table>`;
+}
 
-  // COVERAGE WE DO NOT HOLD. Listed rather than summarised: we have the
-  // headline and the date and not the body, and writing a summary of an
-  // article nobody fetched is the one thing this archive must never do.
-  const elsewhere = !s.outside?.stories.length ? '' : `
-    <h2 class="sect">What was being discussed elsewhere</h2>
-    <p class="note">Stories about these subjects that this archive never
-      collected, from the public Hacker News index, oldest first. Headlines and
-      dates only &mdash; the bodies were not fetched, so nothing here is
-      summarised. Points are attention on one site on one day.</p>
-    <ul class="mv-elsewhere">${s.outside.stories.map((o) => `<li>
-      <a href="${escapeHtml(o.url ?? '#')}" rel="noreferrer noopener"
-         target="_blank">${escapeHtml(truncate(o.title, 110))}</a>
-      <span class="muted">${escapeHtml(o.when)}${o.host ? ` · ${escapeHtml(o.host)}` : ''}${
-  o.score != null ? ` · ${o.score} points` : ''}</span>
-    </li>`).join('')}</ul>`;
+/** Coverage this archive does not hold. Folded away: it is background. */
+function elsewhereBlock(s: StoredStrategy): string {
+  if (!s.outside?.stories.length) return '';
+  return `
+    <details class="bf-more">
+      <summary>${s.outside.stories.length} stories elsewhere that this archive
+        never collected</summary>
+      <p class="note">From the public Hacker News index, oldest first. Headlines
+        and dates only &mdash; the bodies were not fetched, so nothing here is
+        summarised. Points are attention on one site on one day.</p>
+      <ul class="mv-elsewhere">${s.outside.stories.map((o) => `<li>
+        <a href="${escapeHtml(o.url ?? '#')}" rel="noreferrer noopener"
+           target="_blank">${escapeHtml(truncate(o.title, 110))}</a>
+        <span class="muted">${escapeHtml(o.when)}${o.host ? ` &middot; ${escapeHtml(o.host)}` : ''}${
+  o.score != null ? ` &middot; ${o.score} points` : ''}</span>
+      </li>`).join('')}</ul>
+    </details>`;
+}
 
-  // WHERE THE WORK IS, SECOND. This archive exists so one person can find
-  // remote work they could take; a page that puts vendor strategy above that
-  // is answering a question its reader did not ask.
-  const HORIZON: Record<StoredWork['horizon'], string> = {
-    now: 'the work exists now',
-    months: 'as the change lands',
-    watch: 'plausible, unproven',
-  };
-  const work = !s.work?.length ? '' : `
-    <h2 class="sect">Where the work is</h2>
-    <p class="note">Things one person could start on remotely, with the
-      evidence from today that somebody would pay for it.</p>
-    ${s.work.map((w) => `<section class="mv-op">
-      <h3>${escapeHtml(w.what)}</h3>
-      <p>${escapeHtml(w.why)}</p>
-      <dl>
-        ${w.skills ? `<dt>Needs</dt><dd>${escapeHtml(w.skills)}</dd>` : ''}
+/** The kinds of finding that have a page of their own. */
+export const ITEM_KINDS = [
+  'shift', 'work', 'direction', 'positioning', 'tension', 'opening',
+] as const;
+export type ItemKind = typeof ITEM_KINDS[number];
+
+export function isItemKind(x: string): x is ItemKind {
+  return (ITEM_KINDS as readonly string[]).includes(x);
+}
+
+/**
+ * One finding, in full, on its own page.
+ *
+ * WHAT THIS PAGE IS FOR, and it is not merely "the same text with more room".
+ * The index shows a claim; this shows whether to believe it. So the order is
+ * the order a sceptic reads in: the claim, the reasoning, THE EVIDENCE AT BOTH
+ * ENDS side by side, and then what would show it wrong.
+ *
+ * Addressed by (day, kind, index) rather than by an id, because the reading is
+ * stored as one jsonb document per field per day and its arrays have no ids of
+ * their own. That makes the index positional and therefore stable only for a
+ * stored report -- which is exactly the guarantee needed, since a stored report
+ * never changes. A report re-run for the same day overwrites the whole document
+ * and the links go with it.
+ */
+export async function renderReportItem(
+  slug: string, day: string, kind: ItemKind, n: number,
+): Promise<string> {
+  const field = FIELDS.find((f) => f.slug === slug);
+  if (!field) return wrap(pageHead('Unknown field', 'Not a root of the taxonomy.'));
+
+  const b = await briefingFor(slug, day).catch(() => null);
+  const base = `/field/${encodeURIComponent(slug)}/report/${day}`;
+  const crumbs = crumbsFor(`${base}/${kind}/${n}`, field.label);
+  const back = `<p class="note"><a href="${base}">&larr; ${escapeHtml(field.label)},
+    ${escapeHtml(niceDay(day))}</a></p>`;
+
+  const s = b?.strategy;
+  if (!b || !s) {
+    return wrap(`${pageHead('Nothing here',
+      'No reading was stored for this field on this day.', { crumbs })}
+      ${empty(NOT_YET, 'book')}${back}`);
+  }
+
+  const i = n - 1;
+  const cited = (cs: Citation[] | undefined, heading: string, note = ''): string =>
+    !cs?.length ? '' : `<div>
+      <h3>${escapeHtml(heading)}</h3>
+      ${note ? `<p class="note">${note}</p>` : ''}
+      ${citations(cs)}
+    </div>`;
+
+  // Both ends beside each other, because a claim about change is only checkable
+  // as a comparison and a reader should not have to hold one half in their head.
+  const bothEnds = (then: Citation[] | undefined, now: Citation[]): string => `
+    <div class="mv-then-now">
+      ${cited(then, then?.length ? `Then, from ${then[0]!.when}` : 'Then')
+    || `<div><h3>Then</h3><p class="note">This reading was written before the
+        earlier end was stored, so only today&rsquo;s stories are linked.</p></div>`}
+      ${cited(now, 'Now') || '<div><h3>Now</h3></div>'}
+    </div>`;
+
+  let title = '';
+  let body = '';
+
+  if (kind === 'shift' && s.shift) {
+    title = 'What has changed in this field';
+    body = `
+      <p class="mv-moved">${escapeHtml(s.shift.moved)}</p>
+      <div class="mv-then-now">
+        <div>
+          <h3>Then${s.shift.then.length
+    ? ` &middot; ${escapeHtml(s.shift.then.map((c) => c.when).sort()[0]!)}` : ''}</h3>
+          <p>${escapeHtml(s.shift.before)}</p>
+          ${citations(s.shift.then)}
+        </div>
+        <div>
+          <h3>Now${s.shift.now[0] ? ` &middot; ${escapeHtml(s.shift.now[0].when)}` : ''}</h3>
+          <p>${escapeHtml(s.shift.after)}</p>
+          ${citations(s.shift.now)}
+        </div>
+      </div>`;
+  } else if (kind === 'work' && s.work?.[i]) {
+    const w = s.work[i]!;
+    const HORIZON: Record<StoredWork['horizon'], string> = {
+      now: 'The work exists now.',
+      months: 'It will as the change lands.',
+      watch: 'Plausible, unproven.',
+    };
+    title = w.what;
+    body = `
+      <p class="mv-body">${escapeHtml(w.why)}</p>
+      <dl class="mv-facts">
+        ${w.skills ? `<dt>What it needs</dt><dd>${escapeHtml(w.skills)}</dd>` : ''}
         <dt>Timing</dt><dd>${escapeHtml(HORIZON[w.horizon] ?? w.horizon)}</dd>
       </dl>
-      ${cites(w.evidence)}
-    </section>`).join('')}`;
+      ${cited(w.evidence, 'The evidence that somebody would pay for this')}`;
+  } else if (kind === 'direction' && s.direction[i]) {
+    const d = s.direction[i]!;
+    title = d.claim;
+    body = `
+      <p class="mv-body">${escapeHtml(d.reasoning)}</p>
+      ${bothEnds(d.then, d.now)}
+      ${d.falsifier ? `<div class="mv-caveat"><p><b>What would show this
+        wrong.</b> ${escapeHtml(d.falsifier)}</p></div>` : ''}`;
+  } else if (kind === 'positioning' && s.positioning[i]) {
+    const pz = s.positioning[i]!;
+    title = pz.who;
+    body = `
+      <p class="mv-body">${escapeHtml(pz.bet)}</p>
+      ${pz.firstParty ? `<div class="mv-caveat"><p><b>Read from what they say
+        about themselves.</b> Good evidence of what they have decided to sell,
+        and none at all that anybody bought it.</p></div>` : ''}
+      ${cited(pz.evidence, 'What this was read from')}`;
+  } else if (kind === 'tension' && s.tensions?.[i]) {
+    const t = s.tensions[i]!;
+    title = t.what;
+    body = `<p class="mv-body">${escapeHtml(t.sides)}</p>
+      ${cited(t.evidence, 'The sources that disagree')}`;
+  } else if (kind === 'opening' && s.openings[i]) {
+    const o = s.openings[i]!;
+    title = o.what;
+    body = `
+      <p class="mv-body">${escapeHtml(o.why)}</p>
+      ${o.who ? `<dl class="mv-facts"><dt>Who could take it</dt>
+        <dd>${escapeHtml(o.who)}</dd></dl>` : ''}
+      ${cited(o.evidence, 'What this was read from')}`;
+  }
 
-  const direction = s.direction.length === 0 ? '' : `
-    <h2 class="sect">Where this is going</h2>
-    ${s.direction.map((d) => `<section class="mv-find">
-      <h3>${escapeHtml(d.claim)}</h3>
-      <p>${escapeHtml(d.reasoning)}</p>
-      ${d.then?.length ? `<div class="mv-then-now">
-        <div><h3>Then · ${escapeHtml(d.then[0]!.when)}</h3>${cites(d.then)}</div>
-        <div><h3>Now</h3>${cites(d.now)}</div>
-      </div>` : `<p class="note">The earlier end of this comparison is
-        ${d.thenCount} ${d.thenCount === 1 ? 'story' : 'stories'}${s.history
-    ? ` of the ${s.history.n} read from before the window` : ''}. This reading
-        was written before the earlier end was stored, so only today's is
-        linked. Today's end:</p>${cites(d.now)}`}
-      ${d.falsifier ? `<p class="note"><b>What would show this wrong.</b>
-        ${escapeHtml(d.falsifier)}</p>` : ''}
-    </section>`).join('')}`;
+  if (!title) {
+    return wrap(`${pageHead('Nothing here',
+      'That reading has no item at this position.', { crumbs })}
+      ${empty('The report for this day does not contain it. It may have been '
+      + 'written again since the link was made.', 'book')}${back}`);
+  }
 
-  const positioning = s.positioning.length === 0 ? '' : `
-    <h2 class="sect">What each company appears to be betting on</h2>
-    ${s.positioning.map((p) => `<section class="mv-find">
-      <h3>${escapeHtml(p.who)}</h3>
-      <p>${escapeHtml(p.bet)}</p>
-      ${p.firstParty ? `<p class="note"><b>Read from what they say about
-        themselves.</b> Good evidence of what they have decided to sell, and none
-        at all that anybody bought it.</p>` : ''}
-      ${cites(p.evidence)}
-    </section>`).join('')}`;
-
-  const tensions = s.tensions?.length ? `
-    <h2 class="sect">Where the evidence argues with itself</h2>
-    <p class="note">Two sources pointing different ways is a finding, not a
-      flaw in the reading. These are the places the stories do not agree.</p>
-    ${s.tensions.map((t) => `<section class="mv-find">
-      <h3>${escapeHtml(t.what)}</h3>
-      <p>${escapeHtml(t.sides)}</p>
-      ${cites(t.evidence)}
-    </section>`).join('')}` : '';
-
-  const openings = s.openings.length === 0 ? '' : `
-    <h2 class="sect">What nobody has taken</h2>
-    ${s.openings.map((o) => `<section class="mv-find">
-      <h3>${escapeHtml(o.what)}</h3>
-      <p>${escapeHtml(o.why)}</p>
-      ${o.who ? `<p class="note">Who could take it: ${escapeHtml(o.who)}</p>` : ''}
-      ${cites(o.evidence)}
-    </section>`).join('')}`;
-
-  return `
-
-    ${shift}${curves}${work}${direction}${positioning}${tensions}${openings}${elsewhere}
-
-
-`;
+  return wrap(`
+    ${pageHead(title, `${field.label}, ${niceDay(day)}`, { crumbs })}
+    ${body}
+    <div class="mv-caveat">
+      <p><b>${escapeHtml(readLine(b))}</b></p>
+      ${s.history ? `<p>The reading was set against ${s.history.n} earlier
+        ${s.history.n === 1 ? 'story' : 'stories'}, from
+        ${escapeHtml(s.history.from)} to ${escapeHtml(s.history.to)}.</p>` : ''}
+      ${s.limits ? `<p><b>On the reading as a whole.</b>
+        ${escapeHtml(s.limits)}</p>` : ''}
+    </div>
+    ${back}`);
 }
 
 /** Said plainly when there is no reading, so an absence is never a finding. */

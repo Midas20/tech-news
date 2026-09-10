@@ -30,7 +30,7 @@ import { renderOverview } from './overview.ts';
 import { renderTrends, renderTrend } from './trends.ts';
 import {
   renderArchiveReport, renderFieldBriefing, renderReportIndex, renderReportDay,
-  reportDay,
+  reportDay, renderReportItem, isItemKind,
 } from './briefing.ts';
 import { renderRail, statusBadge, topNav, railCounts } from './rail.ts';
 import { renderSources } from './sources.ts';
@@ -906,6 +906,19 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
       // `/field/ai/report/2026-09-01` before both, for the same reason one level
       // deeper: a field's briefing on a given day is its own page, so a reader
       // can link to what was said rather than to whatever is said now.
+      // `/field/ai/report/2026-09-09/work/2` before the dated form, one level
+      // deeper again: a single finding is its own page so a reader can be sent
+      // straight to the claim rather than to the report it sits in. Asked for
+      // on 2026-09-09 -- "when user click each content, show detail page".
+      const item = rest.match(/^(.+)\/report\/([^/]+)\/([a-z]+)\/(\d{1,3})$/);
+      if (item) {
+        const day = reportDay(decodeURIComponent(item[2]!));
+        const kind = item[3]!;
+        if (!day || !isItemKind(kind)) return missing({ path });
+        const slug = decodeURIComponent(item[1]!);
+        return render(`${slug} ${kind}`,
+          await renderReportItem(slug, day, kind, Number(item[4])));
+      }
       const dated = rest.match(/^(.+)\/report\/([^/]+)$/);
       if (dated) {
         const day = reportDay(decodeURIComponent(dated[2]!));

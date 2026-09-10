@@ -1719,6 +1719,40 @@ h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
    .bf-fp, and the only colour on the page. */
 .mv-cites a.fp{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
 
+/* THE REPORT AS AN INDEX. One card per finding: the claim, one line of why,
+   and a way in. Asked for on 2026-09-09 -- "the report have to simple with core
+   content and when user click each content, show detail page" -- against a
+   field report that had grown to 41KB of prose. A whole card is the link, so
+   the target is the size of the thought rather than the size of a heading. */
+.mv-items{display:grid;gap:var(--s-3);margin:0 0 var(--s-5)}
+.mv-item{display:block;padding:var(--s-4);border:1px solid var(--line);border-radius:4px;
+  text-decoration:none;color:inherit;background:var(--bg-2,transparent);
+  transition:border-color .12s ease}
+.mv-item:hover{border-color:var(--ink-3,var(--ink-4))}
+.mv-item h3{margin:0 0 var(--s-2);font:600 var(--t-15)/1.35 var(--sans);color:var(--ink);
+  max-width:70ch}
+.mv-item p{margin:0;font:400 var(--t-14)/1.65 var(--serif);color:var(--ink-2);max-width:74ch}
+.mv-item .mv-more{display:inline-block;margin-top:var(--s-3);
+  font:600 var(--t-11)/1.6 var(--sans);letter-spacing:.04em;text-transform:uppercase;
+  color:var(--ink-4)}
+.mv-item:hover .mv-more{color:var(--ink-2)}
+/* The lead card carries the one sentence the whole page exists to deliver. */
+.mv-lead{border-left:3px solid var(--ink)}
+.mv-tag{display:inline-block;margin-left:var(--s-2);padding:1px 6px;border-radius:3px;
+  font:600 var(--t-11)/1.7 var(--sans);letter-spacing:.03em;text-transform:uppercase;
+  border:1px solid var(--line);color:var(--ink-4);vertical-align:middle;white-space:nowrap}
+.mv-tag.now{color:var(--good,#1a7f37);border-color:currentColor}
+.mv-tag.months{color:var(--ink-2)}
+.mv-tag.watch{color:var(--ink-4)}
+
+/* A detail page: the claim, then the facts that qualify it, as a definition
+   list rather than as more prose. */
+.mv-facts{display:grid;grid-template-columns:auto 1fr;gap:var(--s-2) var(--s-4);
+  margin:var(--s-4) 0;max-width:74ch}
+.mv-facts dt{font:600 var(--t-11)/1.7 var(--sans);letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-4)}
+.mv-facts dd{margin:0;font:400 var(--t-14)/1.65 var(--sans);color:var(--ink-2)}
+
 /* WHAT THE PUBLIC NUMBERS DID. The only quantities on a field report that come
    with no story attached, so they are set as a table rather than as prose -- a
    number in a sentence reads as an assertion, and a number in a row with its

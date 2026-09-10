@@ -162,8 +162,38 @@ export interface DiversityCaps {
   total: number;
 }
 
+/**
+ * How much of a day a report is allowed to read.
+ *
+ * WIDENED ON 2026-09-09 -- "the scope of news that you use when make report is
+ * still small" -- and the complaint was measurable. Same day, same window:
+ *
+ *   field      eligible   read at 40   read at 120
+ *   ai              114           40            93
+ *   practice         76           40            73
+ *   cloud            20           16            20
+ *   data             19           19            19
+ *
+ * So `ai` was reading 35% of what it was allowed to see and `practice` 53%,
+ * while `cloud` and `data` were already reading everything they had. The cap
+ * was the binding constraint on exactly the two busiest fields, which are the
+ * ones a reader most needs a filter for -- and a filter that drops two thirds
+ * of the evidence is not selecting, it is sampling.
+ *
+ * 120 costs about 53,000 characters of prompt for the busiest field, roughly
+ * 14,000 tokens. That is comfortable for Claude, which heads the chain. IT IS
+ * NOT comfortable for the small free models below it, and that is a real
+ * trade recorded here rather than discovered later: on a day when Claude is
+ * unavailable, a wide corpus makes the fallbacks likelier to refuse. The
+ * fallbacks already produce the weakest readings in the system, so losing them
+ * on a busy day costs less than reading a third of a busy day every day.
+ *
+ * The per-source and per-subject caps rise too, but by less than threefold, so
+ * they still bind: one publisher may not speak for a field. They were set when
+ * the registry held 86 sources and it now holds 511.
+ */
 export const CAPS: DiversityCaps = {
-  perSource: 4, perSubject: 3, maxReleases: 8, total: 40,
+  perSource: 6, perSubject: 5, maxReleases: 16, total: 120,
 };
 
 /**
