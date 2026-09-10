@@ -36,6 +36,7 @@ import { renderRail, statusBadge, topNav, railCounts } from './rail.ts';
 import { renderSources } from './sources.ts';
 import { renderWhatsNew } from './whatsnew.ts';
 import { renderPeriodReport, renderPeriodIndex } from './period.ts';
+import { renderMarket } from './market.ts';
 import { isSpan, keyFor } from '../analysis/period.ts';
 import { renderIntel } from './intel.ts';
 import {
@@ -924,6 +925,9 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
     // it is the answer to "what is new", and every other report can only
     // answer "what happened in a category somebody wrote down in advance".
     if (path === '/new') return render('What is new', await renderWhatsNew());
+    // MEASUREMENT, WITH NO STORY ON IT. The only page whose answer does not
+    // depend on which 512 feeds are subscribed or whether a model was reachable.
+    if (path === '/market') return render('Market', await renderMarket());
     if (path === '/fields') return render('Fields', await renderFields());
     if (path.startsWith('/field/')) {
       const rest = path.slice('/field/'.length);

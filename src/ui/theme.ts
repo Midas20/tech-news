@@ -1787,6 +1787,10 @@ h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
 /* A four-column table of magnitudes does not fit a phone. It scrolls inside its
    own box rather than widening the page: a body that scrolls sideways moves
    every paragraph on it, and the reader loses the column they were reading. */
+/* A caption a screen reader announces and a sighted reader does not need: the
+   heading above the table already says what it is. */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .mv-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 0 var(--s-5)}
 .mv-scroll .mv-curve{margin:0}
 

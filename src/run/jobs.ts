@@ -67,6 +67,9 @@ import {
 } from '../maintain/classify.ts';
 import { evaluateSources, summariseEvaluate } from '../maintain/evaluate.ts';
 import { runDailyReport, summariseReport } from '../analysis/briefing.ts';
+import {
+  resolveBacklog, refreshSeries, summariseResolve, summariseSeries,
+} from '../analysis/downloads.ts';
 import { applyStoredSettings } from '../db/repos/settings.ts';
 import { getConfig } from '../config.ts';
 import type { LlmContext } from '../llm/router.ts';
@@ -210,6 +213,50 @@ export function buildJobs(opts: JobOptions = {}): Job[] {
         return summariseAdoption(await refreshAdoption(worker, {
           userAgent: getConfig().fetch.userAgent,
         }));
+      },
+    },
+
+    // ADOPTION AS A MEASUREMENT, across the registry rather than six packages.
+    //
+    // "The target of report is recognizing market change and finding new
+    // market" (2026-09-10). Measured that morning: 35 of 5,993 stories were
+    // classified `market`, 510 of 512 sources were news, and of 1,038
+    // technologies with a GitHub repository exactly SIX had a download curve.
+    // The only real market instrument in the system was pointed at six things.
+    //
+    // It was six because resolution happened inside the daily report, capped at
+    // six subjects so one briefing does not spend its afternoon on registry
+    // lookups. That cap is right for a report and wrong for a catalogue, so the
+    // work moves here and walks the whole registry instead.
+    {
+      name: 'resolve-packages',
+      what: 'Work out which package each technology ships as, and prove it.',
+      // Twenty every five minutes brings 1,038 technologies round in about four
+      // days, and each answer is cached for ever, so this is a one-time walk
+      // that afterwards only picks up newly added rows. A resolution costs up
+      // to six requests: two candidate names against three registries.
+      //
+      // Deliberately unhurried. Nothing here is urgent -- an adoption curve does
+      // not move in an afternoon -- and these are free public APIs run by
+      // volunteers and foundations. The rate is manners, not a limit we hit.
+      everySeconds: 300,
+      leaseSeconds: 600,
+      async run({ worker }) {
+        return summariseResolve(await resolveBacklog(worker));
+      },
+    },
+
+    {
+      name: 'download-series',
+      what: 'Keep every verified package’s download curve current.',
+      // One request each, forty at a time, oldest first. Anything fetched in
+      // the last twenty hours is left alone, so once the backlog drains this
+      // settles into refreshing each package about once a day -- the resolution
+      // the curves are actually drawn at.
+      everySeconds: 600,
+      leaseSeconds: 900,
+      async run({ worker }) {
+        return summariseSeries(await refreshSeries(worker));
       },
     },
 
