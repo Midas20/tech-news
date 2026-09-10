@@ -35,8 +35,8 @@ import {
 import { renderRail, statusBadge, topNav, railCounts } from './rail.ts';
 import { renderSources } from './sources.ts';
 import { renderWhatsNew } from './whatsnew.ts';
-import { renderPeriodReport } from './period.ts';
-import { isSpan } from '../analysis/period.ts';
+import { renderPeriodReport, renderPeriodIndex } from './period.ts';
+import { isSpan, keyFor } from '../analysis/period.ts';
 import { renderIntel } from './intel.ts';
 import {
   accountById, accountByUsername, cookieFrom, COOKIE, isPublicPath, issueSession,
@@ -902,6 +902,12 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
     // while `/reports/month/2026-09` is a composed period. Asked for on
     // 2026-09-09 -- "make weekly report and month report. And generate a year's
     // report by collecting all news."
+    // Every week, month and year the archive holds, as one list. Above the
+    // span routes because `periods` is not a span and would otherwise fall
+    // through to the dated report and 404.
+    if (path === '/reports/periods') {
+      return render('Every period', await renderPeriodIndex());
+    }
     if (path.startsWith('/reports/')) {
       const rest = decodeURIComponent(path.slice('/reports/'.length));
       const slash = rest.indexOf('/');

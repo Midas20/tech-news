@@ -28,7 +28,7 @@ import {
   type NavItem,
 } from './nav.ts';
 import { GROUPS } from '../settings.ts';
-import { latestDay } from '../analysis/period.ts';
+import { latestDay, keyFor } from '../analysis/period.ts';
 
 export interface RailCounts {
   day: number;
@@ -337,15 +337,15 @@ export async function renderRail(
     // because the archive works in UTC and for several hours every morning the
     // calendar day holds only overnight items.
     const anchor = await latestDay().catch(() => new Date().toISOString().slice(0, 10));
+    const at = (span: 'day' | 'week' | 'month' | 'year', label: string): RailItem => {
+      const href = `/reports/${span}/${keyFor(span, anchor)}`;
+      return { href, label, sub: true, active: state.path === href };
+    };
     const periodItems: RailItem[] = [
-      { href: `/reports/day/${anchor}`, label: 'That day', sub: true,
-        active: state.path === `/reports/day/${anchor}` },
-      { href: `/reports/week/${anchor}`, label: 'That week', sub: true,
-        active: state.path === `/reports/week/${anchor}` },
-      { href: `/reports/month/${anchor.slice(0, 7)}`, label: 'That month', sub: true,
-        active: state.path === `/reports/month/${anchor.slice(0, 7)}` },
-      { href: `/reports/year/${anchor.slice(0, 4)}`, label: 'That year', sub: true,
-        active: state.path === `/reports/year/${anchor.slice(0, 4)}` },
+      at('day', 'That day'), at('week', 'That week'),
+      at('month', 'That month'), at('year', 'That year'),
+      { href: '/reports/periods', label: 'Every period', sub: true,
+        active: state.path === '/reports/periods' },
     ];
 
     return [
