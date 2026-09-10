@@ -9130,6 +9130,214 @@ several hours every morning "today" holds a handful of overnight items and would
 read as a broken page.
 
 
+## The market, measured rather than reported
+
+Asked for on 2026-09-10: *"I think the news scope isn't still wide and the report
+are focus on news analysis. The target of report is recognizing market change
+and finding new market."*
+
+The objection is right, and it has a number. Measured that morning:
+
+```
+stories classified `market`     35 of 5,993   (0.6%)
+sources of kind 'news'         510 of 512
+stacks with a GitHub repo        1,038
+...with an adoption curve            6
+```
+
+**The classifier is not the problem**, which is worth saying because it was the
+first place looked and it was wrong. `classifyEvent` reads funding, acquisition
+and position out of a headline with rules and no model at all —
+`tests/market.test.ts` is a long record of it being taught to. The 35 is a
+*sourcing* number: the archive does not subscribe to the places funding is
+announced. Widening the beat is a sourcing job, not a parsing one, and it is
+still open.
+
+`/market` takes the other road entirely. **It reads no story.** Every figure on
+it is daily download counts published by PyPI and npm — quantities that exist
+whether or not a journalist noticed, that anybody can re-derive from the same
+public API, and that move before the coverage does.
+
+### Why it was six packages
+
+`gatherOutside` resolved packages for the subjects of the day it was briefing,
+capped at six so one report did not spend its afternoon on registry lookups.
+That cap is right for a report and wrong for a catalogue: it means the archive
+only ever learned about a package on a day a story happened to name it.
+
+So resolution and series-fetching moved out of the report and into
+`src/analysis/downloads.ts`, with two jobs walking the whole registry at a polite
+rate — `resolve-packages` (20 every 5 minutes) and `download-series` (40 every
+10). Every call is keyless. The report now reads a table that is already full.
+
+A package is accepted only when the registry's own declared repository matches
+the repository the taxonomy holds, and the slug appears in that path. That is
+what stopped `npm:torch`, an unrelated project, from being published as PyTorch.
+
+### Two questions, two different arithmetics
+
+- **Market change** compares two means on the *same* package, so the units
+  cancel and a percentage means something.
+- **New market** is *not* the top of the percentage list. A package going 40/day
+  to 400 is +900% and is one CI pipeline being switched on. So a forming market
+  needs a floor under the later end — at least 2,000/day now, under 60,000/day
+  before, up at least 60%.
+
+### Two ways the curves were lying
+
+**A Sunday is about a third of a Tuesday.** Download data has a weekly cycle, so
+a window whose edges are not whole multiples of 7 days compares different parts
+of the week against each other. `edgeFor(7)` was returning 3, which compared
+Mon–Wed against Fri–Sun; every weekly report showed −30% to −45% and called it a
+collapse. Edges are now whole weeks, and the period reports use ISO weeks
+(Monday-start) to match Postgres `date_trunc('week', …)`, so the SQL enumeration
+and the TypeScript rendering agree about which days a week contains.
+
+**A move shared by every subject is a fact about the instrument.** On 2026-08-25
+all five tracked packages stepped down together because PyPI changed how it
+counts. Adoption is not correlated across unrelated projects at large magnitude;
+measurement is perfectly correlated by construction. `detectCohortBreak` scans
+for a day where at least 80% of at least three series move by a median of 20% or
+more and stay there, and any comparison spanning that day is void. A published
+year report had already carried contaminated figures (`langchain −10%` and
+others) and was withdrawn and republished.
+
+A break **shortens the window rather than blanking the page**: the days after it
+are measured consistently with each other, so the comparison moves to the largest
+whole number of weeks that fits entirely after the break, and the page says so at
+the top. Suppressing everything would have shown nothing until late October. A
+short honest measurement beats seven weeks of an empty page — and a suppressed
+number must say it is suppressed, because an absent section reads as "nothing
+moved".
+
+### What it cannot tell you, on the page rather than in a commit message
+
+A registry is not a market: anything sold rather than installed — a hosted
+product, a licensed database, a consultancy — has no curve and is invisible.
+Downloads are not users. Growth is not revenue. And a small satellite package
+published by the right organisation can stand in for a large project, so the
+registry, the package name and both absolute rates are all shown: a curve whose
+numbers look too small for the name it carries probably is.
+
+
+## The report was a summary because the reading never ran
+
+Asked on 2026-09-10, against `/field/ai/report/2026-09-10`: *"It is only summary
+of report, it doesn't any new change."*
+
+That is exactly what it was. A field briefing has two halves — `field_briefing`
+writes what happened, `field_strategy` writes what it means — and only the first
+one ran:
+
+```
+2026-09-09    4 of 4 fields had a strategic reading
+2026-09-10    0 of 5
+```
+
+Five fields, five last words from the one provider still answering:
+
+```
+ai         unparseable output
+cloud      schema: $.openings[0].what: required
+data       503, "this model is currently experiencing high demand"
+infra      schema: $.openings[0].what: required
+security   unparseable output
+```
+
+Four causes, three fixes, and one of them was ours.
+
+### "Unparseable output" named no cause
+
+The other four providers reported a credential, a quota and a bill — each of
+which tells an operator what to do. The fifth was the only one that was
+reachable, had budget and actually answered, and it was described in two words.
+The raw text was discarded at the point of failure, so there was nothing left to
+look at afterwards either.
+
+`describeUnparseable` now separates the four cases, because they have four
+different fixes: **empty** (a silent refusal — retrying will not help),
+**truncated** (brackets still open; the model was fine and `maxTokens` was too
+low — *our* bug), **prose** (a weaker model ignoring the format), and
+**malformed** (brackets balance and it still will not parse — a trailing comma, a
+smart quote, an unescaped newline). It reports the size and the tail, and says
+outright when the output stopped at the token ceiling.
+
+Applied to the real failure, the answer was 6,494 characters of complete,
+bracket-balanced JSON with a syntax error inside it — not truncation, and not a
+model that could not do the job.
+
+### The prompt required a key it never named
+
+Two of the five fields failed identically, and it reproduced on a second sample
+at a different temperature. `field_strategy` required `openings[].what`, and the
+paragraph describing `openings` explained `who` and `why` and stopped. Every
+other block in that prompt describes its own `what`. The JSON skeleton above it
+showed the key, so a strong model inferred it from the shape and the weakest one
+— the one that answers on a day the other four are out of quota — followed the
+prose and left it out. A complete, cited analysis was thrown away over a key
+nobody had asked for by name.
+
+`tests/prompt-contract.test.ts` now checks the seam structurally: every property
+name a job's schema will reject a document for omitting must appear in that job's
+prompt. The prompt is `v2`, because `llm_cache` is keyed on `prompt_version` and
+an edited prompt without a version bump keeps serving the old one's answers.
+
+### One sample was not enough, and a retry at temperature 0 is not a retry
+
+The chain gave each provider exactly one attempt, and a format failure fell
+straight through to the next provider — which was out of quota. It now draws a
+**second sample, and only for a format failure**: a 429 or a 402 is a fact about
+the account, and repeating it is rude to the provider and useless to us.
+
+The second sample is drawn at temperature 0.4. Every provider here is called at
+temperature 0 by default, so re-sending the identical prompt asks for the
+identical answer — a wasted call against the budget that is the binding
+constraint on this whole system.
+
+### The report gets one attempt, at the worst hour of the day
+
+This is the part that was not about any of those causes.
+
+The report runs at 07:00. By 07:00 the overnight ingestion has already spent the
+free tiers on work that cannot wait — measured on 2026-09-10, **319 `classify`
+calls, 281 `entity_extraction` and 53 `dedup_pairs`**, roughly 650 model calls
+before the report asked for its first. So the report reached for a model at the
+emptiest hour of the day, failed on every field, and nothing tried again for
+twenty-four hours.
+
+Quotas refill during the day. Nothing was reaching for them.
+
+The `readings` job (every 3 hours) fills in the readings the morning could not
+get. It writes **only** the reading, with a targeted `UPDATE` into the row the
+morning already wrote, so the summary, the citations and the day's record are
+untouched — and in particular `covered_to`, the read cursor, is never touched at
+all. It selects only gaps that say `no model answered`, never `no earlier stories
+to compare against`, which will be just as true this afternoon. It costs nothing
+on a day the report succeeded, and it asks the budget table whether any provider
+is reachable *before* doing any research, because the expensive half of
+`analyseField` is the open-web research it does before it reaches for a model.
+
+`storedStrategy` was lifted out of `saveArchiveReport` so both paths shape the
+reading identically. It resolves every citation index against the corpus the
+model was shown and drops what does not resolve, so the top-up must pass the same
+corpus: a stub would store confident paragraphs whose every claim had lost its
+evidence, and nothing downstream would notice.
+
+### What is still true
+
+Four of the five providers are unusable for reasons no code change reaches:
+`ANTHROPIC_API_KEY` is empty, cerebras answers `402 payment_required`, and both
+Gemini tiers and groq are on **daily** token quotas that the ingestion pipeline
+spends overnight. A 64-token probe to any of them passes while the ~54,000
+character briefing that actually needs sending is refused — probing a provider
+with a request that does not resemble the real one measures nothing.
+
+The fixes above make the archive use what it has. They do not create budget.
+Setting favourite fields in Settings narrows the report to fewer than fourteen
+fields and is the existing lever; a working `ANTHROPIC_API_KEY` puts the
+strongest reader at the head of the chain and removes the problem.
+
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.

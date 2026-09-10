@@ -485,7 +485,10 @@ export const JOBS: Record<string, JobSpec> = {
     // here and a thin analysis that cites its evidence still beats no analysis;
     // the pairing rule in validateStrategy() throws out what it cannot support.
     chain: ['claude', 'gemini-flash', 'cerebras', 'groq', 'gemini-flash-lite'],
-    promptVersion: 'v1',
+    // v2 names `openings[].what` in the prose, which v1 required and never
+    // described. See the note on that line: it cost two of five fields their
+    // entire reading on 2026-09-10.
+    promptVersion: 'v2',
     maxTokens: 8000,
     system: [
       'You are a strategy analyst reading a technology archive. You have TODAY\'S',
@@ -674,7 +677,27 @@ export const JOBS: Record<string, JobSpec> = {
       'tensions: 0 to 3. `what` names the disagreement in one line; `sides` sets',
       '  out both readings and says which the evidence favours, if either. Leave',
       '  it empty rather than manufacturing a disagreement.',
-      'openings: 2 to 4. `who` names the kind of party that could take it, and',
+      // `what` WAS NEVER DESCRIBED HERE, and it is required.
+      //
+      // Every other block in this list explains its own `what` -- work has "the
+      // job, in one line", tensions has "names the disagreement in one line" --
+      // and openings jumped straight to `who` and `why`. The skeleton above
+      // shows the key, so a strong model fills it in from the shape; a weak one
+      // follows the prose, writes the two keys the prose names, and omits the
+      // one it does not.
+      //
+      // Measured on 2026-09-10, when every field's reading failed: two of the
+      // five fields failed on exactly this, identically, and it reproduced on a
+      // second sample at a different temperature --
+      //
+      //   cloud   schema: $.openings[0].what: required; $.openings[1].what: required
+      //   infra   schema: $.openings[0].what: required; $.openings[1].what: required
+      //
+      // -- which is not a model missing the format. It is the format not having
+      // been stated. The whole document was thrown away over a key the prompt
+      // never asked for by name.
+      'openings: 2 to 4. `what` names the gap itself in one line -- the thing',
+      '  nobody is selling. `who` names the kind of party that could take it, and',
       '  `why` says what specifically is unserved -- not that a market is large.',
       'limits: three or four sentences. What the evidence cannot show, which claim',
       '  here is weakest, and what would settle it.',

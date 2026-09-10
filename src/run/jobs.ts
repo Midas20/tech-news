@@ -27,6 +27,11 @@
 //   releases     6h   make the release feeds match Settings, both directions.
 //   tune         1h   move each source's interval toward its observed rate, and
 //                     make sure next month's partition exists.
+//   readings     3h   fill in the strategic readings the 07:00 report could not
+//                     get. The report has one attempt and takes it at the hour
+//                     the overnight ingestion has just emptied the free tiers;
+//                     quotas refill during the day and nothing was reaching for
+//                     them. Selects nothing on a day the report succeeded.
 //   rollup     03:10  reduce every settled month to analysis that outlives it.
 //   retain     03:40  delete what is past the window. AFTER rollup, always.
 //   lapsed     04:10  favourites released more than the grace window ago.
@@ -67,6 +72,7 @@ import {
 } from '../maintain/classify.ts';
 import { evaluateSources, summariseEvaluate } from '../maintain/evaluate.ts';
 import { runDailyReport, summariseReport } from '../analysis/briefing.ts';
+import { topUpReadings, summariseTopUp } from '../analysis/readings.ts';
 import {
   resolveBacklog, refreshSeries, summariseResolve, summariseSeries,
 } from '../analysis/downloads.ts';
@@ -310,6 +316,32 @@ export function buildJobs(opts: JobOptions = {}): Job[] {
           worker.query<T>(sql, params);
         const ctx: LlmContext = { db: worker, env: process.env as Record<string, string> };
         return summariseReport(await runDailyReport(ctx, query));
+      },
+    },
+    {
+      name: 'readings',
+      what: 'Fill in the strategic readings the morning report could not get.',
+      // EVERY THREE HOURS, BECAUSE THE REPORT GETS ONE ATTEMPT AND TAKES IT AT
+      // THE WORST HOUR OF THE DAY.
+      //
+      // The report runs at 07:00, by which time the overnight ingestion has
+      // spent the free tiers on work that cannot wait -- 319 classify calls,
+      // 281 entity_extraction and 53 dedup_pairs on 2026-09-10, roughly 650
+      // model calls before the report asked for its first. It then failed on
+      // every field and nothing tried again for twenty-four hours.
+      //
+      // Quotas refill during the day. Until now nothing was reaching for them.
+      //
+      // Cheap when there is nothing to do: the select returns no rows on a day
+      // the report succeeded, and when it does return rows the budget table is
+      // consulted before any research happens.
+      everySeconds: 3 * 3600,
+      leaseSeconds: 1800,
+      async run({ worker }) {
+        const query = <T>(sql: string, params: unknown[] = []) =>
+          worker.query<T>(sql, params);
+        const ctx: LlmContext = { db: worker, env: process.env as Record<string, string> };
+        return summariseTopUp(await topUpReadings(ctx, query, worker));
       },
     },
     {

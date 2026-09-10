@@ -579,32 +579,32 @@ export async function runDailyReport(
  * months and this table outlives them, so an unresolved index would become a
  * pointer to nothing exactly when the report became historically interesting.
  */
+// Citations are resolved into real stories rather than kept as indexes.
+// Retention deletes stories after four months and these tables outlive them,
+// so an index would become a pointer to nothing exactly when the report became
+// historically interesting.
+const cite = (b: Briefing, n: number) => {
+  const it = b.corpus[n - 1];
+  return it ? {
+    id: it.id, title: it.title, url: it.url, source: it.source,
+    kind: it.kind, when: it.when, independent: it.independent,
+  } : null;
+};
+
+// The same copy, taken from the earlier corpus. Curried because it is used as
+// a `.map` argument in four places and the alternative is four closures that
+// have to agree with each other.
+const priorCite = (b: Briefing) => (n: number) => {
+  const it = b.strategy?.priorCorpus?.[n - 1];
+  return it ? {
+    id: it.id, title: it.title, url: it.url, source: it.source,
+    kind: it.kind, when: it.when, independent: it.independent,
+  } : null;
+};
+
 export async function saveArchiveReport(
   query: Query, report: ArchiveReport,
 ): Promise<{ day: string; fields: number; themes: number; read: number }> {
-  // Citations are resolved into real stories rather than kept as indexes.
-  // Retention deletes stories after four months and these tables outlive them,
-  // so an index would become a pointer to nothing exactly when the report became
-  // historically interesting.
-  const cite = (b: Briefing, n: number) => {
-    const it = b.corpus[n - 1];
-    return it ? {
-      id: it.id, title: it.title, url: it.url, source: it.source,
-      kind: it.kind, when: it.when, independent: it.independent,
-    } : null;
-  };
-
-  // The same copy, taken from the earlier corpus. Curried because it is used as
-  // a `.map` argument in four places and the alternative is four closures that
-  // have to agree with each other.
-  const priorCite = (b: Briefing) => (n: number) => {
-    const it = b.strategy?.priorCorpus?.[n - 1];
-    return it ? {
-      id: it.id, title: it.title, url: it.url, source: it.source,
-      kind: it.kind, when: it.when, independent: it.independent,
-    } : null;
-  };
-
   const shaped = report.fields.map((b) => ({
     b,
     read: provenance(b.corpus),
@@ -633,7 +633,24 @@ export async function saveArchiveReport(
     // on which every claim about change displayed only the present. A reader
     // cannot check a then-and-now claim with the "then" missing, and this
     // archive exists to be checked.
-    strategy: b.strategy ? {
+    strategy: storedStrategy(b),
+  }));
+
+  return await writeBriefings(query, report, shaped);
+}
+
+/**
+ * The reading, shaped for storage.
+ *
+ * Lifted out of `saveArchiveReport` on 2026-09-10 so that a reading obtained
+ * AFTER the morning report can be written into the row the morning left empty,
+ * in exactly the shape the renderer already reads. Two functions building this
+ * object independently is two functions that will disagree the first time
+ * either is changed, and the disagreement would be invisible: both write valid
+ * JSON and only one of them matches what `src/ui/briefing.ts` looks for.
+ */
+export function storedStrategy(b: Briefing) {
+  return b.strategy ? {
       read: b.strategy.read,
       shift: b.strategy.shift ? {
         before: b.strategy.shift.before,
@@ -680,9 +697,19 @@ export async function saveArchiveReport(
         stories: b.strategy.outside.stories,
       } : null,
       provider: b.strategy.provider,
-    } : null,
-  }));
+    } : null;
+}
 
+/** The writes themselves, once the shaping above has been done. */
+async function writeBriefings(
+  query: Query, report: ArchiveReport,
+  shaped: Array<{
+    b: Briefing;
+    read: ReturnType<typeof provenance>;
+    payload: { themes: unknown[] } & Record<string, unknown>;
+    strategy: ReturnType<typeof storedStrategy>;
+  }>,
+): Promise<{ day: string; fields: number; themes: number; read: number }> {
   // ONE ROW PER FIELD PER DAY, which is the grain the reader navigates: down the
   // days for one field, across the fields for one day. Written one statement at
   // a time rather than in a single multi-row insert -- fourteen small writes
