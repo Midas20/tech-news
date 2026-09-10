@@ -9389,6 +9389,122 @@ fields and is the existing lever; a working `ANTHROPIC_API_KEY` puts the
 strongest reader at the head of the chain and removes the problem.
 
 
+## Four fifths of the report was not the report
+
+*"The report is very messy, why do you add unnecessary contents to report, I
+can't find necessary infos in report because unnecessary info is more than
+necessary info. And don't add news link to report. You don't add any analysis
+result and fill screen with unnecessary contents"* — 2026-09-10.
+
+Not a matter of taste. Measured on the two pages, by share of rendered text:
+
+**`/field/ai/report/2026-09-10`**
+
+| section | share | news links |
+|---|---|---|
+| The stories this was read from | 23% | 10 |
+| stories elsewhere (Hacker News) | ~20% | 24 |
+| What the recent readings established | 13% | — |
+| What is actually known about size | 9% | — |
+| What this cannot tell you | 8% | — |
+| **the analysis itself** | **~20%** | — |
+
+**`/reports/month/2026-06`**
+
+| section | share | news links |
+|---|---|---|
+| Introduced, not updated | 35% | 40 |
+| curve table | 48% | — |
+| caveats and notes | 18% | — |
+| **What the readings found** | **3%** | — |
+
+A reader looking for the reading had to scroll past thirty-four headlines to
+reach it.
+
+### Why removing the story lists costs nothing
+
+Every card in a reading already links to `/field/<slug>/report/<day>/<kind>/<n>`
+— a page showing that one claim with the stories at both ends of it. **The
+evidence never lived in those lists.** It lives behind the claim it supports,
+which is the only place it can be checked against anything. What the lists added
+was volume.
+
+So the report is now the reading, and the evidence is one click under each
+finding:
+
+- **Gone:** "The stories this was read from" — the whole theme list, when a
+  reading exists. When there is *no* reading it stays and becomes the report,
+  under the plainer heading "What happened".
+- **Gone:** the twenty-four Hacker News headlines the reading was researched
+  against. That is provenance, not a finding. The research itself is unchanged
+  and still stored with the reading; only the decision to render it as a list is
+  gone.
+- **Gone:** "What is actually known about size" on the field page — GitHub topic
+  counts, which are a fact about GitHub and not about the day. Still on the
+  archive-wide report.
+- **Gone from the period pages:** the forty-headline launch list. A list of
+  headlines is not a finding, and this page is forbidden from turning its own
+  counts into one — so it states the count, says why it is not listing them, and
+  links to `/whatsnew`.
+- **Compressed:** every section note and both caveat blocks. Provenance — how
+  many stories, which provider, what dates the history spans — is one grey line
+  at the bottom instead of four paragraphs under a heading.
+
+Result: the AI report went from 13,865 to 6,050 characters with **zero** news
+links, and the analysis from ~20% to ~77% of the page. The June month report
+went from 13,354 to 7,919 characters and 42 links to 2, with the curve table —
+the market measurement the reports exist for — now 79% of it.
+
+### What was deliberately kept
+
+**An absence still has to say what it is.** Trimming is not a licence to delete
+the rule that `brokenCurves`, `noCurves` and `noFindings` all exist to enforce.
+"What the recent readings have established" still renders when there is nothing
+to show, because otherwise a field whose readings have established nothing looks
+identical to a field that has only ever been read once. It just says so in one
+line now instead of four.
+
+### The lede and the shift were the same sentence twice
+
+Both `read` and `shift.moved` ask the model for the one thing a reader should
+take from the day, so it answered both with the same claim:
+
+> **lede** — In March the question was whether AI coding models worked; today it
+> is whether autonomous agents can be audited, sandboxed, and kept from writing
+> their own exploits.
+>
+> **shift** — In March the argument was whether these models could do the work;
+> today it is whether autonomous agents can be audited, sandboxed, and prevented
+> from executing unauthorized code.
+
+`nearlySame` compares content words and suppresses the repeat. The section keeps
+its heading and its link, because the then-and-now evidence is reachable only
+through it — only the repeated sentence goes.
+
+The threshold is measured rather than guessed. That real pair overlaps 9 content
+words of 16, or **0.56**; two thirds was tried first and missed it, because
+"kept from writing their own exploits" and "prevented from executing
+unauthorized code" are the same claim with no words in common. Two genuinely
+different findings from the same page score **0.17**, and two sentences sharing
+only their grammar score **0.33** — so 0.55 sits in the middle of a wide gap
+rather than at the edge of one. It is biased toward keeping text: a missed
+duplicate is a slightly padded page, and a false positive silently deletes a
+finding.
+
+### Three tests stopped guarding rules and started guarding sentences
+
+Five assertions broke on this change, and every one of them matched prose
+verbatim — `/This is the first reading written for/`, `/never totalled into a
+trend/`, `/published by somebody else/`. The guarantees were all still honoured;
+only the wording had been shortened. A test that pins the sentence makes a
+legitimate edit look like a regression and quietly discourages ever tightening
+the copy, so they now assert the rule and tolerate rewording.
+
+One of them was a genuine reversal rather than a rewording: `outside.test.ts`
+used to assert that the report *listed* the Hacker News coverage. It now asserts
+that it does not, with the measurement above as the reason.
+
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.

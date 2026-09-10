@@ -344,50 +344,72 @@ export async function renderFieldBriefing(
     ? strategyBlock(b.strategy, `/field/${encodeURIComponent(slug)}/report/${b.day}`)
     : noStrategy(b.strategyGap ?? 'none was written')}
 
-    <h2 class="sect">The stories this was read from</h2>
-    <p class="note">${b.strategy?.read ? `${escapeHtml(b.summary)} ` : ''}Everything
-      here is an event, cited; nothing here is a conclusion.</p>
-    ${b.themes.map(themeBlock).join('')}
+    ${/* THE STORY LIST IS NOT THE REPORT, AND IT WAS MOST OF IT.
+        "The report is very messy... I can't find necessary infos in report
+        because unnecessary info is more than necessary info. And don't add news
+        link to report. You don't add any analysis result and fill screen with
+        unnecessary contents" -- 2026-09-10.
 
-    ${(b.figures ?? []).length === 0 ? '' : `
-      <h2 class="sect">What is actually known about size</h2>
-      ${figuresBlock(b.figures ?? [])}`}
+        Measured on this page that morning, by share of rendered text:
+
+          The stories this was read from        23%   10 news links
+          stories elsewhere (Hacker News)      ~20%   24 news links
+          What the recent readings established  13%
+          What is actually known about size      9%   GitHub topic counts
+          What this cannot tell you              8%   almost entirely caveat
+          THE ANALYSIS ITSELF                  ~20%
+
+        Four fifths of the report was not the report. The objection is not a
+        matter of taste: a reader looking for the reading had to scroll past
+        thirty-four headlines to find it, and each headline was already
+        reachable one click deeper.
+
+        WHICH IS WHY REMOVING THEM COSTS NOTHING. Every card in the reading
+        links to `${base}/${kind}/${n}`, a page that shows that claim with the
+        stories at both ends of it. The evidence did not live in these lists; it
+        lives behind the claim it supports, which is the only place it can
+        actually be checked against something. What the lists added was volume.
+
+        The themes stay ONLY when there is no reading -- then they are the whole
+        report rather than a preamble to it. */''}
+    ${b.strategy ? '' : `
+      <h2 class="sect">What happened</h2>
+      ${b.themes.map(themeBlock).join('')}`}
 
     ${b.watch.length === 0 ? '' : `<h2 class="sect">What to watch</h2>${watchBlock(b.watch)}`}
 
-    ${/* EVERY CAVEAT IN ONE BLOCK. They used to be scattered: a note under the
-        reading, another under the history line, a third under the provider, and
-        a bulleted list of its own down here. Sprinkled hedging reads as evasion
-        and is skipped; gathered, it reads as a limit and gets read. */''}
-    <h2 class="sect">What this cannot tell you</h2>
-    <div class="mv-caveat">
-      ${b.strategy?.limits ? `<p><b>On the reading.</b>
-        ${escapeHtml(b.strategy.limits)}</p>` : ''}
-      ${b.gaps ? `<p><b>On the stories.</b> ${escapeHtml(b.gaps)}</p>` : ''}
-      <p><b>${escapeHtml(readLine(b))}</b> Nothing above counts stories to make a
-        point: what this archive happens to catch is a fact about its feed list,
-        not about ${escapeHtml(field.label)}.</p>
-      ${b.strategy?.history ? `<p>The reading was set against
-        ${b.strategy.history.n} earlier ${b.strategy.history.n === 1 ? 'story' : 'stories'}
-        on the same subjects, published between
-        ${escapeHtml(b.strategy.history.from)} and
-        ${escapeHtml(b.strategy.history.to)}.</p>` : ''}
-      ${b.strategy?.provider ? `<p>The reading was written by
-        ${escapeHtml(b.strategy.provider)}.</p>` : ''}
-    </div>
+    ${/* ONE LINE, NOT A PARAGRAPH, but not nothing. Trimming the page is not a
+        licence to delete the rule that an absence has to say what it is: with
+        this section simply gone, a reader cannot tell a field whose readings
+        have established nothing from a field that has only ever been read
+        once. It just does not need four sentences to say so. */
+      standing ? standingBlock(standing, field.label)
+        : `<h2 class="sect">What the recent readings have established</h2>
+      <p class="note">Nothing yet &mdash; this is the first reading written for
+      ${escapeHtml(field.label)}. This section fills as they accumulate.</p>`}
 
-    ${standing ? standingBlock(standing, field.label)
-    : `<h2 class="sect">What the recent readings have established</h2>
-      <p class="note">Nothing yet. This is the first reading written for
-      ${escapeHtml(field.label)}, so there is no run of earlier claims to set it
-      against. This section fills as the readings accumulate.</p>`}
+    ${/* EVERY CAVEAT IN ONE BLOCK, and now a short one. What limits the reading
+        is worth a reader's attention; how many stories were counted, which
+        provider wrote it and what dates the history spans are provenance, and
+        provenance belongs in one grey line at the bottom, not in four
+        paragraphs under a heading of their own. */''}
+    ${!b.strategy?.limits && !b.gaps ? '' : `
+      <h2 class="sect">What this cannot tell you</h2>
+      <div class="mv-caveat">
+        ${b.strategy?.limits ? `<p>${escapeHtml(b.strategy.limits)}</p>` : ''}
+        ${b.gaps ? `<p>${escapeHtml(b.gaps)}</p>` : ''}
+      </div>`}
 
     <h2 class="sect">Earlier briefings for ${escapeHtml(field.label)}</h2>
     ${fieldHistory(slug, history, b.day)}
 
-    <p class="note">Written ${escapeHtml(b.day)} by
-      ${escapeHtml(b.provider ?? 'an unnamed model')}, from the cited stories and nothing
-      else. <a href="/field/${encodeURIComponent(slug)}">See the stories themselves</a>.</p>`);
+    <p class="note">${escapeHtml(readLine(b))} Written ${escapeHtml(b.day)} by
+      ${escapeHtml(b.strategy?.provider ?? b.provider ?? 'an unnamed model')}${
+  b.strategy?.history ? `, against ${b.strategy.history.n} earlier
+      ${b.strategy.history.n === 1 ? 'story' : 'stories'} from
+      ${escapeHtml(b.strategy.history.from)}` : ''}. Nothing above counts stories
+      to make a point. <a href="/field/${encodeURIComponent(slug)}">See the
+      stories themselves</a>.</p>`);
 }
 
 // ---------------------------------------------------------------------------
@@ -564,6 +586,44 @@ export async function renderReportIndex(): Promise<string> {
  * a page per item. Nothing is deleted and nothing is summarised by a model --
  * the detail page shows the same stored text this page truncates.
  */
+/**
+ * Are these two sentences the same claim in different words?
+ *
+ * Content words only, so the rewording a model does between two prompts asking
+ * for the same thing does not hide the repetition: "the argument was whether
+ * these models could do the work" and "the question was whether AI coding
+ * models worked" share almost every word that carries meaning and almost none
+ * of the grammar.
+ *
+ * THE THRESHOLD IS MEASURED, NOT GUESSED. Against the real pair this exists
+ * for -- the AI report of 2026-09-10, whose lede and shift said the same thing
+ * -- the overlap is 9 content words of 16, or 0.56. Two thirds was tried first
+ * and missed it: "kept from writing their own exploits" and "prevented from
+ * executing unauthorized code" are the same claim with no words in common, so
+ * word overlap cannot go much above this even for a true duplicate.
+ *
+ * The margin below is what makes 0.55 safe rather than lucky. Two genuinely
+ * different findings from that same page score 0.17, and two sentences sharing
+ * only their grammar score 0.33 -- so the gap between a duplicate and a
+ * non-duplicate is wide, and the line sits in the middle of it rather than at
+ * the edge of either.
+ *
+ * Biased toward keeping text, deliberately: a missed duplicate is a slightly
+ * padded page, and a false positive silently deletes a finding.
+ */
+export function nearlySame(a: string, b: string): boolean {
+  const words = (s: string) => new Set(
+    s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+      .filter((w) => w.length > 3));
+  const x = words(a);
+  const y = words(b);
+  if (x.size === 0 || y.size === 0) return false;
+  const [small, large] = x.size <= y.size ? [x, y] : [y, x];
+  let shared = 0;
+  for (const w of small) if (large.has(w)) shared += 1;
+  return shared / small.size >= 0.55;
+}
+
 function strategyBlock(s: StoredStrategy, base: string): string {
   const card = (
     kind: string, i: number, title: string, line: string, tag = '',
@@ -575,10 +635,27 @@ function strategyBlock(s: StoredStrategy, base: string): string {
   // WHAT CHANGED, FIRST AND IN ONE SENTENCE. `moved` is written to be exactly
   // this: the change named in terms a reader can disagree with. The before and
   // after paragraphs, and the stories at both ends, are on its own page.
+  //
+  // UNLESS IT IS THE LEDE AGAIN, WHICH IT USUALLY IS. Both `read` and
+  // `shift.moved` ask the model for the one thing a reader should take from the
+  // day, so it answers both with the same sentence. On 2026-09-10 the AI report
+  // opened with "In March the question was whether AI coding models worked;
+  // today it is whether autonomous agents can be audited, sandboxed, and kept
+  // from writing their own exploits" and then, one heading later, "In March the
+  // argument was whether these models could do the work; today it is whether
+  // autonomous agents can be audited, sandboxed, and prevented from executing
+  // unauthorized code."
+  //
+  // Two paragraphs saying one thing is the shape of a page that feels padded,
+  // and it is the same objection as the citation duplication fixed on
+  // 2026-09-09. The section still earns its place -- the then-and-now evidence
+  // is only reachable through it -- so the heading and the link stay and the
+  // repeated sentence goes.
+  const echo = s.shift ? nearlySame(s.shift.moved, s.read) : false;
   const shift = !s.shift ? '' : `
     <h2 class="sect">What has changed in this field</h2>
     <a class="mv-item mv-lead" href="${base}/shift/1">
-      <p class="mv-moved">${escapeHtml(s.shift.moved)}</p>
+      ${echo ? '' : `<p class="mv-moved">${escapeHtml(s.shift.moved)}</p>`}
       <span class="mv-more">Then and now, with the stories at both ends</span>
     </a>`;
 
@@ -616,8 +693,11 @@ function strategyBlock(s: StoredStrategy, base: string): string {
     <div class="mv-items">${s.openings.map((o, i) =>
     card('opening', i, o.what, o.why)).join('')}</div>`;
 
+  // `elsewhereBlock` is gone from here: twenty-four Hacker News headlines the
+  // archive never collected, which is research provenance and not a finding.
+  // It is what the reading was set against, and the reading is what to publish.
   return `${shift}${curvesBlock(s)}${work}${direction}${positioning}`
-    + `${tensions}${openings}${elsewhereBlock(s)}`;
+    + `${tensions}${openings}`;
 }
 
 /**
@@ -631,10 +711,8 @@ function curvesBlock(s: StoredStrategy): string {
   if (!s.outside?.movements.length) return '';
   return `
     <h2 class="sect">What the public numbers did</h2>
-    <p class="note">Mean installs per day at each end of the window, from the
-      registry that publishes the package. Measured by them, not by us, and
-      anybody can re-run the query. <b>Downloads are not users</b> &mdash; they
-      include continuous integration and mirrors.</p>
+    <p class="note">Mean installs per day at each end of the window, published
+      by the registry. <b>Downloads are not users.</b></p>
     <table class="mv-curve">
       <thead><tr><th>Technology</th><th>Then</th><th>Now</th><th>Move</th></tr></thead>
       <tbody>${s.outside.movements.map((m) => `<tr>
@@ -648,25 +726,6 @@ function curvesBlock(s: StoredStrategy): string {
           ${m.changePct >= 0 ? '+' : ''}${m.changePct}%</td>
       </tr>`).join('')}</tbody>
     </table>`;
-}
-
-/** Coverage this archive does not hold. Folded away: it is background. */
-function elsewhereBlock(s: StoredStrategy): string {
-  if (!s.outside?.stories.length) return '';
-  return `
-    <details class="bf-more">
-      <summary>${s.outside.stories.length} stories elsewhere that this archive
-        never collected</summary>
-      <p class="note">From the public Hacker News index, oldest first. Headlines
-        and dates only &mdash; the bodies were not fetched, so nothing here is
-        summarised. Points are attention on one site on one day.</p>
-      <ul class="mv-elsewhere">${s.outside.stories.map((o) => `<li>
-        <a href="${escapeHtml(o.url ?? '#')}" rel="noreferrer noopener"
-           target="_blank">${escapeHtml(truncate(o.title, 110))}</a>
-        <span class="muted">${escapeHtml(o.when)}${o.host ? ` &middot; ${escapeHtml(o.host)}` : ''}${
-  o.score != null ? ` &middot; ${o.score} points` : ''}</span>
-      </li>`).join('')}</ul>
-    </details>`;
 }
 
 /** The kinds of finding that have a page of their own. */
@@ -862,11 +921,8 @@ function standingBlock(st: Standing, label: string): string {
 
   return `
     <h2 class="sect">What the recent readings have established</h2>
-    <p class="note">Every claim made about ${escapeHtml(label)} in the
-      ${st.readings} earlier reading${st.readings === 1 ? '' : 's'} between
-      ${escapeHtml(niceDay(st.from))} and ${escapeHtml(niceDay(st.to))}, with
-      what would show each one wrong. Nothing here is re-summarised: these are
-      the claims as they were written and cited on the day, so a reading that
-      has since been overtaken is visible rather than quietly dropped.</p>
+    <p class="note">Claims from the ${st.readings} earlier
+      reading${st.readings === 1 ? '' : 's'} of ${escapeHtml(label)}, with what
+      would show each one wrong.</p>
     ${claims}${openings}`;
 }

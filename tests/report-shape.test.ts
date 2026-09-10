@@ -20,6 +20,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { validateStrategy } from '../src/analysis/strategy.ts';
+import { nearlySame } from '../src/ui/briefing.ts';
 
 const page = readFileSync(new URL('../src/ui/briefing.ts', import.meta.url), 'utf8');
 const theme = readFileSync(new URL('../src/ui/theme.ts', import.meta.url), 'utf8');
@@ -184,7 +185,13 @@ describe('what the recent readings have established', () => {
   });
 
   it('says so plainly when there is only one reading so far', () => {
-    expect(page).toMatch(/This is the first reading written for/);
+    // The rule, not the sentence. Shortened on 2026-09-10 from four sentences
+    // to one while trimming the page -- an absence still has to say what it is,
+    // or a field whose readings have established nothing looks the same as a
+    // field that has only ever been read once. Matching the wording verbatim
+    // made a legitimate edit look like a regression.
+    expect(page).toMatch(/first reading written for/i);
+    expect(page).toMatch(/fills as they accumulate/i);
   });
 });
 
@@ -199,5 +206,59 @@ describe('the caveats are gathered, not sprinkled', () => {
   it('shows one lede rather than the summary and the reading both', () => {
     expect(page).toMatch(/ONE LEDE, NOT TWO/);
     expect(page).toMatch(/b\.strategy\?\.read/);
+  });
+});
+
+describe('the lede and the shift are not the same sentence twice', () => {
+  // Both `read` and `shift.moved` ask the model for the one thing a reader
+  // should take from the day, so it answers both with the same claim. Measured
+  // on the AI report, 2026-09-10:
+  //
+  //   lede   "In March the question was whether AI coding models worked; today
+  //           it is whether autonomous agents can be audited, sandboxed, and
+  //           kept from writing their own exploits."
+  //   shift  "In March the argument was whether these models could do the work;
+  //           today it is whether autonomous agents can be audited, sandboxed,
+  //           and prevented from executing unauthorized code."
+  //
+  // Two paragraphs saying one thing is what a padded page is made of.
+  it('spots a reworded repeat', () => {
+    expect(nearlySame(
+      'In March the question was whether AI coding models worked; today it is '
+      + 'whether autonomous agents can be audited, sandboxed, and kept from '
+      + 'writing their own exploits.',
+      'In March the argument was whether these models could do the work; today '
+      + 'it is whether autonomous agents can be audited, sandboxed, and '
+      + 'prevented from executing unauthorized code.')).toBe(true);
+  });
+
+  it('leaves two genuinely different claims alone', () => {
+    // The expensive mistake in the other direction: suppressing this would
+    // delete a finding, not a repetition.
+    expect(nearlySame(
+      'Enterprise concerns have pivoted from raw model capability to '
+      + 'compliance, auditability, and catastrophic loss of control.',
+      'Vulnerability surfaces have moved from application-layer web flaws to '
+      + 'agent-driven code injection and sandbox escapes.')).toBe(false);
+  });
+
+  it('is not fooled by shared grammar alone', () => {
+    // Short words are dropped, so two sentences that share only "the", "from"
+    // and "have" are not duplicates.
+    expect(nearlySame(
+      'The registry changed how it counts downloads this week.',
+      'The vendors changed how they price support this year.')).toBe(false);
+  });
+
+  it('says no rather than yes when a sentence is empty', () => {
+    expect(nearlySame('', 'anything at all here')).toBe(false);
+    expect(nearlySame('a b c', '')).toBe(false);
+  });
+
+  it('drops only the sentence, never the section', () => {
+    // The then-and-now evidence is reachable only through this card, so the
+    // heading and its link must survive the deduplication.
+    expect(page).toMatch(/echo \? '' :/);
+    expect(page).toMatch(/Then and now, with the stories at both ends/);
   });
 });

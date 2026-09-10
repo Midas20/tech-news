@@ -240,9 +240,23 @@ describe('the page shows the curve as a measurement, not as a claim', () => {
     expect(page).toMatch(/Downloads are not users/);
   });
 
-  it('lists outside coverage without summarising it', () => {
-    expect(page).toMatch(/stories elsewhere that this archive/);
-    expect(page).toMatch(/nothing here is\s*\n?\s*summarised/);
+  it('does not publish the outside coverage it was researched against', () => {
+    // REVERSED ON 2026-09-10, and the reason is worth keeping. This used to
+    // assert that the report listed the Hacker News stories the reading was set
+    // against -- twenty-four headlines, folded but present, and about a fifth
+    // of the page.
+    //
+    // "don't add news link to report... you fill screen with unnecessary
+    // contents." Measured against that page: the analysis was ~20% of it and
+    // thirty-four news links were ~43%. Those headlines are research
+    // provenance -- what the reading was compared WITH -- and provenance is not
+    // a finding. The curve above stays, because a number somebody else
+    // published is a measurement; a list of headlines is not.
+    //
+    // The research itself is unchanged and still stored with the reading; only
+    // the decision to render it as a list is gone.
+    expect(page).not.toMatch(/stories elsewhere that this archive/);
+    expect(page).toMatch(/research provenance and not a finding/);
   });
 
   it('stores what was researched rather than re-fetching it on view', () => {

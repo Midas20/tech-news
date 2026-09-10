@@ -111,12 +111,8 @@ function curves(ms: PeriodMovement[], span: Span): string {
   </tr>`;
   return `
     <h2 class="sect">What the public numbers did over this ${SPAN_LABEL[span]}</h2>
-    <p class="note">Daily downloads from the registry that publishes each
-      package, averaged over ${ms[0]!.edge} days at each end of the period.
-      <b>Downloads are not users:</b> a CI run that installs a package every
-      commit is counted, and a company mirroring it internally is not.
-      These are the only figures on this page, and every one of them is
-      published by somebody else.</p>
+    <p class="note">Mean daily downloads over ${ms[0]!.edge} days at each end,
+      published by the registry. <b>Downloads are not users.</b></p>
     <div class="mv-scroll"><table class="mv-curve">
       <thead><tr><th>Technology</th><th class="num">Start of period</th>
         <th class="num">End of period</th><th class="num">Change</th></tr></thead>
@@ -190,10 +186,9 @@ function findings(fs: PeriodFinding[], span: Span): string {
   if (fs.length === 0) return '';
   return `
     <h2 class="sect">What the readings found</h2>
-    <p class="note">The claims the daily readings made inside this
-      ${SPAN_LABEL[span]}, in the words they were written in and not
-      re-summarised. Each links to the field report that argued it, where the
-      stories at both ends are.</p>
+    <p class="note">What the daily readings concluded inside this
+      ${SPAN_LABEL[span]}, in their own words. Each links to the report that
+      argued it.</p>
     <ul class="mv-elsewhere">${fs.map((f) => `<li>
       <a href="/field/${encodeURIComponent(f.field)}/report/${escapeHtml(f.day)}">${
   escapeHtml(truncate(f.text, 190))}</a>
@@ -209,11 +204,8 @@ export function bodyOf(r: PeriodReport): string {
   return `
     ${r.names.length === 0 ? '' : `
       <h2 class="sect">Names this archive had never seen</h2>
-      <p class="note">Read out of the launch and funding headlines below, and in
-        none of the registries this archive holds. A name two publishers reached
-        for is corroborated; one is a claim. <b>This is a weaker test than it
-        looks:</b> it only finds a name somebody put in a headline in a form a
-        pattern recognises, so an absence here means nothing at all.</p>
+      <p class="note">Named in a headline and in none of the registries this
+        archive holds. <b>A weak test:</b> an absence here means nothing.</p>
       <ul class="mv-new-names">${r.names.map(nameCard).join('')}</ul>`}
 
     ${r.market.length === 0 ? '' : `
@@ -223,12 +215,26 @@ export function bodyOf(r: PeriodReport): string {
   more(r.market.length, r.totals.market)}</p>
       <ul class="bf-cites">${r.market.map(line).join('')}</ul>`}
 
+    ${/* THE FORTY-HEADLINE LIST IS GONE. On /reports/month/2026-06 it was 35%
+        of the page and forty news links, against 3% for the analysis -- "I
+        can't find necessary infos in report because unnecessary info is more
+        than necessary info" (2026-09-10).
+
+        A list of every launch in a month is not a finding about the month, and
+        this archive's own rule says it cannot become one: the counts measure
+        the feed list, so the page was forbidden from drawing any conclusion
+        from the very thing that filled it. What remains is what the period
+        actually says -- names nobody had seen, money that moved, what the
+        public curves did, and what the readings concluded.
+
+        The launches are still on /whatsnew and on each field's page, which is
+        where a reader who wants a list of launches is going anyway. */''}
     ${r.launches.length === 0 ? '' : `
-      <h2 class="sect">Introduced, not updated</h2>
-      <p class="note">The event classifier&rsquo;s verdict that a story
-        introduces something rather than changing something that already
-        existed.${more(r.launches.length, r.totals.launches)}</p>
-      <ul class="bf-cites">${r.launches.map(line).join('')}</ul>`}
+      <p class="note"><b>${r.totals.launches}</b> ${r.totals.launches === 1
+    ? 'story was' : 'stories were'} classed as introducing something rather than
+      updating it this ${SPAN_LABEL[r.span]}. They are not listed here &mdash;
+      a list of headlines is not a finding, and this page may not turn its own
+      counts into one. <a href="/whatsnew">See what is new</a>.</p>`}
 
     ${r.shift ? brokenCurves(r.shift, r.span)
     : r.movements.length > 0 ? curves(r.movements, r.span)
@@ -282,13 +288,14 @@ export async function renderPeriodReport(span: Span, key: string): Promise<strin
 
     ${spanNav(span, siblingKeys(r.range))}
 
-    <p class="note"><b>Nothing on this page was written by a model.</b> The
-      lists are the pipeline&rsquo;s own verdicts about which stories introduce
-      something rather than update it; the figures come from public package
-      registries; the claims are quoted from the daily readings that already
-      argued them. A ${SPAN_LABEL[span]} of stories does not fit in a prompt,
-      and a report that needs a provider is a report that is missing on the day
-      every provider is rate-limited &mdash; which is the day this was written.</p>
+    ${/* THE CAVEATS WERE A QUARTER OF THIS PAGE. Measured 2026-09-10 on
+        /reports/month/2026-06: 27% of the rendered text was explanation of what
+        the page is, against 4% for what the readings found. Prose defending a
+        page is not the page. Each of these still says its one thing; none of
+        them says it twice. */''}
+    <p class="note"><b>No model wrote any of this.</b> The figures are from
+      public package registries; the claims are quoted from the daily readings
+      that argued them.</p>
 
     ${nothing
     ? empty(`No launch, market move or public curve fell inside this ${SPAN_LABEL[span]}. `
@@ -296,20 +303,11 @@ export async function renderPeriodReport(span: Span, key: string): Promise<strin
       + 'archive caught, not about the industry.', 'sparkle')
     : bodyOf(r)}
 
-    <h2 class="sect">What this cannot tell you</h2>
-    <div class="mv-caveat">
-      <p><b>Nothing here is counted.</b> How many launches this archive caught in
-        a ${SPAN_LABEL[span]} is a fact about its feed list, so the lists are
-        shown and never totalled into a trend. The only figures on the page are
-        the download curves, and those are somebody else&rsquo;s measurements.</p>
-      <p><b>A launch is a claim that something is new</b>, made by whoever
-        published it. This page passes that claim on with its source attached
-        and does not check it.</p>
-      <p><b>The period is only as good as the collection under it.</b> A quiet
-        ${SPAN_LABEL[span]} here may be a quiet ${SPAN_LABEL[span]} in the
-        industry or a ${SPAN_LABEL[span]} when this archive was not
-        collecting, and this page cannot tell you which.</p>
-    </div>`);
+    <p class="note"><b>What this cannot tell you.</b> Nothing here is counted:
+      what this archive catches is a fact about its feed list, so no total on
+      this page becomes a trend. A quiet ${SPAN_LABEL[span]} may be a quiet
+      ${SPAN_LABEL[span]} or a ${SPAN_LABEL[span]} this archive was not
+      collecting, and it cannot tell you which.</p>`);
 }
 
 /**

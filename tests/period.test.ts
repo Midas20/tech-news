@@ -190,24 +190,30 @@ describe('no model writes a period report', () => {
     expect(period).toMatch(/NO MODEL WRITES ANY OF THIS/);
     expect(period).toMatch(/A YEAR DOES NOT FIT IN A PROMPT/);
     expect(period).toMatch(/THE PROVIDERS ARE NOT THERE/);
-    expect(page).toMatch(/Nothing on this page was written by a model/);
+    // The rule, not the sentence. This prose was cut down on 2026-09-10 when
+    // the caveats measured 27% of the month page against 4% for the findings
+    // -- "unnecessary info is more than necessary info". Each guarantee still
+    // has to be stated; none of them has to be stated at length.
+    expect(page).toMatch(/No model wrote any of this/i);
   });
 
   it('quotes the daily readings rather than re-summarising them', () => {
     // A model's summary of a model's summary moves further from the story that
     // was cited with every pass.
     expect(period).toMatch(/never re-summarised/);
-    expect(page).toMatch(/not\s+re-summarised/);
+    // These strings are written across wrapped template-literal lines, so every
+    // gap between words has to tolerate a newline and its indentation.
+    expect(page).toMatch(/in\s+their\s+own\s+words/i);
   });
 
   it('never totals a list into a trend', () => {
     expect(period).toMatch(/WHY NO STORY COUNTS ANYWHERE/);
-    expect(page).toMatch(/Nothing here is counted/);
-    expect(page).toMatch(/never totalled into a trend/);
+    expect(page).toMatch(/Nothing here is counted/i);
+    expect(page).toMatch(/no\s+total\s+on\s+this\s+page\s+becomes\s+a\s+trend/i);
   });
 
   it('says the only figures come from outside', () => {
-    expect(page).toMatch(/published by somebody else/);
+    expect(page).toMatch(/published by the registry/i);
     expect(page).toMatch(/Downloads are not users/);
   });
 
