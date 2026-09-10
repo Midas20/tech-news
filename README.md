@@ -9169,10 +9169,17 @@ ever wrote one.
 
 **What this does not do is produce the missing analysis.** Period reports
 collect the claims the daily readings already argued; they do not write new
-ones, because a month of stories does not fit in a prompt and a report that
-needs a provider is missing on the day every provider is rate-limited. Filling
-in June would mean backfilling daily reports across June, which is bounded by
-the provider budget and not by any code here. The half of the period report that
+ones.
+
+> **Superseded the same day.** The reason given here — "a month of stories does
+> not fit in a prompt" — was never measured, and is false: July 2026 holds 360
+> readable stories and a daily briefing already reads 80. Periods are now read
+> in their own right. See *[A month can be read. It was never
+> tried.](#a-month-can-be-read-it-was-never-tried)* The paragraph is left
+> standing because a wrong reason that shaped two days of work is worth more
+> visible than deleted.
+
+The half of the period report that
 answers *"recognising market change and finding new market"* — the curve table,
 the funding and acquisition list, the unrecognised names — is complete for every
 period the archive holds stories for, and needs no model at all.
@@ -9566,6 +9573,96 @@ comparison is not.
 Both ends default to empty at render time — these come out of a `jsonb` column,
 and a report page that throws on a row written last week is worse than one that
 shows the claim without its earlier end.
+
+
+## A month can be read. It was never tried.
+
+2026-09-10, against `/reports/month/2026-07` — a page that answered a request
+for analysis with a careful paragraph explaining why there could not be any:
+*"hey kidding me?"*
+
+The explanation was accurate, useless, and rested on a claim that had never been
+measured.
+
+### "A period of stories does not fit in a prompt"
+
+That sentence was written about the **year** — the archive holds 5,461 stories
+back to 2010, and it is true of those — and was then repeated about every span,
+in the page copy, in the module header, and in this README as settled design.
+Measured:
+
+| period | readable stories |
+|---|---|
+| 2026-05 | 163 |
+| 2026-06 | 266 |
+| 2026-07 | **360** |
+| 2026-08 | 790 |
+| 2026-09 | 1,882 |
+
+A daily field briefing already reads **80 stories in a ~54,000 character
+prompt**. July, diversified, is the same size. The period pages were refusing,
+on principle, work that fits.
+
+### What it took: almost no machinery
+
+`analyseField` already takes its window and its corpus as **arguments**, and
+derives the earlier end from the subjects the corpus names. Point it at a month
+instead of a day and it does the same thing over a longer baseline: what was
+being said about these subjects *before* the month, against what was said during
+it. That is exactly the comparison asked for two messages earlier — *"analysis
+the news in the period with old news that related to each news"* — and one model
+call produces it.
+
+What was actually missing was somewhere to put the answer, so `period_readings`
+(migration 0080) stores one reading per `(span, key)`, in the same shape as
+`field_briefings.strategy` so a single renderer serves both.
+
+Three decisions worth keeping:
+
+- **One call per period, not one per field.** A month report is one report.
+  Reading it fourteen times would cost fourteen calls from the binding
+  constraint on this system and answer a per-field question nobody asked.
+- **The corpus is archive-wide.** `fieldPool` filters on
+  `stacks && stack_expand(field)`, which is right for a field page and wrong
+  here: a funding round belongs to no field, and the period report is the one
+  page where it has always belonged.
+- **A table, not a column** — the opposite of the call made in 0076. A field
+  briefing's strategy is a column because its citations are indices into that
+  briefing's story list and the two cannot outlive each other. A period has no
+  such row to hang from; `/reports/month/2026-07` is composed on demand from
+  several queries. Citations are resolved to real stories at write time for the
+  same reason field briefings resolve theirs: retention deletes the stories
+  within four months and the comparison has to outlive them.
+
+The `period-reading` job (hourly, one period per run) walks the last four
+months, the last eight weeks and the current year, newest first, and reads
+whichever has not been read. It looks back four months and no further, because
+retention has already deleted the evidence beyond that — a period read while its
+stories still existed keeps its reading for ever, which is the point of storing
+it rather than composing it on view.
+
+### What stopped it landing the same day
+
+Nothing to do with the design. Every provider was spent:
+
+```
+claude              no credentials
+gemini-flash        429  (daily request cap)
+gemini-flash-lite   429  (daily request cap)
+cerebras            402  payment required
+groq                budget exhausted
+```
+
+Both Gemini tiers hit their **daily** cap, and a smaller prompt does not help
+with a request-per-day limit. The cause is the one already documented under
+*The report gets one attempt, at the worst hour of the day*: overnight ingestion
+spent roughly 650 model calls — 319 `classify`, 281 `entity_extraction`, 53
+`dedup_pairs` — before any analysis asked for its first.
+
+**This is now the binding constraint on every remaining complaint about these
+reports**, and no further code change reaches it. The two things that do:
+reserve a share of the daily budget for analysis rather than letting ingestion
+take it all, or put a working `ANTHROPIC_API_KEY` at the head of the chain.
 
 
 ## Not built, and why

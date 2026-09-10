@@ -11,6 +11,8 @@
 
 import { wrap, pageHead, empty, escapeHtml, truncate, niceDay } from './html.ts';
 import { crumbsFor } from './nav.ts';
+import { periodReading, type StoredPeriodReading } from '../analysis/periodread.ts';
+import type { StoredStrategy } from '../analysis/briefing.ts';
 import { fieldLabel } from '../vocab/fields.ts';
 import {
   periodReport, spanKeys, latestDay, periodIndex, keyFor, edgeFor,
@@ -182,6 +184,111 @@ function noFindings(r: PeriodReport): string {
       ${escapeHtml(niceDay(c.firstEver))}.</p>`;
 }
 
+/**
+ * The period's own reading, when it has one.
+ *
+ * 2026-09-10, against /reports/month/2026-07: "hey kidding me?" -- at a page
+ * that explained at length why it had no analysis. The explanation rested on a
+ * claim ("a period of stories does not fit in a prompt") that was true of the
+ * year it was written about and had never been checked against a month. July
+ * holds 360 readable stories; a daily briefing already reads 80.
+ *
+ * So a period is now read in its own right, once, against the stories that came
+ * before it -- and this renders what it found. Same shape as a daily reading,
+ * because it is produced by the same function over a longer window.
+ *
+ * NO DETAIL PAGES. A field reading's cards link to `/field/<f>/report/<day>/
+ * <kind>/<n>`, which exists because a daily briefing is a stored row with a
+ * route. A period is composed on demand, so the evidence is inline: the two
+ * ends under each claim, and nothing deeper to click into.
+ */
+function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Span): string {
+  const claim = (title: string, body: string, then: unknown, now: unknown,
+    tag = '') => `<article class="mv-then-now">
+      <p class="mv-claim">${escapeHtml(title)}${tag}</p>
+      ${body ? `<p class="mv-body">${escapeHtml(truncate(body, 420))}</p>` : ''}
+      ${pair(then, now)}
+    </article>`;
+
+  const pair = (then: unknown, now: unknown): string => {
+    const t = asCites(then);
+    const n = asCites(now);
+    if (t.length === 0 && n.length === 0) return '';
+    return `<div class="mv-ends">
+      ${t.length === 0
+    ? `<div class="mv-end"><h4>Before</h4><p class="muted">No earlier story on
+         this subject is held.</p></div>`
+    : `<div class="mv-end"><h4>Before</h4><ul>${endOf(t)}</ul></div>`}
+      ${n.length === 0 ? ''
+    : `<div class="mv-end"><h4>In this ${escapeHtml(SPAN_LABEL[span])}</h4>
+         <ul>${endOf(n)}</ul></div>`}
+    </div>`;
+  };
+
+  const HORIZON: Record<string, string> = {
+    now: 'the work exists now', months: 'as the change lands',
+    watch: 'plausible, unproven',
+  };
+
+  const sections = [
+    s.shift ? `<h2 class="sect">What changed over this ${SPAN_LABEL[span]}</h2>
+      <div class="mv-items">${claim(s.shift.moved, s.shift.after ?? '',
+    s.shift.then, s.shift.now)}</div>` : '',
+
+    (s.work ?? []).length === 0 ? '' : `
+      <h2 class="sect">Where the work is</h2>
+      <p class="note">Things one person could start on remotely, with the
+        evidence that somebody would pay for it.</p>
+      <div class="mv-items">${s.work.map((w) => claim(w.what, w.why, [], w.evidence,
+    ` <span class="mv-tag ${escapeHtml(w.horizon)}">${
+      escapeHtml(HORIZON[w.horizon] ?? w.horizon)}</span>`)).join('')}</div>`,
+
+    (s.direction ?? []).length === 0 ? '' : `
+      <h2 class="sect">Where this is going</h2>
+      <div class="mv-items">${s.direction.map((d) =>
+    claim(d.claim, d.reasoning, d.then, d.now)).join('')}</div>`,
+
+    (s.positioning ?? []).length === 0 ? '' : `
+      <h2 class="sect">What each company appears to be betting on</h2>
+      <div class="mv-items">${s.positioning.map((p) => claim(p.who, p.bet, [],
+    p.evidence, p.firstParty
+      ? ' <span class="mv-tag watch">says so itself</span>' : '')).join('')}</div>`,
+
+    (s.openings ?? []).length === 0 ? '' : `
+      <h2 class="sect">What nobody has taken</h2>
+      <div class="mv-items">${s.openings.map((o) =>
+    claim(o.what, o.why, [], o.evidence)).join('')}</div>`,
+  ].filter(Boolean).join('');
+
+  return `
+    ${s.read ? `<p class="mv-lede">${escapeHtml(s.read)}</p>` : ''}
+    ${sections}
+    ${s.limits ? `<p class="note"><b>What this cannot settle.</b>
+      ${escapeHtml(s.limits)}</p>` : ''}
+    <p class="note">Read from ${r.storiesRead} stories published in this
+      ${escapeHtml(SPAN_LABEL[span])}${r.historyRead
+  ? `, against ${r.historyRead} earlier ${r.historyRead === 1 ? 'story' : 'stories'}
+      on the same subjects${r.historyFrom
+    ? ` going back to ${escapeHtml(niceDay(r.historyFrom))}` : ''}` : ''}${
+  r.provider ? `, by ${escapeHtml(r.provider)}` : ''}. The stories were
+      diversified first, so no publisher and no project can speak for the
+      ${escapeHtml(SPAN_LABEL[span])}.</p>`;
+}
+
+/** Citations as they come out of jsonb: shape-checked, never trusted. */
+function asCites(v: unknown): FindingCite[] {
+  return (Array.isArray(v) ? v : [])
+    .filter((c): c is Record<string, unknown> => Boolean(c) && typeof c === 'object')
+    .map((c) => ({
+      title: String(c.title ?? '').trim(),
+      when: String(c.when ?? '').trim(),
+      source: String(c.source ?? '').trim(),
+      ...(typeof c.id === 'string' ? { id: c.id } : {}),
+    }))
+    .filter((c) => c.title !== '')
+    .slice(0, 2);
+}
+
 /** One end of a comparison: the story, and when it said so. */
 function endOf(cs: FindingCite[]): string {
   return cs.map((c) => `<li>${c.id
@@ -319,7 +426,11 @@ function siblingKeys(range: { from: string }): Record<Span, string> {
 }
 
 export async function renderPeriodReport(span: Span, key: string): Promise<string> {
-  const r = await periodReport(span, key).catch(() => null);
+  const [r, reading] = await Promise.all([
+    periodReport(span, key).catch(() => null),
+    span === 'day' ? Promise.resolve(null)
+      : periodReading(span, key).catch(() => null),
+  ]);
   const crumbs = crumbsFor('/reports', 'Reports');
 
   if (!r) {
@@ -340,14 +451,25 @@ export async function renderPeriodReport(span: Span, key: string): Promise<strin
 
     ${spanNav(span, siblingKeys(r.range))}
 
+    ${/* THE PERIOD'S OWN READING, FIRST. Everything below it is the evidence
+        and the measurements; this is the report. It is absent until the period
+        has been read -- the `period-reading` job walks the recent spans -- and
+        the page below stands on its own when it is. */
+      reading ? readingBlock(reading.strategy as StoredStrategy, reading, span) : ''}
+
     ${/* THE CAVEATS WERE A QUARTER OF THIS PAGE. Measured 2026-09-10 on
         /reports/month/2026-06: 27% of the rendered text was explanation of what
         the page is, against 4% for what the readings found. Prose defending a
         page is not the page. Each of these still says its one thing; none of
         them says it twice. */''}
-    <p class="note"><b>No model wrote any of this.</b> The figures are from
-      public package registries; the claims are quoted from the daily readings
-      that argued them.</p>
+    <p class="note">${reading
+    ? '<b>The reading above was written by a model, from the stories cited '
+      + 'under it and nothing else.</b> Everything below it was not: the figures '
+      + 'are from public package registries and the claims are quoted from the '
+      + 'daily readings that argued them.'
+    : '<b>No model wrote any of this.</b> The figures are from public package '
+      + 'registries; the claims are quoted from the daily readings that argued '
+      + 'them.'}</p>
 
     ${nothing
     ? empty(`No launch, market move or public curve fell inside this ${SPAN_LABEL[span]}. `

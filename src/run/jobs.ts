@@ -27,6 +27,9 @@
 //   releases     6h   make the release feeds match Settings, both directions.
 //   tune         1h   move each source's interval toward its observed rate, and
 //                     make sure next month's partition exists.
+//   period-rd    1h   read one unread week, month or year against what came
+//                     before it. One model call each; the backlog drains itself
+//                     whenever quota exists.
 //   readings     3h   fill in the strategic readings the 07:00 report could not
 //                     get. The report has one attempt and takes it at the hour
 //                     the overnight ingestion has just emptied the free tiers;
@@ -73,6 +76,7 @@ import {
 import { evaluateSources, summariseEvaluate } from '../maintain/evaluate.ts';
 import { runDailyReport, summariseReport } from '../analysis/briefing.ts';
 import { topUpReadings, summariseTopUp } from '../analysis/readings.ts';
+import { readBacklog, summariseRead } from '../analysis/periodread.ts';
 import {
   resolveBacklog, refreshSeries, summariseResolve, summariseSeries,
 } from '../analysis/downloads.ts';
@@ -342,6 +346,27 @@ export function buildJobs(opts: JobOptions = {}): Job[] {
           worker.query<T>(sql, params);
         const ctx: LlmContext = { db: worker, env: process.env as Record<string, string> };
         return summariseTopUp(await topUpReadings(ctx, query, worker));
+      },
+    },
+    {
+      name: 'period-reading',
+      what: 'Read a week, month or year against the stories that came before it.',
+      // ONE PERIOD PER RUN, hourly. Each is a single model call and the useful
+      // property is not speed: it is that the backlog drains by itself whenever
+      // quota exists, rather than waiting for somebody to ask for a month that
+      // has never been read.
+      //
+      // The claim these pages used to make -- that a period of stories does not
+      // fit in a prompt -- was true of the year and had never been checked
+      // against a month. July 2026 holds 360 readable stories; a daily briefing
+      // already reads 80 in a ~54,000 character prompt.
+      everySeconds: 3600,
+      leaseSeconds: 1800,
+      async run({ worker }) {
+        const query = <T>(sql: string, params: unknown[] = []) =>
+          worker.query<T>(sql, params);
+        const ctx: LlmContext = { db: worker, env: process.env as Record<string, string> };
+        return summariseRead(await readBacklog(ctx, query, worker));
       },
     },
     {
