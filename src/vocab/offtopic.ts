@@ -74,12 +74,58 @@ export const CONSUMER_HOSTS = [
   'theverge.com', 'engadget.com', 'gizmodo.com', 'mashable.com', 'slashgear.com',
   'bgr.com', 'androidauthority.com', '9to5mac.com', '9to5google.com', 'macrumors.com',
   'androidcentral.com', 'windowscentral.com', 'xda-developers.com', 'lifehacker.com',
-  // Startup and venture press: the beat is who raised money, not what shipped.
-  'techcrunch.com', 'venturebeat.com', 'sifted.eu', 'crunchbase.com',
-  // General-interest science and technology magazines.
-  'arstechnica.com', 'wired.com', 'newscientist.com', 'popsci.com',
+  'newscientist.com', 'popsci.com',
   // Hobbyist, and hosting offers.
   'hackaday.com', 'hackster.io', 'lowendbox.com', 'lowendtalk.com',
+];
+
+/**
+ * The venture and industry press, WHICH THIS ARCHIVE NOW WANTS.
+ *
+ * These sat in CONSUMER_HOSTS under the comment "startup and venture press: the
+ * beat is who raised money, not what shipped". That was a correct reading of
+ * the purpose as it stood when the list was written, and the purpose has since
+ * changed twice underneath it:
+ *
+ *   2026-08-28  "The purpose of this project is finding new stacks and market
+ *               via news." MARKET became the second target and an event_kind.
+ *   2026-09-09  "detect IT market changes and find opportunity that I can
+ *               attend to work remotely and create income as freelancer."
+ *
+ * Under either of those, "who raised money" is not the reason to refuse an
+ * outlet; it is one of the two things being collected. The list was never
+ * revisited, so the archive spent three weeks with `market` as a first-class
+ * event kind and every outlet that covers it blocked at the host level. That
+ * is why the market lane held 3 stories against 1,560 `change`.
+ *
+ * Reported on 2026-09-09 with fourteen headlines this archive should have had
+ * and did not -- Mistral raising $3.5B, Qualcomm handing Amazon $4B of
+ * warrants, Google Cloud's Accenture deal, DeepSeek hiring 150 engineers,
+ * H-1B denials targeting IT outsourcing wage levels. Every one of them is a
+ * market move, and the last is labour-market intelligence aimed squarely at
+ * the reader this archive is for.
+ *
+ * KEPT SEPARATE FROM CONSUMER_HOSTS RATHER THAN DELETED, because the consumer
+ * judgement above is still right and was re-measured on the same day. Sampling
+ * thirty items per feed through the whole gauntlet with the host block lifted:
+ *
+ *   Ars Technica   15/20   exploits, industry accusations, security
+ *   The Verge       9/10   "there aren't AirPods with cameras yet",
+ *                          "the black iPhone Pro returns"
+ *
+ * The Verge clears the gates easily and publishes exactly what the original
+ * comment said it publishes. It stays blocked. Ars Technica does not, and does
+ * not.
+ *
+ * ONE HONEST CAVEAT ON THE MEASUREMENT: an audition reads the feed only, while
+ * ingest fetches the article page for anything short. TechCrunch scored 1/20
+ * with 18 `too_short`, which measures its feed stubs rather than its
+ * journalism, so its real yield is unknown until it has run. It is admitted on
+ * the strength of its BEAT, not of that number.
+ */
+export const MARKET_PRESS_HOSTS = [
+  'techcrunch.com', 'venturebeat.com', 'sifted.eu', 'crunchbase.com',
+  'arstechnica.com', 'wired.com',
 ];
 
 /**

@@ -37,11 +37,44 @@ describe('what is refused', () => {
     for (const h of ['reuters.com', 'theguardian.com', 'apnews.com']) {
       expect(isOffTopicHost(h)).toBe(true);
     }
-    for (const h of ['techcrunch.com', 'tomshardware.com', 'zdnet.com', 'engadget.com']) {
+    // CONSUMER tech, which is a beat about the phone in your pocket. Verified
+    // on 2026-09-09 by sampling The Verge with the block lifted: 9 of 10 items
+    // cleared every gate, and they were "there aren't AirPods with cameras yet"
+    // and "the black iPhone Pro returns". The block is doing what it says.
+    for (const h of ['tomshardware.com', 'zdnet.com', 'engadget.com',
+      'theverge.com', 'gizmodo.com', '9to5mac.com']) {
       expect(isOffTopicHost(h)).toBe(true);
     }
     expect(isOffTopicHost('twitter.com')).toBe(true);
     expect(isOffTopicHost('x.com')).toBe(true);
+  });
+
+  it('does NOT refuse the venture and industry press any more', () => {
+    // These moved to MARKET_PRESS_HOSTS on 2026-09-09. They were blocked under
+    // "the beat is who raised money, not what shipped", which was right when
+    // the only target was new stacks and wrong from the day MARKET became the
+    // second one -- three weeks during which `market` was a first-class event
+    // kind and every outlet covering it was refused at the host level.
+    //
+    // The report that forced it listed fourteen headlines this archive should
+    // have had: Mistral raising $3.5B, Qualcomm handing Amazon $4B of warrants,
+    // DeepSeek hiring 150 engineers, H-1B denials targeting IT outsourcing wage
+    // levels.
+    for (const h of ['techcrunch.com', 'crunchbase.com', 'venturebeat.com',
+      'sifted.eu', 'arstechnica.com', 'wired.com']) {
+      expect(isOffTopicHost(h), h).toBe(false);
+    }
+  });
+
+  it('still refuses general news, which was never about the beat', () => {
+    // The distinction that survives: an outlet whose technology coverage is
+    // written for somebody who does not use it. A funding round is a fact
+    // about a technology's market; "Jellyfish-hit French nuclear plant shuts
+    // down three reactors" is not, and the event classifier reads it as a
+    // change because the grammar really is the grammar of one.
+    for (const h of ['nytimes.com', 'economist.com', 'axios.com', 'forbes.com']) {
+      expect(isOffTopicHost(h), h).toBe(true);
+    }
   });
 });
 

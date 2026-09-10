@@ -8617,6 +8617,144 @@ themselves failing. It needs an OAuth application credential, which is separate
 work and not yet done.
 
 
+## Nothing had reloaded the code
+
+Reported on 2026-09-09: *"5,276 this number is less when it is a month's news
+from 507 sources, And in the report there aren't change."*
+
+The second half had an embarrassing cause and it is worth writing down because
+it will happen again. The running process — web server and scheduler in one —
+had been started at 14:55. The report page was edited at 16:49. Node loads
+modules once at startup, so the page being served and the collector doing the
+collecting were both running code from before every fix of that afternoon: no
+Atom xhtml parser, no refusal memory, no `shift` section.
+
+There were also **eleven** copies of `src/main.ts` running, ten of them orphans
+dating from 1 September. They divide work rather than duplicating it — the
+scheduler takes a claim per job — so they were not corrupting anything, but they
+were holding database connections and running four different generations of the
+code.
+
+**A code change is not deployed until the process restarts.** Nothing in this
+repository restarts it, and `npm run live` is a foreground process with no
+supervisor. That is the gap; the fix for this instance was to kill all eleven
+and start one.
+
+## 406 of 507 sources had produced nothing
+
+The first half of the same report was the more serious one, and the arithmetic
+behind it was sound. 507 sources, 5,276 stories. Where is everything?
+
+| | sources |
+|---|---|
+| have produced at least one story | 101 |
+| produced nothing, and report an error | 43 |
+| **produced nothing, and report no error at all** | **363** |
+
+Those 363 fetch, parse, see items, and keep zero. gihyo.jp had offered 4,145
+items and kept none. Every one of the 363 had `tech_only = false`, and the
+dominant refusal was `not_an_event`.
+
+This is the finding `seeds/measured-breadth.ts` already recorded on 2026-08-31 —
+*IEEE Spectrum 1 of 27 → 27 of 27*, *InfoWorld 3 of 20 → 19 of 20* — once
+`tech_only` was set. The flag was then applied to the ten sources named in that
+file and to none of the other 363. With `EVENTS_ONLY` on, a publication that
+writes about technology is vetoed sentence by sentence while a vendor changelog
+sails through.
+
+`npm run audition:silent` finishes that job the way it was started: it re-runs
+every silent source against its own live feed with articles allowed, and sets
+the flag only on those that clear `KEEP_BAR` on the measurement. Seven cleared —
+TC39 proposals 17/17, GitHub Engineering 10/10, Xe Iaso 10/10, @IT 16/30,
+Console.dev 5/6, JavaScript Weekly 4/4, This Week in Rust 4/4.
+
+**356 did not, and their refusals are real:**
+
+| refusal | what it is |
+|---|---|
+| `lang_gate` | gihyo.jp, OSCHINA, heise, ITmedia, InfoQ 中国, Mercari. `ALLOWED_LANGUAGES` is `['en']`. These are good sources refused for being in Japanese, German and Chinese — a real decision with real cost, and one that belongs to whoever decides what languages this archive reads, not to a script about a boolean column. |
+| `blocked_host` | see below |
+| `build:tag_page` | Bun, Pulumi, Unsloth, PEFT "releases" feeds that serve a tag listing rather than release notes |
+
+The script deliberately does not touch any of those three, does not lower
+`KEEP_BAR`, and does not unblock a host.
+
+## The blocklist was answering a question the project had stopped asking
+
+Reported minutes later, with fourteen headlines and their URLs: *"This the AI
+news title and their url I collected, but you can't find these news, it means
+there are big problem in your source list."*
+
+There was a problem and it was not the size of the list. **Seven of the twelve
+domains were refused at the host level**, before any filter saw them, by this
+entry in `src/vocab/offtopic.ts`:
+
+```
+// Startup and venture press: the beat is who raised money, not what shipped.
+'techcrunch.com', 'venturebeat.com', 'sifted.eu', 'crunchbase.com',
+```
+
+That comment was a correct reading of the purpose on the day it was written. The
+purpose then changed underneath it, twice:
+
+- **2026-08-28** — *"The purpose of this project is finding new stacks and market
+  via news."* `market` became the second target and an `event_kind`.
+- **2026-09-09** — *"detect IT market changes and find opportunity that I can
+  attend to work remotely and create income as freelancer."*
+
+Under either of those, "who raised money" is not a reason to refuse an outlet; it
+is one of the two things being collected. So the archive ran for three weeks with
+`market` as a first-class event kind and every outlet covering it blocked at the
+host level — which is the actual explanation for a note recorded weeks earlier
+and never resolved: *the market lane held 3 stories against 1,560 `change`.*
+
+Two of the fourteen domains were not blocked at all. Schneier on Security was
+simply never registered.
+
+### Measured before deciding, including the ones that stayed out
+
+Sampling each live feed through the whole gauntlet with the host block lifted.
+`market` counts items the event classifier filed as a market move — the lane
+that was empty:
+
+| source | kept | market | outcome |
+|---|---|---|---|
+| SiliconANGLE | 29/30 | 6 | added |
+| Ars Technica | 15/20 | 0 | unblocked |
+| Crunchbase News | 8/10 | 4 | added |
+| Schneier on Security | 5/10 | 0 | added |
+| The Next Web | 3/10 | 0 | added |
+| TechCrunch | 1/20 | 0 | unblocked — see below |
+| **The Verge** | **9/10** | 0 | **stays blocked** |
+| Wired | 0/30 | 0 | not admitted |
+
+Crunchbase returned the exact headline reported missing — *"Mistral AI Raises
+$3.5B At $24B Valuation In Another Record European AI Round"* — and Schneier
+returned both of the ones attributed to it.
+
+**The Verge is the control, and it is why `CONSUMER_HOSTS` survives.** It clears
+every gate at 9 of 10, and what it clears with is *"there aren't AirPods with
+cameras yet and I hope it stays that way"* and *"the black iPhone Pro returns"*.
+The consumer-press judgement is still exactly right about the outlets it was
+written about. So the venture and industry press moved to a separate
+`MARKET_PRESS_HOSTS` list rather than the consumer list being deleted.
+
+### An audition reads the feed; ingest reads the page
+
+TechCrunch scored **1 of 20**, with 18 refused as `too_short`. It was admitted
+anyway, on its beat rather than its score, with the number written down and the
+reason stated: an audition sees only the feed, while ingest fetches the article
+page for anything short.
+
+Polled for real, immediately afterwards: **19 of 20 kept.** The caveat was worth
+writing and the source was worth admitting on it. Wired stays out on a different
+number — 11 of 30 refused as `off_topic:commerce`, which is a shopping-guide
+business attached to a magazine, and no amount of page fetching changes that.
+
+Registry 507 → 511. Three of the fourteen reported headlines are now in the
+archive under their own bylines.
+
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.
