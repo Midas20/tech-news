@@ -9505,6 +9505,69 @@ used to assert that the report *listed* the Hacker News coverage. It now asserts
 that it does not, with the measurement above as the reason.
 
 
+## The finding is the pair, not the sentence
+
+*"the report still looks like filter news by date. The core content that the
+result that analysis the news in the period with old news that related to each
+news"* — 2026-09-10.
+
+The claims were already on the period pages. The **pairing** was not — so the
+page was a run of assertions over a date range, which is what "filtered by date"
+describes.
+
+> The agent pitch has moved from how clever the model is to what it is allowed
+> to touch.
+
+Read on its own that is a claim about change with an invisible past, and it
+cannot be told apart from a claim about today. What makes it an analysis is the
+other half:
+
+> **Before** — Introducing Mistral Small 4 · Mistral AI news · 2026-03-16
+> **Now** — CVE-2026-78379, consent bypass in Strands Agents Tools · AWS
+> Security Bulletins · 2026-09-09
+
+### The data was there the whole time
+
+`then` and `now` are copied onto every reading at write time — precisely because
+retention deletes the underlying stories within four months and a then-and-now
+claim has to outlive them. `findingsIn` was reading the claim text and throwing
+the citations away. Measured on 2026-09-10: **ten of twelve** directional claims
+and **five of five** shifts carried a populated earlier end.
+
+So this was not a missing capability. It was a rendering decision, and it was
+the wrong one.
+
+### This is not the headline list that was removed the same day
+
+Those were every story of the period, in date order, attached to no claim — 40
+links, 35% of the month page. These are at most **two** stories at each end of
+**one** claim, and the relation between the two is the content. Everything
+beyond two stays on the field report the claim links to.
+
+Three other things moved with it:
+
+- **The analysis is first on the page.** It used to sit under the new names, the
+  funding list, the launch list and the curve table, so a reader met four
+  inventories before reaching a single conclusion.
+- **Claims that show their earlier end sort first.** A finding with only a
+  present end is a statement about today filed under a change heading, and it
+  should not be what a reader meets at the top.
+- **A missing earlier end says so**, and is counted in the note — *"12 of 31 had
+  no earlier end in the archive and state only the present"* — rather than
+  quietly rendering as a one-sided claim. Same rule as everywhere else on these
+  pages: an absent half otherwise reads as "nothing came before", which is a
+  claim about the industry rather than about this archive's depth on a subject.
+
+`shift.thenOutside` is the fallback earlier end, used when the archive's own
+past does not reach: the reading is told to prefer outside evidence for anything
+older than a few weeks, because the retention window is four months and the
+comparison is not.
+
+Both ends default to empty at render time — these come out of a `jsonb` column,
+and a report page that throws on a row written last week is worse than one that
+shows the claim without its earlier end.
+
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.

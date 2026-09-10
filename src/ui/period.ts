@@ -15,7 +15,7 @@ import { fieldLabel } from '../vocab/fields.ts';
 import {
   periodReport, spanKeys, latestDay, periodIndex, keyFor, edgeFor,
   SPAN_LABEL, SPANS,
-  type Span, type PeriodReport, type PeriodMovement, type PeriodFinding,
+  type Span, type PeriodReport, type PeriodMovement, type PeriodFinding, type FindingCite,
   type PeriodRow, type CohortBreak,
 } from '../analysis/period.ts';
 import type { NewThing, NewName } from '../analysis/whatsnew.ts';
@@ -182,18 +182,63 @@ function noFindings(r: PeriodReport): string {
       ${escapeHtml(niceDay(c.firstEver))}.</p>`;
 }
 
-function findings(fs: PeriodFinding[], span: Span): string {
-  if (fs.length === 0) return '';
+/** One end of a comparison: the story, and when it said so. */
+function endOf(cs: FindingCite[]): string {
+  return cs.map((c) => `<li>${c.id
+    ? `<a href="/read/${escapeHtml(c.id)}">${escapeHtml(truncate(c.title, 100))}</a>`
+    : escapeHtml(truncate(c.title, 100))}
+    <span class="muted">${escapeHtml(c.source)}${
+  c.when ? ` &middot; ${escapeHtml(c.when)}` : ''}</span></li>`).join('');
+}
+
+/**
+ * What changed, against what it changed from.
+ *
+ * "the report still looks like filter news by date. The core content [is] the
+ * result that analysis the news in the period with old news that related to
+ * each news" -- 2026-09-10.
+ *
+ * The claims were already here and the pairing was not, so the page read as a
+ * run of assertions over a date range. A claim about change whose earlier end
+ * is invisible cannot be told apart from a claim about today; showing both ends
+ * is the difference between an analysis and a filter.
+ *
+ * THE EVIDENCE IS TWO STORIES, NOT A LIST OF THEM. The headline lists removed
+ * from these pages earlier the same day were every story of the period in date
+ * order, attached to no claim. These are at most two stories at each end of one
+ * claim, and the relation between them is the finding. Everything further is on
+ * the field report the claim links to.
+ */
+function findings(all: PeriodFinding[], span: Span): string {
+  if (all.length === 0) return '';
+  // BOTH ENDS DEFAULTED, because these come out of a jsonb column. Every reading
+  // written from now on carries `then` and `now`, and a row written before this
+  // change does not -- and a report page that throws on an old row is worse
+  // than one that shows the claim without its earlier end.
+  const fs = all.map((f) => ({ ...f, then: f.then ?? [], now: f.now ?? [] }));
+  const paired = fs.filter((f) => f.then.length > 0).length;
   return `
-    <h2 class="sect">What the readings found</h2>
+    <h2 class="sect">What changed, and against what</h2>
     <p class="note">What the daily readings concluded inside this
-      ${SPAN_LABEL[span]}, in their own words. Each links to the report that
-      argued it.</p>
-    <ul class="mv-elsewhere">${fs.map((f) => `<li>
-      <a href="/field/${encodeURIComponent(f.field)}/report/${escapeHtml(f.day)}">${
-  escapeHtml(truncate(f.text, 190))}</a>
-      <span class="muted">${escapeHtml(fieldLabel(f.field))} &middot; ${
-  escapeHtml(f.day)}</span></li>`).join('')}</ul>`;
+      ${SPAN_LABEL[span]}, in their own words, each set against the earlier
+      story it revises.${paired < fs.length ? ` ${fs.length - paired} of
+      ${fs.length} had no earlier end in the archive and state only the
+      present.` : ''}</p>
+    <div class="mv-items">${fs.map((f) => `<article class="mv-then-now">
+      <a class="mv-claim"
+         href="/field/${encodeURIComponent(f.field)}/report/${escapeHtml(f.day)}">${
+  escapeHtml(truncate(f.text, 220))}</a>
+      <span class="muted">${escapeHtml(fieldLabel(f.field))} &middot; read
+        ${escapeHtml(f.day)}</span>
+      ${f.then.length === 0 && f.now.length === 0 ? '' : `<div class="mv-ends">
+        ${f.then.length === 0
+    ? `<div class="mv-end"><h4>Before</h4><p class="muted">No earlier story on
+         this subject is held, so this claim rests on the present alone.</p></div>`
+    : `<div class="mv-end"><h4>Before</h4><ul>${endOf(f.then)}</ul></div>`}
+        ${f.now.length === 0 ? ''
+    : `<div class="mv-end"><h4>Now</h4><ul>${endOf(f.now)}</ul></div>`}
+      </div>`}
+    </article>`).join('')}</div>`;
 }
 
 /** The three lists, shared by the period page and the lead card. */
@@ -202,6 +247,14 @@ export function bodyOf(r: PeriodReport): string {
     (total > shown ? ` <span class="muted">${total - shown} more not listed.</span>` : '');
 
   return `
+    ${/* THE ANALYSIS IS THE FIRST THING ON THE PAGE, not the last.
+        It used to sit under the new names, the funding list, the launch list
+        and the curve table -- so a reader met four inventories before reaching
+        a single conclusion, and the page read as news filtered by date. What
+        the readings concluded, each against the story it revises, is the report;
+        the measurements below are what supports it. */''}
+    ${r.findings.length > 0 ? findings(r.findings, r.span) : noFindings(r)}
+
     ${r.names.length === 0 ? '' : `
       <h2 class="sect">Names this archive had never seen</h2>
       <p class="note">Named in a headline and in none of the registries this
@@ -238,8 +291,7 @@ export function bodyOf(r: PeriodReport): string {
 
     ${r.shift ? brokenCurves(r.shift, r.span)
     : r.movements.length > 0 ? curves(r.movements, r.span)
-      : noCurves(r.span, r.days)}
-    ${r.findings.length > 0 ? findings(r.findings, r.span) : noFindings(r)}`;
+      : noCurves(r.span, r.days)}`;
 }
 
 /** The other spans, as links, so a reader can widen or narrow the same view. */

@@ -355,12 +355,47 @@ export async function movementsIn(
 // What the readings already found
 // ---------------------------------------------------------------------------
 
+/** One end of a comparison, as it was copied at write time. */
+export interface FindingCite {
+  title: string;
+  when: string;
+  source: string;
+  id?: string;
+}
+
 export interface PeriodFinding {
   field: string;
   day: string;
   /** The claim, as the reading wrote it. */
   text: string;
   kind: 'shift' | 'direction';
+  /**
+   * THE EARLIER END, AND THE CURRENT ONE. This is the finding.
+   *
+   * "the report still looks like filter news by date. The core content [is] the
+   * result that analysis the news in the period with old news that related to
+   * each news" -- 2026-09-10.
+   *
+   * The objection is precise and it was right. A period page listed the claims
+   * its daily readings made, as sentences, with the stories at either end of
+   * each one reachable only by opening the field report that argued it. Read on
+   * its own, a claim about change with an invisible past is indistinguishable
+   * from a claim about today -- so the page read as a set of assertions over a
+   * date range, which is what "filtered by date" describes.
+   *
+   * `then` and `now` are the pairing that makes it an analysis rather than a
+   * list: the older story a subject was last seen in, against the one that
+   * revises it. Both are already stored with every reading -- copied at write
+   * time precisely because retention deletes the stories and the comparison has
+   * to outlive them -- and were simply never rendered here.
+   *
+   * NOT THE SAME THING AS THE HEADLINE LISTS REMOVED EARLIER THE SAME DAY. Those
+   * were every story of the period, in date order, attached to no claim. These
+   * are two stories attached to one claim, and the relation between them IS the
+   * content.
+   */
+  then: FindingCite[];
+  now: FindingCite[];
 }
 
 /**
@@ -383,12 +418,35 @@ export async function findingsIn(
 
   const out: PeriodFinding[] = [];
   const seen = new Set<string>();
+
+  /**
+   * Two per end, at most.
+   *
+   * A claim resting on six citations is not better evidenced than one resting
+   * on two; it is just longer, and length is what was wrong with these pages.
+   * The rest stay one click away on the field report that argued the claim.
+   */
+  const cites = (v: unknown): FindingCite[] =>
+    (Array.isArray(v) ? v : [])
+      .filter((c): c is Record<string, unknown> => Boolean(c) && typeof c === 'object')
+      .map((c) => ({
+        title: String(c.title ?? '').trim(),
+        when: String(c.when ?? '').trim(),
+        source: String(c.source ?? '').trim(),
+        ...(typeof c.id === 'string' ? { id: c.id } : {}),
+      }))
+      .filter((c) => c.title !== '')
+      .slice(0, 2);
+
   for (const r of rows) {
     const s = r.strategy as {
-      shift?: { moved?: unknown } | null;
-      direction?: Array<{ claim?: unknown }> | null;
+      shift?: { moved?: unknown; then?: unknown; now?: unknown;
+        thenOutside?: unknown } | null;
+      direction?: Array<{ claim?: unknown; then?: unknown; now?: unknown }> | null;
     } | null;
-    const push = (text: unknown, kind: PeriodFinding['kind']) => {
+    const push = (
+      text: unknown, kind: PeriodFinding['kind'], then: unknown, now: unknown,
+    ) => {
       const t = typeof text === 'string' ? text.trim() : '';
       if (t.length < 20) return;
       // The same claim can be reached by two fields on the same day -- an AI
@@ -397,11 +455,24 @@ export async function findingsIn(
       const key = t.toLowerCase().replace(/\s+/g, ' ');
       if (seen.has(key)) return;
       seen.add(key);
-      out.push({ field: r.field, day: r.day, text: t, kind });
+      out.push({ field: r.field, day: r.day, text: t, kind,
+        then: cites(then), now: cites(now) });
     };
-    push(s?.shift?.moved, 'shift');
-    for (const d of s?.direction ?? []) push(d?.claim, 'direction');
+    // `thenOutside` is the fallback earlier end: the reading is told to prefer
+    // it for anything older than a few weeks, because this archive's own past
+    // is only as deep as the retention window and the comparison is not.
+    push(s?.shift?.moved, 'shift',
+      (Array.isArray(s?.shift?.then) && s.shift.then.length > 0)
+        ? s.shift.then : s?.shift?.thenOutside,
+      s?.shift?.now);
+    for (const d of s?.direction ?? []) push(d?.claim, 'direction', d?.then, d?.now);
   }
+
+  // CLAIMS THAT SHOW THEIR EARLIER END COME FIRST. A finding with both ends is
+  // the thing this section exists to publish; one with only a present end is a
+  // statement about today that happened to be filed under a change heading, and
+  // it should not be what a reader meets at the top of the page.
+  out.sort((a, b) => Number(b.then.length > 0) - Number(a.then.length > 0));
   return out.slice(0, cap);
 }
 

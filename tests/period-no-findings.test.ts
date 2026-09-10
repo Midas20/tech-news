@@ -115,12 +115,103 @@ describe('a period that did find things', () => {
     { briefings: 5, withReading: 5, firstEver: '2026-09-09' },
     { findings: [{ field: 'ai', day: '2026-09-10', kind: 'direction',
       text: 'The agent pitch has moved from how clever the model is to what it '
-        + 'is allowed to touch' }] })));
+        + 'is allowed to touch',
+      then: [{ title: 'Claude 3.5 Sonnet is the most capable model yet',
+        when: '2026-03-04', source: 'Anthropic', id: 'a1' }],
+      now: [{ title: 'AWS opens its Agent Registry with scoped identities',
+        when: '2026-09-10', source: 'AWS News Blog', id: 'b2' }] }] })));
 
   it('shows the findings and none of the explanations', () => {
     expect(html).toContain('allowed to touch');
     expect(html).not.toContain('provider failure');
     expect(html).not.toContain('no report ran');
     expect(html).not.toContain('nothing has been read yet');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The finding is the pair, not the sentence
+// ---------------------------------------------------------------------------
+//
+// "the report still looks like filter news by date. The core content [is] the
+// result that analysis the news in the period with old news that related to
+// each news" -- 2026-09-10.
+//
+// The claims were already on the page and the pairing was not, so it read as a
+// run of assertions over a date range. A claim about change whose earlier end is
+// invisible cannot be told apart from a claim about today.
+//
+// The data was there the whole time: `then` and `now` are copied onto every
+// reading at write time -- precisely because retention deletes the stories
+// within four months and the comparison has to outlive them -- and the period
+// page simply never read them. Measured on 2026-09-10, ten of twelve directional
+// claims and five of five shifts carried a populated earlier end.
+
+const finding = (over = {}) => ({
+  field: 'ai', day: '2026-09-10', kind: 'direction' as const,
+  text: 'The agent pitch has moved from how clever the model is to what it is '
+    + 'allowed to touch',
+  then: [{ title: 'Claude 3.5 Sonnet is the most capable model yet',
+    when: '2026-03-04', source: 'Anthropic', id: 'a1' }],
+  now: [{ title: 'AWS opens its Agent Registry with scoped identities',
+    when: '2026-09-10', source: 'AWS News Blog', id: 'b2' }],
+  ...over,
+});
+
+describe('a claim is shown against the story it revises', () => {
+  const html = strip(bodyOf(report(
+    { briefings: 5, withReading: 5, firstEver: '2026-09-09' },
+    { findings: [finding()] })));
+
+  it('shows both ends, labelled', () => {
+    expect(html).toContain('Before');
+    expect(html).toContain('Now');
+    expect(html).toContain('Claude 3.5 Sonnet');
+    expect(html).toContain('AWS opens its Agent Registry');
+  });
+
+  it('dates each end, so the reader can see the gap', () => {
+    // "Before" and "Now" mean nothing without the two dates: six months apart
+    // is a direction, six hours apart is the same story twice.
+    expect(html).toContain('2026-03-04');
+    expect(html).toContain('2026-09-10');
+  });
+
+  it('leads the page with the analysis, not with the inventories', () => {
+    const full = bodyOf(report(
+      { briefings: 5, withReading: 5, firstEver: '2026-09-09' },
+      { findings: [finding()],
+        names: [{ name: 'VCR', sources: 1, stories: [{ when: '2026-06-29' }] }] }));
+    expect(full.indexOf('What changed, and against what'))
+      .toBeLessThan(full.indexOf('Names this archive had never seen'));
+  });
+});
+
+describe('a claim with no earlier end', () => {
+  const html = strip(bodyOf(report(
+    { briefings: 5, withReading: 5, firstEver: '2026-09-09' },
+    { findings: [finding({ then: [] })] })));
+
+  it('says the earlier end is missing rather than implying there was none', () => {
+    // The same rule as everywhere else on these pages: an absent half reads as
+    // "nothing came before", which is a claim about the industry rather than
+    // about the archive's depth on that subject.
+    expect(html).toMatch(/No earlier story on this subject is held/i);
+  });
+
+  it('is counted in the note at the top', () => {
+    expect(html).toMatch(/1 of 1 had no earlier end/i);
+  });
+});
+
+describe('a reading stored before the pairing existed', () => {
+  it('renders without throwing', () => {
+    // These come out of a jsonb column. A page that 500s on a row written last
+    // week is worse than one that shows the claim without its earlier end.
+    const old = { field: 'ai', day: '2026-09-09', kind: 'direction' as const,
+      text: 'Cost per solved task has moved out of the footnotes' };
+    expect(() => bodyOf(report(
+      { briefings: 4, withReading: 4, firstEver: '2026-09-09' },
+      { findings: [old] }))).not.toThrow();
   });
 });
