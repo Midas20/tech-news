@@ -1719,6 +1719,33 @@ h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
    .bf-fp, and the only colour on the page. */
 .mv-cites a.fp{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
 
+/* WHAT THE PUBLIC NUMBERS DID. The only quantities on a field report that come
+   with no story attached, so they are set as a table rather than as prose -- a
+   number in a sentence reads as an assertion, and a number in a row with its
+   date and its registry beside it reads as a measurement somebody can go and
+   repeat. */
+.mv-curve{width:100%;border-collapse:collapse;margin:0 0 var(--s-5);
+  font:400 var(--t-13)/1.5 var(--sans)}
+.mv-curve th{text-align:left;padding:0 var(--s-3) var(--s-2) 0;
+  font:600 var(--t-11)/1.6 var(--sans);letter-spacing:.05em;text-transform:uppercase;
+  color:var(--ink-4);border-bottom:1px solid var(--line)}
+.mv-curve td{padding:var(--s-2) var(--s-3) var(--s-2) 0;border-bottom:1px solid var(--line);
+  vertical-align:baseline;color:var(--ink-2)}
+.mv-curve td:first-child{color:var(--ink);font-weight:500}
+.mv-curve .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mv-curve .muted{display:block;font:400 var(--t-11)/1.5 var(--sans);color:var(--ink-4)}
+.mv-curve .up{color:var(--good,#1a7f37);font-weight:600}
+.mv-curve .down{color:var(--bad,#b3261e);font-weight:600}
+
+/* COVERAGE WE DO NOT HOLD. A list of headlines and dates, deliberately not
+   styled like a finding: there is no body behind any of these and nothing here
+   was summarised. */
+.mv-elsewhere{list-style:none;margin:0 0 var(--s-5);padding:0}
+.mv-elsewhere li{padding:var(--s-2) 0;border-bottom:1px solid var(--line)}
+.mv-elsewhere a{color:var(--ink);text-decoration:none;font:400 var(--t-14)/1.5 var(--sans)}
+.mv-elsewhere a:hover{text-decoration:underline}
+.mv-elsewhere .muted{display:block;font:400 var(--t-11)/1.6 var(--sans);color:var(--ink-4)}
+
 /* WHAT HAS CHANGED. The first thing on a field report and the reason the page
    exists: the field then, the field now, side by side so the comparison is a
    comparison rather than a paragraph claiming to be one. Reported on

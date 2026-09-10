@@ -21,13 +21,19 @@
 
 import type { LlmContext } from '../llm/router.ts';
 import { llmCall } from '../llm/router.ts';
-import type { Item, Window, Query } from './corpus.ts';
+import { subjectsOf, type Item, type Window, type Query } from './corpus.ts';
 import { q } from '../ui/db.ts';
 import { withHistory, historyPacket, historySpan } from './context.ts';
+import { gatherOutside, outsidePacket, type Outside } from './outside.ts';
 import { corpusPacket, figuresPacket } from './briefing.ts';
 import type { PublicFigure } from './public.ts';
 
 export const STRATEGY_VERSION = 'strategy-v1';
+
+/** The start of the research window: LOOKBACK_DAYS before the report window. */
+function earlier(from: string): string {
+  return new Date(Date.parse(from) - 180 * 86_400_000).toISOString();
+}
 
 /** Below this, there is not enough of a past to compare today against. */
 export const MIN_HISTORY = 4;
@@ -46,6 +52,17 @@ export interface Direction {
   falsifier: string;
   /** Indices into the prior corpus, 1-based, as shown to the model. */
   then: number[];
+  /**
+   * Indices into the OUTSIDE evidence, 1-based, as an alternative earlier end.
+   *
+   * The pairing rule caps a reading at the depth of our own collection, and
+   * this archive began collecting on 2026-09-08. A dated item from the Hacker
+   * News index, or a download curve reaching back six months, is a real earlier
+   * end and a more checkable one than our corpus -- anybody can re-run the same
+   * public query. So `then` OR `thenOutside` satisfies the rule; neither being
+   * present still drops the claim.
+   */
+  thenOutside: number[];
   /** Indices into today's corpus, 1-based. */
   now: number[];
 }
@@ -77,6 +94,7 @@ export interface Shift {
   /** What moved between them, in one sentence a reader can disagree with. */
   moved: string;
   then: number[];
+  thenOutside: number[];
   now: number[];
 }
 
@@ -131,6 +149,8 @@ export interface Strategy {
   limits: string;
   /** The span of earlier coverage this was drawn against. */
   history: { from: string; to: string; n: number } | null;
+  /** What was found outside the archive, and what it was asked about. */
+  outside: Outside | null;
   provider?: string;
   /**
    * The earlier stories themselves, so `then` indexes can be resolved into
@@ -160,6 +180,7 @@ export type StrategyOutcome =
 interface RawStrategy {
   read?: unknown;
   shift?: unknown;
+  outside?: unknown;
   work?: unknown[];
   direction?: unknown[];
   positioning?: unknown[];
@@ -182,8 +203,8 @@ interface RawStrategy {
  * dropped, but a claim left with an empty side after stripping goes.
  */
 export function validateStrategy(
-  raw: RawStrategy, todaySize: number, priorSize: number,
-): Omit<Strategy, 'history' | 'provider'> {
+  raw: RawStrategy, todaySize: number, priorSize: number, outsideSize = 0,
+): Omit<Strategy, 'history' | 'provider' | 'outside'> {
   const inRange = (n: unknown, max: number): boolean =>
     Number.isInteger(Number(n)) && Number(n) >= 1 && Number(n) <= max;
 
@@ -204,11 +225,14 @@ export function validateStrategy(
         reasoning: text(item.reasoning),
         falsifier: text(item.falsifier),
         then: ids(item.then, priorSize),
+        thenOutside: ids(item.thenOutside, outsideSize),
         now: ids(item.now, todaySize),
       };
     })
-    // Both ends, or it is not a claim about change.
-    .filter((d) => d.claim && d.then.length > 0 && d.now.length > 0);
+    // Both ends, or it is not a claim about change. The earlier end may be our
+    // own history or public evidence from outside it; it may not be absent.
+    .filter((d) => d.claim && (d.then.length > 0 || d.thenOutside.length > 0)
+      && d.now.length > 0);
 
   // THE SHIFT, HELD TO THE PAIRING RULE. This is the most prominent paragraph
   // on the page, which makes it the one most worth inventing and the one a
@@ -220,10 +244,12 @@ export function validateStrategy(
     after: text(rawShift.after),
     moved: text(rawShift.moved),
     then: ids(rawShift.then, priorSize),
+    thenOutside: ids(rawShift.thenOutside, outsideSize),
     now: ids(rawShift.now, todaySize),
   };
   const shift = shiftDraft.before && shiftDraft.after && shiftDraft.moved
-    && shiftDraft.then.length > 0 && shiftDraft.now.length > 0
+    && (shiftDraft.then.length > 0 || shiftDraft.thenOutside.length > 0)
+    && shiftDraft.now.length > 0
     ? shiftDraft : null;
 
   const positioning = (Array.isArray(raw.positioning) ? raw.positioning : [])
@@ -297,7 +323,8 @@ export function validateStrategy(
  * and the strategy on one page is looking at one numbering, not two.
  */
 export function strategyPacket(
-  field: string, win: Window, today: Item[], prior: Item[], figures: PublicFigure[],
+  field: string, win: Window, today: Item[], prior: Item[],
+  figures: PublicFigure[], outside: Outside | null = null,
 ): string {
   return [
     `FIELD: ${field}`,
@@ -307,6 +334,10 @@ export function strategyPacket(
     '',
     historyPacket(prior),
     '',
+    // OUTSIDE BEFORE THE FIGURES, because this is the block that answers "what
+    // was happening before we were watching", and the figures block answers a
+    // smaller question about how large a population is today.
+    ...(outside ? [outsidePacket(outside), ''] : []),
     figuresPacket(figures),
   ].join('\n');
 }
@@ -327,11 +358,48 @@ export async function analyseField(
   figures: PublicFigure[],
   query: Query = q,
   minHistory = MIN_HISTORY,
+  /**
+   * The database the outside research writes its cache to.
+   *
+   * Separate from `query` because that one is the reader and this one writes:
+   * a lookup that has been resolved, a curve that has been fetched and a story
+   * that has been seen are all worth keeping so the next report does not ask
+   * the same public API the same question.
+   */
+  outsideDb: import('../db/client.ts').Db | null = null,
 ): Promise<StrategyOutcome> {
-  const { prior } = await withHistory(field, win, today, query);
-  if (prior.length < minHistory) return { status: 'no_history', prior: prior.length };
+  const { prior, subjects } = await withHistory(field, win, today, query);
 
-  const packet = strategyPacket(field, win, today, prior, figures);
+  // RESEARCHED BEFORE THE HISTORY IS JUDGED, and that ordering is the point.
+  // "don't be limited to db's past news" (2026-09-09): an archive nine days old
+  // has almost no past of its own, so refusing to write until OUR history is
+  // deep enough would refuse for ever. Outside evidence is a real earlier end.
+  //
+  // A WIDER SUBJECT LIST THAN THE HISTORY USES, and the width is the fix. The
+  // history is led by the twenty subjects today's stories name most often, and
+  // measured on 2026-09-09 those are category tags -- `ai`, `cloud`,
+  // `open-source`, `startups` -- plus vendor organisations whose repo_url is
+  // `github.com/aws`. None of them is a package, so the first run produced zero
+  // curves on a day when polars, langchain, streamlit and jinja all had six
+  // months of series available. Today's corpus named 333 technologies and 69 of
+  // them have a real repository; they are simply further down the list.
+  //
+  // gatherOutside filters this for curves and takes the head of it for search,
+  // so passing more helps the first and leaves the second alone.
+  const researchSubjects = subjectsOf(today, 60);
+  const outside = outsideDb
+    ? await gatherOutside(outsideDb, researchSubjects, earlier(win.from), win.from)
+      .catch(() => null)
+    : null;
+  const outsideSize = outside?.stories.length ?? 0;
+
+  // Below the minimum on both, there is nothing to compare today against and
+  // no amount of prompting will invent one.
+  if (prior.length < minHistory && outsideSize === 0) {
+    return { status: 'no_history', prior: prior.length };
+  }
+
+  const packet = strategyPacket(field, win, today, prior, figures, outside);
   const res = await llmCall<RawStrategy>(ctx, 'field_strategy', packet, {
     field, version: STRATEGY_VERSION, window: win,
   });
@@ -343,7 +411,7 @@ export async function analyseField(
     return { status: 'unwritten', why: `no model answered: ${why}` };
   }
 
-  const kept = validateStrategy(res.value, today.length, prior.length);
+  const kept = validateStrategy(res.value, today.length, prior.length, outsideSize);
 
   // Nothing survived the pairing rule. The model answered and every claim it
   // made was unsupportable -- which is a fault in the writing, not in the
@@ -362,6 +430,7 @@ export async function analyseField(
     strategy: {
       ...kept,
       history: historySpan(prior),
+      outside,
       provider: res.provider,
       priorCorpus: prior,
     },

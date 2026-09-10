@@ -574,6 +574,52 @@ function strategyBlock(s: StoredStrategy): string {
       </div>
     </section>`;
 
+  // WHAT THE PUBLIC NUMBERS DID, and the only place on this page where a
+  // quantity appears without a story attached.
+  //
+  // Asked for on 2026-09-09: "I want to know trend of the tech, not summary of
+  // the news." A download curve is the one thing here that is a trend in the
+  // ordinary sense -- a measured series with two dated ends -- and it is
+  // measured by the registry rather than by us, which is what makes it
+  // quotable at all. See analysis/outside.ts on why a package is only accepted
+  // once its declared repository matches the taxonomy's.
+  const curves = !s.outside?.movements.length ? '' : `
+    <h2 class="sect">What the public numbers did</h2>
+    <p class="note">Mean installs per day at each end of the window, from the
+      registry that publishes the package. Measured by them, not by us, and
+      anybody can re-run the query. <b>Downloads are not users</b> &mdash; they
+      include continuous integration and mirrors, so read a move as a change in
+      how often something is installed and nothing more.</p>
+    <table class="mv-curve">
+      <thead><tr><th>Technology</th><th>Then</th><th>Now</th><th>Move</th></tr></thead>
+      <tbody>${s.outside.movements.map((m) => `<tr>
+        <td>${escapeHtml(m.slug)}
+          <span class="muted">${escapeHtml(m.registry)}:${escapeHtml(m.package)}</span></td>
+        <td class="num">${m.before.toLocaleString('en-US')}
+          <span class="muted">${escapeHtml(m.fromDay)}</span></td>
+        <td class="num">${m.after.toLocaleString('en-US')}
+          <span class="muted">${escapeHtml(m.toDay)}</span></td>
+        <td class="num ${m.changePct >= 0 ? 'up' : 'down'}">
+          ${m.changePct >= 0 ? '+' : ''}${m.changePct}%</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+
+  // COVERAGE WE DO NOT HOLD. Listed rather than summarised: we have the
+  // headline and the date and not the body, and writing a summary of an
+  // article nobody fetched is the one thing this archive must never do.
+  const elsewhere = !s.outside?.stories.length ? '' : `
+    <h2 class="sect">What was being discussed elsewhere</h2>
+    <p class="note">Stories about these subjects that this archive never
+      collected, from the public Hacker News index, oldest first. Headlines and
+      dates only &mdash; the bodies were not fetched, so nothing here is
+      summarised. Points are attention on one site on one day.</p>
+    <ul class="mv-elsewhere">${s.outside.stories.map((o) => `<li>
+      <a href="${escapeHtml(o.url ?? '#')}" rel="noreferrer noopener"
+         target="_blank">${escapeHtml(truncate(o.title, 110))}</a>
+      <span class="muted">${escapeHtml(o.when)}${o.host ? ` · ${escapeHtml(o.host)}` : ''}${
+  o.score != null ? ` · ${o.score} points` : ''}</span>
+    </li>`).join('')}</ul>`;
+
   // WHERE THE WORK IS, SECOND. This archive exists so one person can find
   // remote work they could take; a page that puts vendor strategy above that
   // is answering a question its reader did not ask.
@@ -645,7 +691,7 @@ function strategyBlock(s: StoredStrategy): string {
 
   return `
 
-    ${shift}${work}${direction}${positioning}${tensions}${openings}
+    ${shift}${curves}${work}${direction}${positioning}${tensions}${openings}${elsewhere}
 
 
 `;

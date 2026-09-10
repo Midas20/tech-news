@@ -27,6 +27,7 @@
 //    first-party, so "the vendor says" and "three unrelated outlets report" are
 //    distinguishable in the packet rather than flattened into "reports say".
 
+import type { Db } from '../db/client.ts';
 import { q } from '../ui/db.ts';
 import { llmCall, type LlmContext } from '../llm/router.ts';
 import { FIELDS, fieldLabel } from '../vocab/fields.ts';
@@ -263,6 +264,8 @@ export type FieldOutcome =
 export async function briefField(
   ctx: LlmContext, field: string, win: Window, query: Query = q,
   minCorpus = MIN_CORPUS,
+  /** Passed through to the reading, which writes its research cache. */
+  outsideDb: Db | null = null,
 ): Promise<FieldOutcome> {
   const corpus = await fieldCorpus(field, win, query);
   if (corpus.length < minCorpus) return { status: 'quiet', read: corpus.length };
@@ -298,7 +301,8 @@ export async function briefField(
   // Never fatal. A briefing that exists is worth keeping whether or not a
   // reading could be drawn from it, and the reason it could not is recorded so
   // the page can say which of the two it is.
-  const read = await analyseField(ctx, field, win, corpus, figures, query)
+  const read = await analyseField(
+    ctx, field, win, corpus, figures, query, undefined, outsideDb)
     .catch((e: unknown): StrategyOutcome =>
       ({ status: 'unwritten', why: (e as Error)?.message ?? 'threw' }));
 
@@ -442,13 +446,14 @@ export async function displayNames(
 export async function briefArchive(
   ctx: LlmContext, win: Window, now = new Date(), query: Query = q,
   fields = FIELDS.map((f) => f.slug),
+  outsideDb: Db | null = null,
 ): Promise<ArchiveReport> {
   const written: Briefing[] = [];
   const quiet: string[] = [];
   const unwritten: Unwritten[] = [];
 
   for (const slug of fields) {
-    const out = await briefField(ctx, slug, win, query)
+    const out = await briefField(ctx, slug, win, query, undefined, outsideDb)
       .catch((e: unknown): FieldOutcome => ({
         status: 'unwritten', read: 0, why: (e as Error)?.message ?? 'threw' }));
     if (out.status === 'written') written.push(out.briefing);
@@ -484,7 +489,12 @@ export async function runDailyReport(
   ctx: LlmContext, query: Query = q, now = new Date(),
 ): Promise<{ day: string; fields: number; themes: number; read: number; days: number }> {
   const win = nextWindow(now, await lastCoverage(query));
-  const report = await briefArchive(ctx, win, now, query);
+  // `ctx.db` is the worker connection the job already holds, and the outside
+  // research needs a WRITER: a resolved package, a fetched curve and a seen
+  // headline are all worth keeping so tomorrow's report does not ask the same
+  // public API the same question. Passing null would still work and would make
+  // this the most network-expensive job in the system, every day, for ever.
+  const report = await briefArchive(ctx, win, now, query, undefined, ctx.db ?? null);
   return { ...await saveArchiveReport(query, report), days: windowDays(win) };
 }
 
@@ -597,6 +607,14 @@ export async function saveArchiveReport(
       })),
       limits: b.strategy.limits,
       history: b.strategy.history,
+      // WHAT WAS FOUND OUTSIDE, stored with the reading rather than re-fetched
+      // on view. A registry answers with today's numbers, so a page that
+      // researched on render would show a different curve every day under a
+      // claim written once -- and the claim is what was published.
+      outside: b.strategy.outside ? {
+        movements: b.strategy.outside.movements,
+        stories: b.strategy.outside.stories,
+      } : null,
       provider: b.strategy.provider,
     } : null,
   }));
@@ -706,6 +724,8 @@ export interface StoredDirection {
 export interface StoredShift {
   before: string; after: string; moved: string;
   then: Citation[]; now: Citation[];
+  /** The outside items cited as the earlier end, where one was used. */
+  thenOutside?: StoredOutsideStory[];
 }
 export interface StoredWork {
   what: string; why: string; skills: string;
@@ -721,8 +741,20 @@ export interface StoredPositioning {
 export interface StoredOpening {
   what: string; why: string; who?: string; evidence: Citation[];
 }
+export interface StoredMovement {
+  slug: string; registry: string; package: string;
+  before: number; after: number; changePct: number;
+  fromDay: string; toDay: string; days: number;
+}
+export interface StoredOutsideStory {
+  subject: string; title: string; url: string | null; host: string | null;
+  when: string; score: number | null; source: string;
+}
+
 export interface StoredStrategy {
   read: string;
+  /** Public evidence from beyond this archive. Absent on readings before 0078. */
+  outside?: { movements: StoredMovement[]; stories: StoredOutsideStory[] } | null;
   /** What is different now from before. Absent on readings written before 0077. */
   shift?: StoredShift | null;
   work: StoredWork[];

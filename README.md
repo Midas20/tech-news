@@ -8755,6 +8755,141 @@ Registry 507 → 511. Three of the fourteen reported headlines are now in the
 archive under their own bylines.
 
 
+## The reading may now research outside the archive
+
+Asked for on 2026-09-09: *"I want to you research all news that related to the
+target news when you generate report, This mans when you make report, don't be
+limited to db's past news, I want to know trend of the tech, not summary of the
+news."*
+
+**The limit was structural, not a matter of prompt wording.** The pairing rule in
+`strategy.ts` discards any claim about change whose earlier end it cannot cite.
+That rule is right — it is the only thing separating a finding from a
+restatement — and it silently caps every reading at the depth of our own
+collection. This archive began collecting on 2026-09-08. Asked how a field had
+changed since March, it could answer only from whatever March-dated items
+happened to be sitting in some feed's back catalogue.
+
+So the earlier end may now come from outside, in two forms, and `then` **or**
+`thenOutside` satisfies the rule. Neither being present still drops the claim.
+
+| | |
+|---|---|
+| **adoption series** | daily downloads from the registry that publishes the package, reaching back six months |
+| **outside coverage** | stories about our subjects that we never collected, from the public Hacker News index, with dates and links |
+
+Every registry used is **keyless** — `api.npmjs.org`, `pypistats.org`,
+`crates.io`, `hn.algolia.com` — which matters because this has to run unattended
+and a key is a thing that expires while nobody is looking.
+
+### Why this is not "counting our own stories" in disguise
+
+That rule exists because an archive count answers *how many of these did WE
+catch*, which measures a feed list. Everything here is published by somebody
+else under its own name and is true whether or not this repository runs — and it
+is **more** checkable than our own corpus, because anybody can re-run the same
+query against the same public API and get the same answer. It is the argument
+`public.ts` already makes for GitHub topic counts, extended from a census to a
+series, because a snapshot cannot express a trend and a trend is the ask.
+
+### It nearly published two wrong numbers, and both are the same mistake
+
+Everything else on a field report is a sentence with a story under it, and a
+reader can open the story. A download curve is the first thing on the page that
+is **a number with no story** — and a number reads as more certain than a
+sentence, so a wrong one does more damage than any wrong paragraph could.
+
+**The name is not the package.** The first version guessed that a technology's
+slug is its package name on the first registry that answers. Measured before it
+was wired into anything:
+
+```
+kubernetes  npm:kubernetes   29/day ->  158/day   +441%
+polars      npm:polars        4/day ->    2/day    -52%
+```
+
+Neither is the technology. `npm:kubernetes` is an abandoned client with a
+hundred installs a day. `npm:polars` declares `github.com/ritchie46/polars`
+while the project lives at `pola-rs/polars` and ships 1.9M/day through PyPI —
+four orders of magnitude apart. *"Kubernetes adoption rose 441%"* is exactly the
+confident, checkable-looking, wrong finding this archive exists to refuse.
+
+So a package is accepted only when **the registry's own declared repository
+matches the repository the taxonomy holds**. The name is not the evidence; the
+repository is. Verification also makes a second guess safe: a project is often
+known by its organisation and ships under its artefact's name, so the
+repository's own name is tried too — which is how `huggingface` correctly
+resolves to `pypi:transformers`.
+
+**And then the taxonomy is not the world.** Verifying against `stacks.repo_url`
+makes that column the single point of failure, and one step after the above was
+fixed, `jinja` resolved cleanly to `pypi:django` — because the taxonomy row for
+jinja carries `github.com/django/django`. Correct by construction and wrong
+about the world, which is the first failure wearing the fix for it as a
+disguise. The guard is that the slug must appear somewhere in the repository it
+claims: `pola-rs/polars`, `huggingface/transformers`, `langchain-ai/langchain`
+and `pypa/pip` all pass; `django/django` does not contain "jinja" and is
+refused, with the taxonomy row named in the refusal so the data can be
+corrected rather than the number quietly published.
+
+74 taxonomy rows have that shape and most are legitimate — `blazor →
+dotnet/aspnetcore`, `delta-lake → delta-io/delta` — so the guard refuses some
+real curves too. **No curve is better than a wrong curve**, and that trade is
+made deliberately.
+
+### What a movement actually measures
+
+A mean over **28 days at each edge**, not the first day against the last.
+Package downloads are violently weekly — a Sunday is a third of a Tuesday — so
+two single days can differ by 200% while nothing has happened. Below two full
+edges, no percentage is computed at all: a figure drawn from four days is a
+number with no meaning, and printing one is worse than printing nothing.
+
+Verified curves at the time of writing:
+
+| | | |
+|---|---|---|
+| polars | `pypi:polars` | 1,580,369/day → 1,990,894/day **+26%** |
+| fastapi | `pypi:fastapi` | 12,310,986/day → 15,023,472/day **+22%** |
+| huggingface | `pypi:transformers` | 4,227,661/day → 4,558,529/day **+8%** |
+| langchain | `pypi:langchain` | 7,567,002/day → 6,784,138/day **−10%** |
+
+The page states, next to the table, that **downloads are not users** — they
+include continuous integration and mirrors, so a move is a change in how often
+something is installed and nothing more.
+
+### Two subject lists, because they want opposite things
+
+The first run produced **zero curves across all four fields**, on a day when
+polars, langchain, streamlit and huggingface all had six months of series
+available. The subjects leading a day's corpus are category tags — `ai`,
+`cloud`, `open-source`, `startups` — plus vendor organisations whose `repo_url`
+is `github.com/aws`. None of them is a package, so every lookup correctly
+refused and the block was empty for a correct reason.
+
+A curve needs a named project with a repository; coverage search wants the
+opposite, because `open-source` is a useless package and a perfectly good
+search. So the curve list is filtered to subjects the taxonomy gives a
+repository, drawn from a wider slice of the day's corpus (333 technologies were
+named; 69 have a real repository), while search takes the head of the frequency
+order.
+
+### What is stored, and what is not
+
+The research is **stored with the reading**, not re-fetched on view. A registry
+answers with today's numbers, so a page that researched on render would show a
+different curve every day underneath a claim written once — and the claim is
+what was published. `adoption_lookup` also records misses, so a technology that
+is not on any registry is not looked up again tomorrow.
+
+Outside coverage is **listed and never summarised**. We have the headline and
+the date and did not fetch the article, and writing a summary of something
+nobody read is the one thing this archive must never do. It is also deduplicated
+against our own stories by URL before it is offered, because an item we already
+hold is not outside evidence and presenting it as an independent second sighting
+would be the worst error this module could make.
+
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.
