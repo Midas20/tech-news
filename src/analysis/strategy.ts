@@ -367,6 +367,23 @@ export async function analyseField(
    * the same public API the same question.
    */
   outsideDb: import('../db/client.ts').Db | null = null,
+  /**
+   * URLs already used by an earlier field in the SAME report run.
+   *
+   * "why do you repeat same sentences in report" (2026-09-09). Measured on that
+   * report: `cloud` and `data` carried 26 of 32 identical outside stories, and
+   * the same headline appeared in four fields' "stories elsewhere" blocks. The
+   * cause is that the search subjects are the head of the frequency list, and
+   * that head is the same broad tags in every field -- cloud searched `aws, ai,
+   * google, cloud, gcp, cve` and data searched `data, google, database, cms, ai,
+   * cve`. Three shared terms is three shared searches is one shared list.
+   *
+   * The set is threaded through the whole run rather than kept per field so the
+   * SECOND field to want a story is the one that goes without it. Passing null
+   * keeps the old behaviour, which is what every test that calls this directly
+   * relies on.
+   */
+  seenOutside: Set<string> | null = null,
 ): Promise<StrategyOutcome> {
   const { prior, subjects } = await withHistory(field, win, today, query);
 
@@ -388,7 +405,8 @@ export async function analyseField(
   // so passing more helps the first and leaves the second alone.
   const researchSubjects = subjectsOf(today, 60);
   const outside = outsideDb
-    ? await gatherOutside(outsideDb, researchSubjects, earlier(win.from), win.from)
+    ? await gatherOutside(outsideDb, researchSubjects, earlier(win.from), win.from,
+      undefined, undefined, seenOutside, field)
       .catch(() => null)
     : null;
   const outsideSize = outside?.stories.length ?? 0;

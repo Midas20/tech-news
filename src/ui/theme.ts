@@ -2297,6 +2297,11 @@ export const LIVE_JS = `
       if (next === undefined || next === null) return;
       var shown = Number(String(el.textContent).replace(/[^0-9]/g, ''));
       var value = Number(next);
+      // A key that does not name a number must not paint one. `counts.fields`
+      // is an array, and a rail row that claimed that key rendered "NaN" over
+      // a correct server-side count every fifteen seconds. Leaving the markup
+      // alone is always better than replacing it with nonsense.
+      if (!isFinite(value)) return;
       if (shown === value) return;
       el.textContent = value.toLocaleString('en-US');
       // A number that changes without moving is a number nobody notices.

@@ -305,7 +305,17 @@ export async function renderRail(
       label: new Date(`${r.day}T00:00:00Z`).toLocaleDateString('en-GB',
         { day: 'numeric', month: 'short', timeZone: 'UTC' }),
       count: r.fields,
-      countKey: 'fields',
+      // NO countKey, AND THAT IS THE FIX. `countKey` names an entry in the
+      // global `railCounts()` payload that the fifteen-second poller re-stamps
+      // onto every matching element. `counts.fields` exists -- and it is the
+      // ARRAY of fields for the News rail, not a number -- so every dated row
+      // here was overwritten with Number([...]) === NaN a few seconds after the
+      // page loaded. The screenshot that reported it showed "NaN" against 10,
+      // 9 and 8 Sept.
+      //
+      // A per-day count cannot be keyed globally in the first place: one key
+      // would paint the same number onto all ten rows. This number is written
+      // once, server-side, and is correct until the page is reloaded.
       sub: true,
       active: state.path === `/reports/${r.day}`,
     }));

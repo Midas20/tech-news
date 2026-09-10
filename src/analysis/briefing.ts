@@ -266,6 +266,8 @@ export async function briefField(
   minCorpus = MIN_CORPUS,
   /** Passed through to the reading, which writes its research cache. */
   outsideDb: Db | null = null,
+  /** Shared across the whole report run so two fields cannot cite one story. */
+  seenOutside: Set<string> | null = null,
 ): Promise<FieldOutcome> {
   const corpus = await fieldCorpus(field, win, query);
   if (corpus.length < minCorpus) return { status: 'quiet', read: corpus.length };
@@ -302,7 +304,7 @@ export async function briefField(
   // reading could be drawn from it, and the reason it could not is recorded so
   // the page can say which of the two it is.
   const read = await analyseField(
-    ctx, field, win, corpus, figures, query, undefined, outsideDb)
+    ctx, field, win, corpus, figures, query, undefined, outsideDb, seenOutside)
     .catch((e: unknown): StrategyOutcome =>
       ({ status: 'unwritten', why: (e as Error)?.message ?? 'threw' }));
 
@@ -452,8 +454,14 @@ export async function briefArchive(
   const quiet: string[] = [];
   const unwritten: Unwritten[] = [];
 
+  // ONE SET FOR THE WHOLE RUN. "why do you repeat same sentences in report"
+  // (2026-09-09): `cloud` and `data` carried 26 of 32 identical outside stories,
+  // because both searched the generic tags at the head of their subject lists.
+  // Whichever field is briefed first now keeps the story.
+  const seenOutside = new Set<string>();
+
   for (const slug of fields) {
-    const out = await briefField(ctx, slug, win, query, undefined, outsideDb)
+    const out = await briefField(ctx, slug, win, query, undefined, outsideDb, seenOutside)
       .catch((e: unknown): FieldOutcome => ({
         status: 'unwritten', read: 0, why: (e as Error)?.message ?? 'threw' }));
     if (out.status === 'written') written.push(out.briefing);
@@ -700,6 +708,29 @@ export async function saveArchiveReport(
   const sources = new Set(
     report.fields.flatMap((b) => b.corpus.map((i) => i.source))).size;
 
+  // A REPORT THAT WROTE NOTHING HAS NOT READ ANYTHING, AND MUST NOT SAY IT HAS.
+  //
+  // `covered_to` is the read cursor: `lastCoverage` takes max(covered_to) and
+  // the next run starts there, so recording it means "these stories have been
+  // reported on". Writing it unconditionally lost a day of news. Measured on
+  // 2026-09-09: the job fired at 20:53:48, every provider was inside a cooldown
+  // that lapsed at 20:54:43, so nothing was written -- and the row still claimed
+  // coverage to 20:53:48. The 291 summarised, tagged stories in that window
+  // would never have been read by any future report. The failure was invisible
+  // because the job reported success: it did run, it just had nothing to say.
+  //
+  // So coverage is claimed only when at least one field was actually briefed.
+  // The row is still written, because a day the report could not be produced is
+  // a fact worth keeping, and `covered_to IS NOT NULL` in `lastCoverage` means a
+  // null here simply leaves the window open for the next attempt.
+  //
+  // A PARTIAL report does still claim the whole window, and that is a real
+  // remaining hole: if `ai` briefed and `cloud` did not, `cloud` loses its
+  // stories. Fixing it properly means a per-field cursor rather than one global
+  // one. This guard covers the total failure, which is the one that empties the
+  // report, and the partial case is recorded in `report.unwritten`.
+  const wrote = report.fields.length > 0;
+
   // The day-level row: the composed title, the totals, and which fields had too
   // little to say. It carries no findings of its own -- those are the rows
   // above, and duplicating them here is how the two copies start to disagree.
@@ -717,7 +748,7 @@ export async function saveArchiveReport(
        payload = EXCLUDED.payload`,
     [report.day, CADENCE_DAYS, report.generator, report.title,
       report.fields.length, themes, read, sources,
-      report.window.from, report.window.to,
+      report.window.from, wrote ? report.window.to : null,
       JSON.stringify({ generator: report.generator, quiet: report.quiet,
         unwritten: report.unwritten })]);
 

@@ -36,6 +36,7 @@
 // is a thing that expires while nobody is looking.
 
 import type { Db } from '../db/client.ts';
+import { NOT_A_PRODUCT } from '../vocab/emerging.ts';
 
 /** How far back to ask a registry for a curve. Matches LOOKBACK_DAYS. */
 export const OUTSIDE_DAYS = 180;
@@ -402,6 +403,10 @@ export interface Outside {
 export async function gatherOutside(
   db: Db, subjects: string[], from: string, to: string,
   subjectCap = 6, storiesPerSubject = 4,
+  /** URLs an earlier field in this run already used. See `analyseField`. */
+  seen: Set<string> | null = null,
+  /** The field being researched, so its own category tag can be dropped. */
+  field: string | null = null,
 ): Promise<Outside> {
   // TWO DIFFERENT SELECTIONS, because the two kinds of evidence want different
   // subjects and using one list for both wasted every curve.
@@ -423,7 +428,15 @@ export async function gatherOutside(
     [subjects]);
   const repoOrder = new Set(withRepos.map((r) => r.slug));
   const forCurves = subjects.filter((x) => repoOrder.has(x)).slice(0, subjectCap);
-  const forSearch = subjects.slice(0, subjectCap);
+
+  // A CATEGORY IS NOT A SEARCH TERM EITHER, and this is the second half of the
+  // same mistake the curve list made. Searching Hacker News for `cloud` or
+  // `data` returns whatever Hacker News was discussing, which is the same
+  // result whichever field asked -- so the field's own slug and the generic
+  // words in NOT_A_PRODUCT come out of the search list. What is left is the
+  // named things: `aws`, `gcp`, `openai`, `postgres`.
+  const generic = new Set<string>([...NOT_A_PRODUCT, ...(field ? [field] : [])]);
+  const forSearch = subjects.filter((x) => !generic.has(x)).slice(0, subjectCap);
 
   const movements: Movement[] = [];
   const stories: OutsideStory[] = [];
@@ -441,7 +454,18 @@ export async function gatherOutside(
   }
 
   for (const slug of forSearch) {
-    stories.push(...await outsideCoverage(db, slug, from, to, storiesPerSubject));
+    for (const s of await outsideCoverage(db, slug, from, to, storiesPerSubject)) {
+      // FIRST FIELD TO WANT A STORY KEEPS IT. Without this, four fields that
+      // share a search term paste the same four headlines into four reports and
+      // the site reads as though it wrote one thing four times.
+      // A story with no URL cannot be deduplicated and is kept: dropping it
+      // would lose evidence to protect against a repeat that cannot be detected.
+      if (s.url) {
+        if (seen?.has(s.url)) continue;
+        seen?.add(s.url);
+      }
+      stories.push(s);
+    }
   }
 
   // Oldest first, matching the history packet, so the numbering runs forwards
