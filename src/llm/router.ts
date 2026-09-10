@@ -48,15 +48,39 @@ export async function llmCall<T>(
 
   const budgetRows = await budgets.loadBudgets(ctx.db);
   const chain = resolveChain(spec, ctx);
-  let lastError = 'no provider available';
+  // EVERY PROVIDER'S REASON, not just the last one's. This was a single
+  // `lastError` that each attempt overwrote, so a chain of five failures
+  // reported one word.
+  //
+  // Measured on 2026-09-09, when the daily report wrote nothing fourteen times
+  // in a row and the log said only "deferred":
+  //
+  //   claude              no API key
+  //   gemini-flash        429, DAILY quota, not a per-minute limit
+  //   gemini-flash-lite   429, same
+  //   cerebras            402 payment_required -- the free tier is spent
+  //   groq                429 tokens-per-day: 193,065 of 200,000 used
+  //
+  // Four different problems with four different fixes -- a credential, a day's
+  // wait, money, and a day's wait -- reported as one. An operator reading
+  // "deferred" goes and looks at the prompt.
+  //
+  // A NOTE ON THE MEASUREMENT ITSELF, because it nearly went in wrong: a 64-token
+  // probe to groq answered in 530ms and looked healthy, which suggested our own
+  // budget table was holding a stale cooldown over a working provider. It was
+  // not. Groq's limit is tokens-per-DAY, so a tiny probe passes while the 54,000
+  // character briefing that actually needs sending gets a 429. Probing a
+  // provider with a request that does not resemble the real one measures
+  // nothing.
+  const tried: string[] = [];
 
   for (const provider of chain) {
     if (!provider.available(ctx.env)) {
-      lastError = `${provider.id}: no credentials`;
+      tried.push(`${provider.id}: no credentials`);
       continue;
     }
     if (!budgets.isUsable(budgetRows.get(provider.id))) {
-      lastError = `${provider.id}: budget exhausted`;
+      tried.push(`${provider.id}: budget exhausted`);
       continue;
     }
 
@@ -69,7 +93,7 @@ export async function llmCall<T>(
 
       const parsed = extractJson(res.text);
       if (parsed === null) {
-        lastError = `${provider.id}: unparseable output`;
+        tried.push(`${provider.id}: unparseable output`);
         continue; // a different provider may well produce valid JSON
       }
 
@@ -77,7 +101,7 @@ export async function llmCall<T>(
       if (!valid.ok) {
         // Schema validation is what catches weaker models. Try the next one
         // rather than accepting output the rest of the pipeline cannot trust.
-        lastError = `${provider.id}: schema: ${valid.errors.slice(0, 3).join('; ')}`;
+        tried.push(`${provider.id}: schema: ${valid.errors.slice(0, 3).join('; ')}`);
         continue;
       }
 
@@ -94,16 +118,17 @@ export async function llmCall<T>(
     } catch (err) {
       if (err instanceof ProviderError && err.isRateLimit) {
         await budgets.recordRateLimit(ctx.db, provider.id, err.retryAfterSeconds);
-        lastError = `${provider.id}: 429`;
+        tried.push(`${provider.id}: 429`);
         continue;
       }
       await budgets.recordFailure(ctx.db, provider.id);
-      lastError = err instanceof Error ? `${provider.id}: ${err.message}` : String(err);
+      tried.push(err instanceof Error ? `${provider.id}: ${err.message}` : String(err));
     }
   }
 
   // Nothing blocks. Unprocessed rows retry next cycle.
-  return { status: 'deferred', reason: lastError };
+  return { status: 'deferred',
+    reason: tried.length === 0 ? 'no provider available' : tried.join('; ') };
 }
 
 function resolveChain(spec: JobSpec, ctx: LlmContext): Provider[] {

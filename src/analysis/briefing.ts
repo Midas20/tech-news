@@ -278,8 +278,22 @@ export async function briefField(
   const packet = fieldPacket(field, win, corpus, figures);
   const res = await llmCall<RawBriefing>(ctx, 'field_briefing', packet, packet);
   if (res.status !== 'ok') {
+    // THE REASON, NOT THE STATUS, exactly as strategy.ts already does. On
+    // 2026-09-09 this line read "no model answered (deferred)" fourteen times
+    // and hid four different problems with four different fixes: no Anthropic
+    // key, both Gemini tiers out of their DAILY quota, cerebras returning 402
+    // payment_required, and groq at 193,065 of its 200,000 tokens per day.
+    // "deferred" sends an operator to look at the prompt.
+    //
+    // THE REAL FINDING UNDER THAT. One briefing prompt is ~54,000 characters,
+    // which groq bills at ~12,400 tokens; the report asks for fourteen fields
+    // at two calls each. That is roughly 350,000 tokens against a 200,000/day
+    // allowance, so this report cannot finish on the free tier even on a fresh
+    // day -- it is not bad luck. `reportFields` is the lever: choosing four
+    // favourite fields brings one day's report inside one day's budget.
+    const why = res.status === 'deferred' ? res.reason : `invalid: ${res.errors.join('; ')}`;
     return { status: 'unwritten', read: corpus.length,
-      why: `no model answered (${res.status})` };
+      why: `no model answered: ${why}` };
   }
 
   const themes = validate(res.value.themes ?? [], corpus.length);
