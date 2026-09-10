@@ -8968,6 +8968,168 @@ broken on the day it is installed. The job note says which of the two happened,
 so *"why is it writing about robotics"* is answerable from the log.
 
 
+## A failed report ate the news it could not read
+
+Reported as *"there are no change"*, then *"I mean the report don't change"*.
+Two things were stale and only one was the code.
+
+The site was **four commits behind on disk**: Node loads modules once at
+startup and the process predated them. Underneath that, the stored report had
+not been rewritten since 07:00 — and the report is a stored artifact, not
+something rendered from the stories on each view, so the code was live while the
+page was twelve hours old.
+
+Forcing a re-run exposed the real defect. `covered_to` is the **read cursor**:
+`lastCoverage` takes `max(covered_to)` and the next run starts there.
+`saveArchiveReport` wrote it unconditionally.
+
+| provider | state at 20:53:48 |
+|---|---|
+| cerebras | `down` until 20:54:43 |
+| gemini-flash, gemini-flash-lite | `exhausted` until 20:54:51 |
+| groq | `exhausted` until 21:52:06 |
+| claude | no key |
+
+All fourteen fields failed in **9.7 seconds**, nothing was written, and the row
+still claimed coverage to 20:53:48. The **291 summarised, tagged stories**
+collected since 07:00 would never have been read by any future report. The job
+logged success, because it did run — it just had nothing to say.
+
+Coverage is now claimed **only when at least one field was actually briefed**.
+The day row is still written, because a day the report could not be produced is
+a fact worth keeping, and `covered_to IS NOT NULL` in `lastCoverage` means a
+null simply leaves the window open. A **partial** report still claims the whole
+window; that needs a per-field cursor, and it is recorded as an open hole rather
+than implied to be handled.
+
+### The repetition was citations, not sentences
+
+Asked separately: *"why do you repeat same sentences in report"*. Measured
+across the whole day's report: **199 distinct prose sentences, zero duplicates.**
+Nothing written was repeated.
+
+What repeated was **evidence**. `cloud` and `data` carried **26 of 32 identical
+outside stories**, and one headline appeared in all four fields. The cause is
+that outside search subjects were the head of the frequency list, and that head
+is the same broad tags in every field:
+
+```
+cloud    aws, ai, google, cloud, gcp, cve
+data     data, google, database, cms, ai, cve
+```
+
+Three shared terms is three shared searches is one shared list. Two changes: the
+field's own category tag and the generic words in `NOT_A_PRODUCT` come out of
+the search list — searching Hacker News for `cloud` returns what Hacker News
+discussed, whichever field asked — and **one seen-set spans the whole run**, so
+the first field to want a story keeps it.
+
+### NaN in the reports rail
+
+Every dated row was stamped `data-count="fields"`, and `counts.fields` is the
+News rail's **array** of fields. The fifteen-second poller painted
+`Number([...])` over three correct server-side counts. A per-day count cannot be
+keyed globally at all — one key would paint one number onto all ten rows — so
+the key is gone, and the painter now refuses a value that is not finite.
+
+
+## Week, month and year reports
+
+Asked for on 2026-09-09, against a screenshot of `/reports`: *"at the top of
+list, you have to display report that summary all day's news and about new
+market and things like tool, platform and so on. And make weekly report and
+month report. And generate a year's report by collecting all news."*
+
+```
+/reports/day/2026-09-09     /reports/month/2026-09
+/reports/week/2026-09-09    /reports/year/2026
+```
+
+One renderer for all four spans. They differ in how much they show and in what
+the caveats say, not in shape — four pages that drift apart is how the same
+question gets four different answers.
+
+### No model writes any of it
+
+This is a decision, not a shortcut, and it has three reasons in the order they
+bind:
+
+1. **A year does not fit in a prompt.** The archive holds 5,461 stories back to
+   2010. Any model-written year report is really a report about whichever slice
+   was sampled, and the sampling would be the finding.
+2. **The providers are not there.** Measured hours before this was written: the
+   daily report failed all fourteen fields in 9.7 seconds with every provider in
+   cooldown. A monthly report that needs a model is a monthly report that does
+   not exist on the day you want it.
+3. **The material is already written.** Every daily briefing in the period was
+   model-written once, cited, and checked by the pairing rule. Re-reading the
+   same stories to say the same thing again is a second chance to be wrong, not
+   a second opinion.
+
+So a period report **composes**, from three things that answer different
+questions:
+
+| section | what it is |
+|---|---|
+| **What appeared** | launches, funding and acquisitions, and names never seen before — the pipeline's own verdicts. The *"new market and things like tool, platform"* half of the ask. |
+| **What moved** | public download curves measured across the period. The only magnitudes on the page, and the only real trend. |
+| **What was read** | the claims the daily readings already made, quoted, deduplicated, never re-summarised. |
+
+Measured on the day it was built:
+
+| span | launches | market | new names | curves | findings |
+|---|---|---|---|---|---|
+| day 2026-09-09 | 12 of 13 | 6 | 5 | — | 14 |
+| week to 09 Sept | 25 of 26 | 10 | 13 | 5 | 14 |
+| September 2026 | 40 of 41 | 15 | 16 | — | 14 |
+| 2026 | 60 of 61 | 19 | 19 | 5 | 14 |
+
+### Calendar periods, and an edge that scales
+
+A month is **September**, not the last thirty days: two of them are only
+comparable if the boundaries are the same boundaries each time. A week is the
+seven days *ending* on the date, because there is no calendar week a reader of
+this archive already thinks in.
+
+The curve comparison uses **a quarter of the period at each end, capped at 28
+days and floored at 3**. The daily reading compares two 28-day means because it
+asks about six months; 28 days of a seven-day period is the whole period twice.
+The floor of three exists because package downloads are violently weekly — a
+Sunday is a third of a Tuesday — so one day at each end would report the shape
+of the calendar rather than the shape of the adoption. Below twice the edge
+there is no comparison to make and **no number is printed**, which is why the
+day report and an incomplete month show no curves.
+
+### No story counts anywhere
+
+Counting our own stories measures the feed list, not the world: *"launches rose
+40% this month"* is a fact about which sources answered. Lists are shown and
+never totalled into a trend. Every figure on a period page comes from PyPI, npm
+or crates.io and can be re-run by anybody against the same public API.
+
+### A withdrawn resolution now takes its curve with it
+
+`adoption_lookup` caches the answer, so once a slug resolves the series is
+fetched daily and kept for ever — and tightening the guard afterwards only stops
+*new* rows. `jinja` had been resolved to `pypi:django` before the "the repo must
+mention the slug" rule existed, and **181 days of django's downloads were still
+sitting in `adoption_series` under the name `jinja`**, ready for the first
+period report to put on a page. Withdrawing a resolution now deletes the curve
+with it, and `movementsIn` joins the lookup so a withdrawn resolution cannot
+reach a page even if a row survives.
+
+### The index leads with what appeared
+
+`/reports` opened with fourteen field buttons and then a list of days, so the
+first thing on the page was navigation and the second was an archive. A launch
+belongs to whichever field its words happened to match and a funding round
+belongs to none of them, so neither was reachable from a per-field index at all.
+The lead card is now first, and it summarises **the latest day that has
+stories** rather than the calendar day — the archive works in UTC, so for
+several hours every morning "today" holds a handful of overnight items and would
+read as a broken page.
+
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.

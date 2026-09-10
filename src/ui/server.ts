@@ -35,6 +35,8 @@ import {
 import { renderRail, statusBadge, topNav, railCounts } from './rail.ts';
 import { renderSources } from './sources.ts';
 import { renderWhatsNew } from './whatsnew.ts';
+import { renderPeriodReport } from './period.ts';
+import { isSpan } from '../analysis/period.ts';
 import { renderIntel } from './intel.ts';
 import {
   accountById, accountByUsername, cookieFrom, COOKIE, isPublicPath, issueSession,
@@ -895,8 +897,20 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
     // This lists the day's briefings rather than composing them, because the
     // composed view is administrators only a few routes down. Rendering it here
     // too would have been a gate with a door beside it.
+    // A PERIOD REPORT, and it must be tested before the dated one below: both
+    // live under /reports/, and `/reports/2026-09-09` is a day of briefings
+    // while `/reports/month/2026-09` is a composed period. Asked for on
+    // 2026-09-09 -- "make weekly report and month report. And generate a year's
+    // report by collecting all news."
     if (path.startsWith('/reports/')) {
-      const day = reportDay(decodeURIComponent(path.slice('/reports/'.length)));
+      const rest = decodeURIComponent(path.slice('/reports/'.length));
+      const slash = rest.indexOf('/');
+      const head = slash === -1 ? '' : rest.slice(0, slash);
+      if (isSpan(head)) {
+        return render(`Report ${rest.slice(slash + 1)}`,
+          await renderPeriodReport(head, rest.slice(slash + 1)));
+      }
+      const day = reportDay(rest);
       if (!day) return missing({ path });
       return render(`Report ${day}`, await renderReportDay(day));
     }

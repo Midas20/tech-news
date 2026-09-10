@@ -1784,6 +1784,12 @@ h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
 .mv-curve .up{color:var(--good,#1a7f37);font-weight:600}
 .mv-curve .down{color:var(--bad,#b3261e);font-weight:600}
 
+/* A four-column table of magnitudes does not fit a phone. It scrolls inside its
+   own box rather than widening the page: a body that scrolls sideways moves
+   every paragraph on it, and the reader loses the column they were reading. */
+.mv-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 0 var(--s-5)}
+.mv-scroll .mv-curve{margin:0}
+
 /* COVERAGE WE DO NOT HOLD. A list of headlines and dates, deliberately not
    styled like a finding: there is no body behind any of these and nothing here
    was summarised. */
@@ -2297,10 +2303,11 @@ export const LIVE_JS = `
       if (next === undefined || next === null) return;
       var shown = Number(String(el.textContent).replace(/[^0-9]/g, ''));
       var value = Number(next);
-      // A key that does not name a number must not paint one. `counts.fields`
-      // is an array, and a rail row that claimed that key rendered "NaN" over
-      // a correct server-side count every fifteen seconds. Leaving the markup
+      // A key that does not name a number must not paint one. counts.fields is
+      // an array, and a rail row that claimed that key rendered "NaN" over a
+      // correct server-side count every fifteen seconds. Leaving the markup
       // alone is always better than replacing it with nonsense.
+      // (No backticks in this comment: it lives inside a template literal.)
       if (!isFinite(value)) return;
       if (shown === value) return;
       el.textContent = value.toLocaleString('en-US');

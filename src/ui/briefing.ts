@@ -37,6 +37,7 @@
 import { wrap, pageHead, empty, escapeHtml, truncate, icon } from './html.ts';
 import { crumbsFor } from './nav.ts';
 import { FIELDS, fieldLabel } from '../vocab/fields.ts';
+import { leadCard, periodLinks } from './period.ts';
 import {
   archiveFor, briefingFor, latestForField, daysForField, reportIndex, reportDay,
   type StoredField, type StoredArchive, type StoredTheme, type FieldDay, type ReportDay,
@@ -506,11 +507,30 @@ export async function renderReportIndex(): Promise<string> {
     href="/field/${encodeURIComponent(f.slug)}/report">${icon(f.icon, 14)}
     ${escapeHtml(f.label)}</a>`).join('');
 
+  // WHAT APPEARED, ABOVE THE NAVIGATION. Asked for on 2026-09-09: "at the top
+  // of list, you have to display report that summary all day's news and about
+  // new market and things like tool, platform and so on."
+  //
+  // This page led with fourteen field buttons and then a list of days, so the
+  // first thing on it was navigation and the second was an archive. A launch
+  // belongs to whichever field its words happened to match and a funding round
+  // belongs to none of them, so neither is reachable from a per-field index at
+  // all. Both fail open: the day list is worth showing even if the composed
+  // summary cannot be built.
+  const [lead, periods] = await Promise.all([
+    leadCard().catch(() => ''),
+    periodLinks().catch(() => ''),
+  ]);
+
   return wrap(`
     ${pageHead('Reports',
     'Every briefing this archive has written. One report a day, one section per field, '
     + 'each written from the stories that arrived since the day before and citing them.',
     { crumbs: crumbsFor('/reports', 'Reports') })}
+
+    ${lead}
+
+    ${periods}
 
     <h2 class="sect">Follow one field</h2>
     <p class="note">The latest briefing for a field, with every earlier one under it.</p>

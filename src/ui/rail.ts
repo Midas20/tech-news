@@ -28,6 +28,7 @@ import {
   type NavItem,
 } from './nav.ts';
 import { GROUPS } from '../settings.ts';
+import { latestDay } from '../analysis/period.ts';
 
 export interface RailCounts {
   day: number;
@@ -330,8 +331,29 @@ export async function renderRail(
       active: state.path.startsWith(`/field/${f.slug}/report`),
     }));
 
+    // OVER A PERIOD, not on a day. Asked for on 2026-09-09: "make weekly report
+    // and month report. And generate a year's report by collecting all news."
+    // Anchored on the latest day that HAS stories rather than the calendar day,
+    // because the archive works in UTC and for several hours every morning the
+    // calendar day holds only overnight items.
+    const anchor = await latestDay().catch(() => new Date().toISOString().slice(0, 10));
+    const periodItems: RailItem[] = [
+      { href: `/reports/day/${anchor}`, label: 'That day', sub: true,
+        active: state.path === `/reports/day/${anchor}` },
+      { href: `/reports/week/${anchor}`, label: 'That week', sub: true,
+        active: state.path === `/reports/week/${anchor}` },
+      { href: `/reports/month/${anchor.slice(0, 7)}`, label: 'That month', sub: true,
+        active: state.path === `/reports/month/${anchor.slice(0, 7)}` },
+      { href: `/reports/year/${anchor.slice(0, 4)}`, label: 'That year', sub: true,
+        active: state.path === `/reports/year/${anchor.slice(0, 4)}` },
+    ];
+
     return [
       railGroup('Reports', items.map((i) => toItem(state, i))),
+      railGroup('Over a period', periodItems, {
+        note: 'What appeared, what the public numbers did, and what the daily '
+          + 'readings found. Composed from what is already written — no model, '
+          + 'so these exist on a day every provider is rate-limited.' }),
       railGroup('Recent', dayItems, {
         limit: 10,
         note: days.length === 0

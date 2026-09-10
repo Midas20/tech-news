@@ -130,6 +130,26 @@ async function declaredRepo(registry: Registry, pkg: string): Promise<string | n
  * Kubernetes, which is the correct answer for it -- gets no curve either. Both
  * are recorded as misses so the lookup is not repeated.
  */
+/**
+ * Drop a technology's cached curve when its resolution is withdrawn.
+ *
+ * A REFUSAL MUST REACH THE DATA THAT WAS PUBLISHED UNDER IT. `adoption_lookup`
+ * caches the answer, so once a slug resolves the series is fetched daily and
+ * kept for ever -- and tightening the guard afterwards only stops NEW rows.
+ * Measured on 2026-09-09: `jinja` had been resolved to pypi:django before the
+ * "the repo must mention the slug" rule existed, and 181 days of django's
+ * downloads were still sitting in `adoption_series` under the name `jinja`,
+ * ready for the first period report to put on a page.
+ *
+ * So withdrawing a resolution deletes the curve with it. That is the whole
+ * correction: a wrong number is worse than no number, because it is the only
+ * thing on the page a reader cannot check against a story.
+ */
+async function forgetSeries(db: Db, slug: string): Promise<void> {
+  await db.query(`DELETE FROM adoption_series WHERE slug = $1`, [slug])
+    .catch(() => undefined);
+}
+
 export async function resolvePackage(
   db: Db, slug: string,
 ): Promise<{ registry: Registry; package: string } | null> {
@@ -149,6 +169,7 @@ export async function resolvePackage(
        ON CONFLICT (slug) DO UPDATE SET missing = true, checked_at = now(),
          note = EXCLUDED.note`,
       [slug, 'no GitHub repo in the taxonomy, so no package can be verified']);
+    await forgetSeries(db, slug);
     return null;
   }
 
@@ -185,6 +206,7 @@ export async function resolvePackage(
          note = EXCLUDED.note`,
       [slug, `taxonomy repo ${want} does not mention "${slug}"; refusing rather `
         + 'than publishing a curve for another project under this name']);
+    await forgetSeries(db, slug);
     return null;
   }
 
