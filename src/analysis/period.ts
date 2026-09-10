@@ -421,8 +421,59 @@ export interface PeriodReport {
   /** Set when a measurement break voids every curve in the period. */
   shift: CohortBreak | null;
   findings: PeriodFinding[];
+  /**
+   * WHY THERE ARE NO FINDINGS, when there are none.
+   *
+   * An absent section reads as "nothing was found", and for every period before
+   * 2026-09-09 that is a false statement: no daily reading existed to find
+   * anything. `/reports/month/2026-06` renders four lists, a curve table and
+   * silence where the analysis goes, and a reader has no way to tell whether
+   * June was a quiet month or an unwatched one.
+   *
+   * So the page needs to distinguish two facts it could not previously
+   * separate: no briefing covered this period at all, versus briefings covered
+   * it and none of them got a reading out of a model.
+   */
+  readings: ReadingCoverage;
   /** Everything the period held, before the caps below took a slice. */
   totals: { launches: number; market: number };
+}
+
+export interface ReadingCoverage {
+  /** Field briefings written inside the period. */
+  briefings: number;
+  /** Of those, how many carried a strategic reading. */
+  withReading: number;
+  /** The first day this archive ever wrote a briefing, or null if never. */
+  firstEver: string | null;
+}
+
+/**
+ * How much of this period the daily reading actually covered.
+ *
+ * `firstEver` is the honest denominator. A period entirely before the archive
+ * started writing briefings has no analysis for a reason that has nothing to do
+ * with the industry, and saying "the archive began on 9 September 2026" is the
+ * only version of that a reader can act on.
+ */
+export async function readingCoverage(
+  range: Range, query: Query = q,
+): Promise<ReadingCoverage> {
+  const [r] = await query<{ briefings: string; with_reading: string;
+    first_ever: string | null }>(
+    `SELECT
+       (SELECT count(*)::text FROM field_briefings
+         WHERE day >= $1::date AND day < $2::date) AS briefings,
+       (SELECT count(*)::text FROM field_briefings
+         WHERE day >= $1::date AND day < $2::date AND strategy IS NOT NULL)
+         AS with_reading,
+       (SELECT min(day)::text FROM field_briefings) AS first_ever`,
+    [range.from, range.to]);
+  return {
+    briefings: Number(r?.briefings ?? 0),
+    withReading: Number(r?.with_reading ?? 0),
+    firstEver: r?.first_ever ?? null,
+  };
 }
 
 /**
@@ -449,17 +500,18 @@ export async function periodReport(
     (Date.parse(range.to) - Date.parse(range.from)) / DAY_MS));
   const cap = CAPS[span];
 
-  const [l, m, curves, findings] = await Promise.all([
+  const [l, m, curves, findings, readings] = await Promise.all([
     launches(range.from, range.to, cap.launch, query),
     marketMoves(range.from, range.to, cap.market, query),
     movementsIn(range, days, query),
     findingsIn(range, query),
+    readingCoverage(range, query),
   ]);
   const names = await newNames([...l.rows, ...m.rows], query);
 
   return {
     span, key, range, days,
-    launches: l.rows, market: m.rows, names, findings,
+    launches: l.rows, market: m.rows, names, findings, readings,
     movements: curves.movements, shift: curves.shift,
     totals: { launches: l.total, market: m.total },
   };

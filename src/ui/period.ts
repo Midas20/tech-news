@@ -9,7 +9,7 @@
 // what the caveats have to say, not in shape -- and building four pages that
 // drift apart is how the same question gets four different answers.
 
-import { wrap, pageHead, empty, escapeHtml, truncate } from './html.ts';
+import { wrap, pageHead, empty, escapeHtml, truncate, niceDay } from './html.ts';
 import { crumbsFor } from './nav.ts';
 import { fieldLabel } from '../vocab/fields.ts';
 import {
@@ -124,6 +124,68 @@ function curves(ms: PeriodMovement[], span: Span): string {
     </table></div>`;
 }
 
+/**
+ * Why the analysis is missing, when it is.
+ *
+ * "there aren't any report" (2026-09-10, about `/reports/month/2026-06`). That
+ * page rendered four lists and a curve table and then simply stopped: the
+ * findings section returns an empty string when it has nothing, so the analysis
+ * half of the report was not absent-with-a-reason, it was invisible.
+ *
+ * FOR EVERY PERIOD BEFORE 2026-09-09 THAT SILENCE WAS A FALSE STATEMENT. The
+ * archive did not begin writing daily readings until then, so June has no
+ * analysis for a reason that has nothing whatever to do with June. A reader
+ * looking at that page could not tell a quiet month from an unwatched one --
+ * which is the distinction this whole project keeps insisting on, made against
+ * itself here.
+ *
+ * The three cases are genuinely different and get three different sentences:
+ * nothing was watching, something was watching and no model would answer, or
+ * the readings ran and this period simply predates them.
+ */
+function noFindings(r: PeriodReport): string {
+  const span = SPAN_LABEL[r.span];
+  const c = r.readings;
+
+  // Never wrote one anywhere, so this is not about this period at all.
+  if (c.firstEver === null) {
+    return `<h2 class="sect">What the readings found</h2>
+      <p class="note"><b>Nothing, because nothing has been read yet.</b> This
+        archive has not written a daily reading on any day, so there is no
+        analysis to collect for this ${escapeHtml(span)} or any other. The lists
+        above are the pipeline's own verdicts and stand on their own.</p>`;
+  }
+
+  // The period ended before the first reading was ever written.
+  if (r.range.to <= c.firstEver) {
+    return `<h2 class="sect">What the readings found</h2>
+      <p class="note"><b>Nothing, and that is a fact about this archive rather
+        than about the ${escapeHtml(span)}.</b> The daily reading did not exist
+        yet: the first one was written on ${escapeHtml(niceDay(c.firstEver))},
+        after this ${escapeHtml(span)} had ended. Everything above was
+        reconstructed from stories that were collected at the time; the analysis
+        was not, and cannot be recovered by looking harder at this page.</p>`;
+  }
+
+  // Briefings covered it and none of them got an answer out of a model.
+  if (c.briefings > 0) {
+    return `<h2 class="sect">What the readings found</h2>
+      <p class="note"><b>Nothing was read, though something was watching.</b>
+        ${c.briefings} field briefing${c.briefings === 1 ? '' : 's'} covered this
+        ${escapeHtml(span)} and none of them carried a strategic reading &mdash;
+        the summaries were written and the analysis half was not. That is a
+        provider failure, not a quiet ${escapeHtml(span)}; each briefing says on
+        its own page which model refused it and why.</p>`;
+  }
+
+  // Readings exist elsewhere, but no briefing was written inside this period.
+  return `<h2 class="sect">What the readings found</h2>
+    <p class="note"><b>Nothing, because no report ran over these days.</b> No
+      field briefing covers any day in this ${escapeHtml(span)}, so there is no
+      analysis to collect from it. The first reading this archive wrote was
+      ${escapeHtml(niceDay(c.firstEver))}.</p>`;
+}
+
 function findings(fs: PeriodFinding[], span: Span): string {
   if (fs.length === 0) return '';
   return `
@@ -171,7 +233,7 @@ export function bodyOf(r: PeriodReport): string {
     ${r.shift ? brokenCurves(r.shift, r.span)
     : r.movements.length > 0 ? curves(r.movements, r.span)
       : noCurves(r.span, r.days)}
-    ${findings(r.findings, r.span)}`;
+    ${r.findings.length > 0 ? findings(r.findings, r.span) : noFindings(r)}`;
 }
 
 /** The other spans, as links, so a reader can widen or narrow the same view. */

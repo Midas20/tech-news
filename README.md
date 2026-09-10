@@ -9130,6 +9130,57 @@ several hours every morning "today" holds a handful of overnight items and would
 read as a broken page.
 
 
+### The missing half said nothing about being missing
+
+*"check this url `/reports/month/2026-06`, there aren't any report"* —
+2026-09-10.
+
+The page was not blank. It was the **largest month page in the archive**: 55KB
+of launches, funding and acquisitions, two names the registries had never seen,
+and a full curve table of public download numbers. What it had no trace of was
+the analysis. `findings()` returned an empty string when it had nothing, so the
+section did not render at all — no heading, no explanation, nothing between the
+curve table and the caveats.
+
+**For every period before 2026-09-09 that silence was a false statement.** This
+archive did not write its first daily reading until then, so June has no
+analysis for a reason that has nothing whatever to do with June. A reader could
+not tell a quiet month from an unwatched one.
+
+Which is the distinction this project keeps insisting on, made against itself.
+`brokenCurves` exists purely so that a withheld curve says it is withheld;
+`noCurves` explains why a week is too short to measure one. The findings section
+was the one place the rule was not applied, and it is the half of the page a
+reader came for.
+
+Three cases, three different sentences, because only one of them is ever fixed
+by waiting:
+
+| what happened | what the page now says |
+|---|---|
+| the period predates the first reading | *a fact about this archive rather than about the month* — names the first reading's date, and says the analysis cannot be recovered by reloading |
+| briefings covered it, no model answered | *nothing was read, though something was watching* — counts the briefings, calls it a provider failure, and points at the field page that names which model refused |
+| no report ran over those days | *no report ran*, rather than nothing was found |
+| the archive has never read anything | says so, without inventing a date |
+
+`readingCoverage` supplies the three numbers that separate them — briefings
+inside the period, how many carried a reading, and the first day the archive
+ever wrote one.
+
+**What this does not do is produce the missing analysis.** Period reports
+collect the claims the daily readings already argued; they do not write new
+ones, because a month of stories does not fit in a prompt and a report that
+needs a provider is missing on the day every provider is rate-limited. Filling
+in June would mean backfilling daily reports across June, which is bounded by
+the provider budget and not by any code here. The half of the period report that
+answers *"recognising market change and finding new market"* — the curve table,
+the funding and acquisition list, the unrecognised names — is complete for every
+period the archive holds stories for, and needs no model at all.
+
+`niceDay` moved into `ui/html.ts` on the way past, where the two existing copies
+in `briefing.ts` and `whatsnew.ts` now come from.
+
+
 ## The market, measured rather than reported
 
 Asked for on 2026-09-10: *"I think the news scope isn't still wide and the report

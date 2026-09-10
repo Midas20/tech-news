@@ -15,15 +15,9 @@
 // of those headlines lexically -- so this page works on a day when every
 // provider is rate-limited, which is the day it was written.
 
-import { wrap, pageHead, empty, escapeHtml, truncate } from './html.ts';
+import { wrap, pageHead, empty, escapeHtml, truncate, niceDay } from './html.ts';
 import { crumbsFor } from './nav.ts';
 import { whatsNew, type NewThing, type NewName } from '../analysis/whatsnew.ts';
-
-/** A day, as a person says it. */
-function niceDay(day: string): string {
-  return new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB',
-    { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-}
 
 /**
  * One story, as a line.

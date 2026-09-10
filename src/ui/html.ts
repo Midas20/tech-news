@@ -553,3 +553,17 @@ export function seriesTable(points: Point[]): string {
     ${table([{ name: 'bucket' }, { name: 'stories' }],
       points.map((p) => ({ bucket: p.label, stories: p.value })))}</details>`;
 }
+
+/**
+ * A day, as a person says it.
+ *
+ * Lifted here on 2026-09-10 from the two copies in `briefing.ts` and
+ * `whatsnew.ts` when a third page needed it. UTC throughout, deliberately: this
+ * archive names its days in UTC everywhere else, and a date formatter that
+ * quietly used the server's zone would render the day before for anyone west of
+ * Greenwich.
+ */
+export function niceDay(day: string): string {
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB',
+    { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+}

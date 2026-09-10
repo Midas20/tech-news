@@ -34,7 +34,7 @@
 // and, worse, would give two people looking at the same archive two different
 // reports -- and a report that changes when you reload is not a report.
 
-import { wrap, pageHead, empty, escapeHtml, truncate, icon } from './html.ts';
+import { wrap, pageHead, empty, escapeHtml, truncate, icon, niceDay } from './html.ts';
 import { crumbsFor } from './nav.ts';
 import { FIELDS, fieldLabel } from '../vocab/fields.ts';
 import { leadCard, periodLinks } from './period.ts';
@@ -51,12 +51,6 @@ export { reportDay };
 function paras(body: string, cls = 'mv-body'): string {
   return body.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean)
     .map((p) => `<p class="${cls}">${escapeHtml(p)}</p>`).join('');
-}
-
-/** A day, as a person says it. */
-function niceDay(day: string): string {
-  return new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB',
-    { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
 /** A stored timestamp, trimmed to the minute. */
