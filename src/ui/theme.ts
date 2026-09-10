@@ -2057,6 +2057,28 @@ main:has(.reading) .wrap{max-width:1320px}
 @media(max-width:720px){
   .reading{max-width:100%}
 }
+/* THE PERIOD READING. A month read against the months before it.
+   Named pr- rather than mv- deliberately: .mv-then-now (no backticks: this is inside a template literal) already exists above
+   for the field report's shift block and is a two-column grid, so reusing that
+   name silently laid a 1fr 1fr grid over a card that holds a claim, a
+   paragraph and its evidence. The classes were also, for one commit, used with
+   no rule at all -- which renders as unstyled text and is exactly the failure
+   reported on 2026-09-09 as "the current report display style is messy". */
+.pr-card{padding:var(--s-4);border:1px solid var(--line);border-radius:4px;
+  background:var(--bg-2,transparent)}
+.pr-claim{margin:0 0 var(--s-2);font:600 var(--t-16)/1.4 var(--sans);
+  color:var(--ink);max-width:70ch}
+.pr-ends{display:grid;grid-template-columns:1fr 1fr;gap:var(--s-4);
+  margin:var(--s-3) 0 0;padding:var(--s-3) 0 0;border-top:1px solid var(--line)}
+/* A claim about the present was never paired, so it gets one column rather than
+   an empty "Before" reporting a comparison that was never attempted. */
+.pr-one{grid-template-columns:1fr}
+@media(max-width:720px){.pr-ends{grid-template-columns:1fr;gap:var(--s-3)}}
+.pr-end h4{margin:0 0 var(--s-2);font:600 var(--t-11)/1.6 var(--sans);
+  letter-spacing:.06em;text-transform:uppercase;color:var(--ink-4)}
+.pr-end ul{margin:0;padding:0;list-style:none;display:grid;gap:var(--s-2)}
+.pr-end li{font:400 var(--t-13)/1.45 var(--sans);min-width:0}
+.pr-end p{margin:0;font:400 var(--t-13)/1.45 var(--sans)}
 `;
 
 /**

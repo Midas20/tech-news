@@ -62,7 +62,8 @@
     "dev:site": "wrangler dev -c wrangler.site.toml",
     "seed:breadth": "node --experimental-strip-types scripts/seed-breadth.ts",
     "build:app": "node --experimental-strip-types scripts/build-app.ts",
-    "app": "node --experimental-strip-types src/launcher/launch.ts"
+    "app": "node --experimental-strip-types src/launcher/launch.ts",
+    "read:period": "node --experimental-strip-types scripts/read-period.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

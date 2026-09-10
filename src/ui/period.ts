@@ -204,23 +204,41 @@ function noFindings(r: PeriodReport): string {
  */
 function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Span): string {
   const claim = (title: string, body: string, then: unknown, now: unknown,
-    tag = '') => `<article class="mv-then-now">
-      <p class="mv-claim">${escapeHtml(title)}${tag}</p>
+    compared: boolean, tag = '') => `<article class="pr-card">
+      <p class="pr-claim">${escapeHtml(title)}${tag}</p>
       ${body ? `<p class="mv-body">${escapeHtml(truncate(body, 420))}</p>` : ''}
-      ${pair(then, now)}
+      ${pair(then, now, compared)}
     </article>`;
 
-  const pair = (then: unknown, now: unknown): string => {
+  /**
+   * The evidence under a claim.
+   *
+   * TWO SHAPES, BECAUSE THERE ARE TWO KINDS OF CLAIM. A shift or a direction
+   * asserts that something CHANGED, so it has two ends and both belong on the
+   * page -- and a missing earlier end has to say so, or a one-sided claim reads
+   * as a comparison that was made and won.
+   *
+   * Work, positioning and openings assert something about the present. They
+   * were never paired and there is no earlier end to be missing. Rendering
+   * "Before: no earlier story on this subject is held" under them, which the
+   * first version did, reports a comparison as failed that was never attempted
+   * -- inventing a gap in the evidence rather than describing one.
+   */
+  const pair = (then: unknown, now: unknown, compared: boolean): string => {
     const t = asCites(then);
     const n = asCites(now);
     if (t.length === 0 && n.length === 0) return '';
-    return `<div class="mv-ends">
+    if (!compared) {
+      return `<div class="pr-ends pr-one"><div class="pr-end">
+        <h4>Evidence</h4><ul>${endOf(n)}</ul></div></div>`;
+    }
+    return `<div class="pr-ends">
       ${t.length === 0
-    ? `<div class="mv-end"><h4>Before</h4><p class="muted">No earlier story on
-         this subject is held.</p></div>`
-    : `<div class="mv-end"><h4>Before</h4><ul>${endOf(t)}</ul></div>`}
+    ? `<div class="pr-end"><h4>Before</h4><p class="muted">No earlier story on
+         this subject is held, so this rests on the present alone.</p></div>`
+    : `<div class="pr-end"><h4>Before</h4><ul>${endOf(t)}</ul></div>`}
       ${n.length === 0 ? ''
-    : `<div class="mv-end"><h4>In this ${escapeHtml(SPAN_LABEL[span])}</h4>
+    : `<div class="pr-end"><h4>In this ${escapeHtml(SPAN_LABEL[span])}</h4>
          <ul>${endOf(n)}</ul></div>`}
     </div>`;
   };
@@ -233,31 +251,31 @@ function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Span): st
   const sections = [
     s.shift ? `<h2 class="sect">What changed over this ${SPAN_LABEL[span]}</h2>
       <div class="mv-items">${claim(s.shift.moved, s.shift.after ?? '',
-    s.shift.then, s.shift.now)}</div>` : '',
+    s.shift.then, s.shift.now, true)}</div>` : '',
 
     (s.work ?? []).length === 0 ? '' : `
       <h2 class="sect">Where the work is</h2>
       <p class="note">Things one person could start on remotely, with the
         evidence that somebody would pay for it.</p>
-      <div class="mv-items">${s.work.map((w) => claim(w.what, w.why, [], w.evidence,
+      <div class="mv-items">${s.work.map((w) => claim(w.what, w.why, [], w.evidence, false,
     ` <span class="mv-tag ${escapeHtml(w.horizon)}">${
       escapeHtml(HORIZON[w.horizon] ?? w.horizon)}</span>`)).join('')}</div>`,
 
     (s.direction ?? []).length === 0 ? '' : `
       <h2 class="sect">Where this is going</h2>
       <div class="mv-items">${s.direction.map((d) =>
-    claim(d.claim, d.reasoning, d.then, d.now)).join('')}</div>`,
+    claim(d.claim, d.reasoning, d.then, d.now, true)).join('')}</div>`,
 
     (s.positioning ?? []).length === 0 ? '' : `
       <h2 class="sect">What each company appears to be betting on</h2>
       <div class="mv-items">${s.positioning.map((p) => claim(p.who, p.bet, [],
-    p.evidence, p.firstParty
+    p.evidence, false, p.firstParty
       ? ' <span class="mv-tag watch">says so itself</span>' : '')).join('')}</div>`,
 
     (s.openings ?? []).length === 0 ? '' : `
       <h2 class="sect">What nobody has taken</h2>
       <div class="mv-items">${s.openings.map((o) =>
-    claim(o.what, o.why, [], o.evidence)).join('')}</div>`,
+    claim(o.what, o.why, [], o.evidence, false)).join('')}</div>`,
   ].filter(Boolean).join('');
 
   return `
@@ -331,19 +349,19 @@ function findings(all: PeriodFinding[], span: Span): string {
       story it revises.${paired < fs.length ? ` ${fs.length - paired} of
       ${fs.length} had no earlier end in the archive and state only the
       present.` : ''}</p>
-    <div class="mv-items">${fs.map((f) => `<article class="mv-then-now">
-      <a class="mv-claim"
+    <div class="mv-items">${fs.map((f) => `<article class="pr-card">
+      <a class="pr-claim"
          href="/field/${encodeURIComponent(f.field)}/report/${escapeHtml(f.day)}">${
   escapeHtml(truncate(f.text, 220))}</a>
       <span class="muted">${escapeHtml(fieldLabel(f.field))} &middot; read
         ${escapeHtml(f.day)}</span>
-      ${f.then.length === 0 && f.now.length === 0 ? '' : `<div class="mv-ends">
+      ${f.then.length === 0 && f.now.length === 0 ? '' : `<div class="pr-ends">
         ${f.then.length === 0
-    ? `<div class="mv-end"><h4>Before</h4><p class="muted">No earlier story on
+    ? `<div class="pr-end"><h4>Before</h4><p class="muted">No earlier story on
          this subject is held, so this claim rests on the present alone.</p></div>`
-    : `<div class="mv-end"><h4>Before</h4><ul>${endOf(f.then)}</ul></div>`}
+    : `<div class="pr-end"><h4>Before</h4><ul>${endOf(f.then)}</ul></div>`}
         ${f.now.length === 0 ? ''
-    : `<div class="mv-end"><h4>Now</h4><ul>${endOf(f.now)}</ul></div>`}
+    : `<div class="pr-end"><h4>Now</h4><ul>${endOf(f.now)}</ul></div>`}
       </div>`}
     </article>`).join('')}</div>`;
 }

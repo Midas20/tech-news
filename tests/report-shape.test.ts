@@ -156,6 +156,38 @@ describe('the page is styled, not merely structured', () => {
     expect(missing, `classes used with no CSS: ${missing.join(', ')}`).toEqual([]);
   });
 
+  it('defines every class the period pages use', () => {
+    // THE SAME CHECK, ON THE OTHER RENDERER. It covered briefing.ts only, so
+    // when the period reading landed on 2026-09-10 using pr-card, pr-claim,
+    // pr-ends and pr-end -- none of which had a rule -- nothing failed. The
+    // page rendered as unstyled text, which is the exact symptom this test was
+    // written for the first time.
+    const periods = readFileSync(
+      new URL('../src/ui/period.ts', import.meta.url), 'utf8');
+    const used = new Set(
+      [...periods.matchAll(/class="([a-z0-9 _-]+)"/g)]
+        .flatMap((m) => m[1]!.split(/\s+/))
+        .filter(Boolean));
+    expect(used.size).toBeGreaterThan(5);
+    const missing = [...used].filter((c) => !theme.includes(`.${c}`));
+    expect(missing, `classes used with no CSS: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('does not reuse a class name across two different layouts', () => {
+    // `.mv-then-now` is the field report's shift block: a two-column grid of
+    // before against after. The period reading reached for the same name for a
+    // card holding a claim, a paragraph and its evidence, and silently
+    // inherited `grid-template-columns:1fr 1fr` over all three.
+    //
+    // A collision like this cannot be caught by checking that a class has a
+    // rule, because it has one -- somebody else's. So the period reading's
+    // classes carry their own prefix, and this asserts the two sets stay apart.
+    const periods = readFileSync(
+      new URL('../src/ui/period.ts', import.meta.url), 'utf8');
+    expect(periods).not.toMatch(/class="[^"]*\bmv-then-now\b/);
+    expect(periods).toMatch(/class="pr-card"/);
+  });
+
   it('styles the findings as cards a reader can scan and click', () => {
     // Replaced .mv-op on 2026-09-09, when the report became an index: the
     // whole card is the link, so the target is the size of the thought.

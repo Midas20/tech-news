@@ -9665,6 +9665,68 @@ reserve a share of the daily budget for analysis rather than letting ingestion
 take it all, or put a working `ANTHROPIC_API_KEY` at the head of the chain.
 
 
+### Reading a period without the free plan
+
+*"I want you generate report without project's free plan"* — 2026-09-10, after
+July had spent a day unable to get a reading because all five providers were out
+of credentials, quota or money.
+
+That is a fact about how this project is funded, not about whether a month can
+be read. So `npm run read:period` has a second path:
+
+```
+npm run read:period -- --month 2026-07 --dump july.json
+npm run read:period -- --month 2026-07 --from reading.json --by "who wrote it"
+```
+
+`--dump` writes the exact corpus and earlier end that `readPeriod` would send —
+so a reading written against the dump cites the same indices the store resolves.
+`--from` takes the answer back.
+
+**It is held to exactly the same standard.** `validateStrategy` drops any claim
+that cannot cite both ends of the comparison it asserts, and `storedStrategy`
+resolves every citation index against the corpus the reader was shown and drops
+what does not resolve. A claim that cannot survive its own citations does not
+reach the page, whoever wrote it. The script prints what it threw away.
+
+`--by` is required, and the page prints it. A reading nobody can reproduce by
+re-running the archive is a different kind of artefact from one they can, and
+that distinction is not one to bury in a column nobody displays.
+
+July 2026 was read this way: 120 stories against 40 earlier ones, every claim
+surviving its citations, stored as `month/2026-07`.
+
+### Two mistakes worth keeping
+
+**A class name that already belonged to something else.** The period reading's
+cards were written as `.mv-then-now` — which already exists as the field
+report's shift block and is a two-column grid. The new cards, holding a claim, a
+paragraph and their evidence, silently inherited `grid-template-columns:1fr 1fr`
+over all three. The existing "every class has a rule" test could not catch it,
+because the class *had* a rule: somebody else's. The period classes now carry a
+`pr-` prefix, and a test asserts the two sets stay apart.
+
+That test also only ever read `briefing.ts`, so four genuinely undefined classes
+in `period.ts` passed it. It reads both renderers now.
+
+**CSS appended to a TypeScript file.** `theme.ts` holds its CSS in a template
+literal, and appending to the end of the file put the rules after the last
+`export`. Moving them by line number then put them inside `FACET_JS` instead —
+which typechecked, and broke the static asset. `tests/scheduler.test.ts` caught
+it by parsing the shipped JavaScript. Backticks inside that literal remain the
+other way to break this file, and the comment there says so.
+
+### An absence that reported a comparison nobody attempted
+
+The first version rendered *"Before: no earlier story on this subject is held"*
+under every work item, positioning call and opening. Those claims are about the
+present and were never paired — there is no earlier end to be missing. Saying so
+invents a gap in the evidence rather than describing one, which is the same
+error as an absent section reading as "nothing was found", pointed the other
+way. Only shift and direction assert change, so only they get two columns; the
+rest get one, headed "Evidence".
+
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.
