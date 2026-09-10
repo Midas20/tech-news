@@ -172,11 +172,31 @@ export async function marketMoves(
  * second opinion about what a product name is -- two copies would drift, and
  * the one making decisions unattended would be the one that drifted.
  */
+// NO `i` FLAG ON THE FIRST TWO, AND THAT IS THE WHOLE POINT OF THIS BLOCK.
+//
+// Capitalisation is the only signal separating a product name from a sentence,
+// and `/i` makes `[A-Z]` match lowercase, which destroys it. The keyword had to
+// be case-insensitive, the flag was the easy way to get that, and it silently
+// disabled every `[A-Z]` in the same pattern. Measured on the first year report
+// generated, 2026-09-09 -- these all reached the "names this archive had never
+// seen" list:
+//
+//   "Introducing context-aware vulnerability discovery and remediation..."
+//     -> context-aware vulnerability discovery
+//   "Introducing GPT-6 Astra for developers"      -> GPT-6 Astra for
+//   "Announcing support for ClickStack..."        -> support for ClickStack
+//   "Introducing DNS filtering by Control D"      -> DNS filtering by
+//   "Introducing computer use in Gemini 3.5 Flash" -> computer use in
+//
+// Six of nineteen names were feature descriptions or sentences cut mid-phrase.
+// The keyword is spelled with both cases instead, so `[A-Z]` means what it says
+// and a trailing lowercase connective -- `for`, `in`, `by` -- ends the name
+// rather than joining it.
 const PATTERNS: RegExp[] = [
   // "Show HN: Booley - an IDE for ..." and "Show HN: Booley, an IDE ..."
-  /^show hn:\s*([A-Z][\w.+-]*(?:\s[A-Z][\w.+-]*){0,2})\s*[-–—:,]/i,
+  /^[Ss]how [Hh][Nn]:\s*([A-Z][\w.+-]*(?:\s[A-Z][\w.+-]*){0,2})\s*[-–—:,]/,
   // "Introducing Consort", "Announcing Foo Bar", "Meet Baz"
-  /^(?:introducing|announcing|meet|presenting)\s+([A-Z][\w.+-]*(?:\s[A-Z][\w.+-]*){0,2})\b/i,
+  /^(?:[Ii]ntroducing|[Aa]nnouncing|[Mm]eet|[Pp]resenting)\s+([A-Z][\w.+-]*(?:\s[A-Z][\w.+-]*){0,2})\b/,
   // "Cymphony launches with $30M", "Harvey raises $550M", "Euno raises $23M"
   /^([A-Z][\w.+-]*(?:\s[A-Z][\w.+-]*){0,1})\s+(?:launches|raises|emerges|debuts|unveils)\b/,
   // "... startup Lightfield raises", "AI company Foo acquires"

@@ -62,6 +62,37 @@ describe('names are read out of the headline, not out of our tagging', () => {
     expect(found).toEqual([]);
   });
 
+  it('REFUSES a lowercase feature description after the keyword', () => {
+    // Found generating the first year report. `/i` on the pattern made `[A-Z]`
+    // match lowercase, which destroyed the only signal separating a product
+    // name from a sentence. Six of nineteen names were feature descriptions or
+    // phrases cut mid-clause.
+    const slugs = extractNames([
+      story('Introducing context-aware vulnerability discovery and remediation'),
+      story('Announcing support for ClickStack in the Terraform provider'),
+      story('Introducing computer use in Gemini 3.5 Flash'),
+      story('Introducing agentic video understanding with Gemini'),
+    ], new Set()).map((f) => f.slug);
+    expect(slugs).toEqual([]);
+  });
+
+  it('stops a name at a lowercase connective rather than swallowing it', () => {
+    // "Introducing GPT-6 Astra for developers" produced `gpt-6-astra-for`.
+    const found = extractNames(
+      [story('Introducing GPT-6 Astra for developers')], new Set());
+    expect(found).toHaveLength(1);
+    expect(found[0]!.name).toBe('GPT-6 Astra');
+  });
+
+  it('still matches the keyword whatever case it is written in', () => {
+    // The `i` flag was there for a reason; removing it must not cost the
+    // keyword match that justified it.
+    for (const t of ['Introducing Consort: a database', 'introducing Consort: a database',
+      'Show HN: Booley – an IDE', 'show hn: Booley – an IDE']) {
+      expect(extractNames([story(t)], new Set()).length, t).toBe(1);
+    }
+  });
+
   it('says nothing about a name the archive already knows', () => {
     expect(extractNames([story('Cymphony launches with $30M')],
       new Set(['cymphony']))).toEqual([]);
