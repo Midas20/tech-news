@@ -34,6 +34,7 @@ import {
 } from './briefing.ts';
 import { renderRail, statusBadge, topNav, railCounts } from './rail.ts';
 import { renderSources } from './sources.ts';
+import { renderWhatsNew } from './whatsnew.ts';
 import { renderIntel } from './intel.ts';
 import {
   accountById, accountByUsername, cookieFrom, COOKIE, isPublicPath, issueSession,
@@ -899,6 +900,10 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
       if (!day) return missing({ path });
       return render(`Report ${day}`, await renderReportDay(day));
     }
+    // THE ONE REPORT THAT IS NOT ABOUT A FIELD. Above /fields deliberately:
+    // it is the answer to "what is new", and every other report can only
+    // answer "what happened in a category somebody wrote down in advance".
+    if (path === '/new') return render('What is new', await renderWhatsNew());
     if (path === '/fields') return render('Fields', await renderFields());
     if (path.startsWith('/field/')) {
       const rest = path.slice('/field/'.length);

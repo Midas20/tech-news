@@ -485,17 +485,59 @@ export async function briefArchive(
  * then written back with the report -- doing that in two places is how a gap or
  * an overlap gets introduced between consecutive days.
  */
+/**
+ * The fields worth spending a model call on.
+ *
+ * Reported on 2026-09-09: "You make all field's report even user didn't select
+ * favourite fields." True -- `briefArchive` defaulted to every slug in FIELDS,
+ * so the job attempted fourteen readings a day whether or not anybody had asked
+ * for them. Each one is a model call and a strategy call behind it, so the
+ * default was spending twenty-eight requests a day to write about subjects
+ * nobody had chosen.
+ *
+ * `accounts.fields` has held the answer since the taxonomy was written and
+ * nothing read it. Now the union across accounts decides, so two people
+ * choosing different fields get both and neither gets a report nobody reads.
+ *
+ * FALLS BACK TO EVERYTHING WHEN NOBODY HAS CHOSEN, and the fallback is not
+ * laziness: an archive that writes nothing until somebody visits Settings looks
+ * broken on the day it is installed, and the first thing a new reader wants is
+ * something to read. The job note says which of the two happened, so "why is it
+ * writing about robotics" has an answer in the log rather than in this comment.
+ */
+export async function reportFields(query: Query = q): Promise<{
+  fields: string[]; chosen: boolean;
+}> {
+  const rows = await query<{ slug: string }>(
+    `SELECT DISTINCT unnest(fields) AS slug FROM accounts
+      WHERE fields IS NOT NULL AND cardinality(fields) > 0`);
+  const known = new Set(FIELDS.map((f) => f.slug));
+  // Filtered against the taxonomy: a field removed from FIELDS but still sitting
+  // in somebody's saved list must not make the report ask for a briefing on a
+  // slug that no longer has a corpus.
+  const chosen = rows.map((r) => r.slug).filter((s) => known.has(s));
+  if (chosen.length > 0) return { fields: chosen, chosen: true };
+  return { fields: FIELDS.map((f) => f.slug), chosen: false };
+}
+
 export async function runDailyReport(
   ctx: LlmContext, query: Query = q, now = new Date(),
-): Promise<{ day: string; fields: number; themes: number; read: number; days: number }> {
+): Promise<{ day: string; fields: number; themes: number; read: number; days: number;
+  chosen: boolean; asked: number }> {
   const win = nextWindow(now, await lastCoverage(query));
+  const { fields, chosen } = await reportFields(query);
   // `ctx.db` is the worker connection the job already holds, and the outside
   // research needs a WRITER: a resolved package, a fetched curve and a seen
   // headline are all worth keeping so tomorrow's report does not ask the same
   // public API the same question. Passing null would still work and would make
   // this the most network-expensive job in the system, every day, for ever.
-  const report = await briefArchive(ctx, win, now, query, undefined, ctx.db ?? null);
-  return { ...await saveArchiveReport(query, report), days: windowDays(win) };
+  const report = await briefArchive(ctx, win, now, query, fields, ctx.db ?? null);
+  return {
+    ...await saveArchiveReport(query, report),
+    days: windowDays(win),
+    chosen,
+    asked: fields.length,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1000,11 +1042,18 @@ export async function archiveFor(
 
 /** One line for the scheduler's log. */
 export function summariseReport(
-  r: { day: string; fields: number; themes: number; read: number; days?: number },
+  r: { day: string; fields: number; themes: number; read: number; days?: number;
+    chosen?: boolean; asked?: number },
 ): string {
   return `${r.day}: ${r.fields} fields briefed, ${r.themes} findings, `
     + `written from ${r.read} stories read`
-    + (r.days ? ` over ${r.days} day${r.days === 1 ? '' : 's'}` : '');
+    + (r.days ? ` over ${r.days} day${r.days === 1 ? '' : 's'}` : '')
+    // WHICH FIELDS AND WHY, in the line an operator actually reads. "Why is it
+    // writing about robotics" should be answerable from the job log rather than
+    // from a comment in the source.
+    + (r.asked === undefined ? ''
+      : r.chosen ? `; asked for ${r.asked} chosen in Settings`
+        : `; asked for all ${r.asked} -- nobody has chosen any yet`);
 }
 
 // ---------------------------------------------------------------------------

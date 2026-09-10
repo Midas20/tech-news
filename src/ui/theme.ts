@@ -1719,6 +1719,19 @@ h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
    .bf-fp, and the only colour on the page. */
 .mv-cites a.fp{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
 
+/* NAMES THIS ARCHIVE HAD NEVER SEEN. A name, what corroborates it, and the
+   headlines it came out of -- nested, because the headline is the evidence for
+   the name and putting it anywhere else would separate a claim from its proof. */
+.mv-new-names{list-style:none;margin:0 0 var(--s-5);padding:0}
+.mv-new-names>li{padding:var(--s-3) 0;border-bottom:1px solid var(--line)}
+.mv-new-names>li>a{font:600 var(--t-15)/1.4 var(--sans);color:var(--ink);
+  text-decoration:none}
+.mv-new-names>li>a:hover{text-decoration:underline}
+.mv-new-names>li>.muted{display:inline-block;margin-left:var(--s-2);
+  font:400 var(--t-11)/1.6 var(--sans);color:var(--ink-4)}
+.mv-new-names .mv-elsewhere{margin:var(--s-2) 0 0;padding-left:var(--s-4)}
+.mv-new-names .mv-elsewhere li{border-bottom:0;padding:2px 0}
+
 /* THE REPORT AS AN INDEX. One card per finding: the claim, one line of why,
    and a way in. Asked for on 2026-09-09 -- "the report have to simple with core
    content and when user click each content, show detail page" -- against a

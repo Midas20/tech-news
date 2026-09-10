@@ -110,7 +110,11 @@ export const SECTIONS: NavSection[] = [
   {
     id: 'reports', label: 'Reports', icon: 'book', home: '/reports',
     blurb: 'What happened, written each morning from the stories that arrived.',
-    owns: ['/reports', '/trends/report'],
+    // '/new' is a report and belongs in this tab, not in Explore. It is the one
+    // report that is not about a field -- see src/ui/whatsnew.ts -- and putting
+    // it anywhere else would file "what is new" under a category, which is the
+    // exact shape it exists to escape.
+    owns: ['/reports', '/trends/report', '/new'],
     // '/field/<slug>/report' and '/field/<slug>/report/<day>', which live under
     // Explore's '/field/' prefix and are not Explore's pages.
     claims: [/^\/field\/[^/]+\/report(\/|$)/],

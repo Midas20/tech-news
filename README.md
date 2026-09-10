@@ -8890,6 +8890,84 @@ hold is not outside evidence and presenting it as an independent second sighting
 would be the worst error this module could make.
 
 
+## The report that is not about a field
+
+Two reports minutes apart on 2026-09-09, and they are the same objection from
+both ends:
+
+> you make report on only fields that user selected, but the most important
+> report is about new appearing fields and market, tool, platform
+
+> You make all field's report even user didn't select favourite fields
+
+`briefArchive` loops over `FIELDS`, a taxonomy written in advance, and asks what
+happened inside each one. **That shape can only ever report on categories
+somebody already thought of.** A genuinely new thing arrives without a field: it
+is one launch from one vendor, tagged with whichever existing label its words
+happened to match, and it reads as an ordinary event in an established category.
+
+So `/new` answers the other question, and it is the only report here that is not
+about a field.
+
+### Nothing on it is written by a model
+
+The emerging ledger (0074) does this properly, reading names out of prose. On
+the day this was asked for it had **3,064 stories unscanned and had added
+nothing since 23 June**, because the `names` job needs a model and every
+provider was rate-limited. The most important report in the system was one that
+could not be written at all.
+
+So `/new` reads the pipeline's own verdicts instead:
+
+| | |
+|---|---|
+| `launch` | the event classifier's verdict that a story introduces rather than updates |
+| `market` | money and ownership moving &mdash; 8 today, and it was 3 in the whole archive before the venture press came off the host blocklist |
+| names | product names pulled out of those headlines, lexically |
+
+### The first version of the name-finder asked the wrong question
+
+It computed a set difference over our own tagging: technologies named today
+that the archive had never attached to a story before. Measured, the answer was
+**`gmail`, `nasa`, `cooling`, `hacking`** &mdash; every one an established thing
+whose taxonomy row says `origin: seed` or `origin: topic_index`. That list
+reports **tagger coverage**: which known names the matcher happened to hit for
+the first time. Useful to somebody maintaining the tagger and worthless to
+somebody asking what is new in the world.
+
+A genuinely new thing is in no registry at all. It is a word in a headline, so
+the names come out of the headline &mdash; and only out of `launch` and `market`
+headlines, because introduction is what makes a capitalised word a product name
+rather than a person, a place, or the first word of a sentence.
+
+It found `booley`, `volanti`, `cymphony`, `consort`, `geordie` and `lightfield`
+on the first run. It also found **`an-open` and `a-free`**, from *"Show HN: An
+open-source SAS interpreter"* and *"Show HN: A free, open-source agent
+orchestrator"* &mdash; those authors did not name their tool in the headline,
+and inventing a name from the first two words is worse than reporting nothing.
+Headlines beginning with a determiner are now refused.
+
+`slugify` and `NOT_A_PRODUCT` are shared with the emerging ledger rather than
+duplicated: two opinions about what a product name is would drift, and the one
+deciding unattended would be the one that drifted.
+
+**An absence on this page means nothing**, and the page says so. It can only
+find a name somebody put in a headline in a form a pattern recognises.
+
+### The daily report now asks for the fields somebody chose
+
+`accounts.fields` has held that answer since the taxonomy was written and
+nothing read it, so the job attempted fourteen readings a day whether or not
+anybody had asked for them &mdash; a model call each, with a strategy call
+behind it. The union across accounts now decides, so two people choosing
+different fields get both.
+
+It **falls back to everything when nobody has chosen**, and the fallback is not
+laziness: an archive that writes nothing until somebody visits Settings looks
+broken on the day it is installed. The job note says which of the two happened,
+so *"why is it writing about robotics"* is answerable from the log.
+
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.
