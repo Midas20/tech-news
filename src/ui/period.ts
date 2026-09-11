@@ -10,6 +10,7 @@
 // drift apart is how the same question gets four different answers.
 
 import { FLOOR, NEW_CEILING, NEW_GROWTH } from '../analysis/market.ts';
+import { confidenceOf } from '../analysis/strategy.ts';
 import {
   techOf, controlsOf, techGap, EDGE as LABOUR_EDGE, type LabourPicture,
 } from '../analysis/labour.ts';
@@ -141,6 +142,81 @@ function curveTable(ms: PeriodMovement[]): string {
 }
 
 /**
+ * The verdict, in figures, before any prose.
+ *
+ * Asked for on 2026-09-11: a labour-market report whose first section is four
+ * numbers with their sources, and "I want to make monthly report at this
+ * level". The thing that makes that section work is not the layout. It is that
+ * every number in it was measured by somebody who was not arguing a case, and
+ * says who.
+ *
+ * NOTHING HERE IS WRITTEN BY A MODEL. Each figure is computed from a public
+ * series -- Indeed Hiring Lab's postings trackers, or the registries' own
+ * download counts -- and carries the name of whoever published it. The reading
+ * below interprets them; this block cannot be argued with, only re-fetched.
+ *
+ * A FIGURE THAT CANNOT BE MEASURED IS OMITTED, NOT ESTIMATED. A period the
+ * postings series does not reach shows fewer cards rather than four cards of
+ * which two are guesses, and the block disappears entirely rather than render
+ * an empty frame.
+ */
+export function verdictBlock(r: PeriodReport): string {
+  const cards: string[] = [];
+  const card = (value: string, label: string, source: string) => `
+    <div class="vd-card">
+      <div class="vd-value">${value}</div>
+      <div class="vd-label">${label}</div>
+      <div class="vd-source">${escapeHtml(source)}</div>
+    </div>`;
+  const pct = (n: number) => `${n >= 0 ? '+' : ''}${n}%`;
+
+  const tech = techOf(r.labour);
+  const software = tech.find((m) => m.sector === 'Software Development');
+  const gap = techGap(r.labour);
+  const remoteSw = r.labour.remote.find((m) => m.sector === 'techsoftware');
+
+  if (software) {
+    cards.push(card(software.end.toFixed(1),
+      `Software Development job postings, against February&nbsp;2020&nbsp;=&nbsp;100`,
+      'Indeed Hiring Lab'));
+    cards.push(card(pct(software.changePct),
+      `Change across this ${SPAN_LABEL[r.span]}`, 'Indeed Hiring Lab'));
+  }
+  if (gap) {
+    cards.push(card(pct(gap.gap),
+      `Technology against the control sectors, same window`, 'Indeed Hiring Lab'));
+  }
+  if (remoteSw) {
+    cards.push(card(`${remoteSw.end.toFixed(1)}%`,
+      `Software postings mentioning remote or hybrid work`, 'Indeed Hiring Lab'));
+  }
+  if (r.labour.ai) {
+    cards.push(card(`${r.labour.ai.end.toFixed(2)}%`,
+      `All job postings mentioning AI`, 'Indeed Hiring Lab'));
+  }
+
+  // The download instrument's one-line answer to the harder question.
+  const real = r.movements.filter((m) => m.after >= FLOOR || m.before >= FLOOR);
+  if (!r.shift && real.length > 0) {
+    const forming = real.filter((m) => m.before < NEW_CEILING
+      && m.after >= FLOOR && m.changePct >= NEW_GROWTH);
+    cards.push(card(String(forming.length),
+      `New markets forming, of ${real.length} tracked packages`,
+      'PyPI and npm download counts'));
+  }
+
+  if (cards.length === 0) return '';
+  return `
+    <section class="vd">
+      <h2 class="sect">The verdict, in figures</h2>
+      <p class="note">Measured by the people named under each number, not by
+        this archive and not by anybody selling anything in it. Everything below
+        this block is interpretation; this is the part that can be re-fetched.</p>
+      <div class="vd-grid">${cards.join('')}</div>
+    </section>`;
+}
+
+/**
  * Where the work is, which is the half of "market" this archive could not see.
  *
  * "the purpose of this project is finding new market and market change"
@@ -161,7 +237,7 @@ function curveTable(ms: PeriodMovement[]): string {
  * publisher over the same window. In 2023 software postings fell 43.8% while
  * the control median fell 17.6%: the gap, not the fall, is the finding.
  */
-function labourBlock(p: LabourPicture, span: Span): string {
+export function labourBlock(p: LabourPicture, span: Span): string {
   const tech = techOf(p);
   const gap = techGap(p);
   const pct = (n: number) => `${n >= 0 ? '+' : ''}${n}%`;
@@ -383,6 +459,36 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
    * who it is for. This archive exists to find work a person can take, and
    * those are the two sentences that say whether they can take it.
    */
+  /**
+   * THE CONFIDENCE MARKER, ON THE CLAIM RATHER THAN IN THE FOOTNOTES.
+   *
+   * Asked for on 2026-09-11 by way of a labour-market report that carries one
+   * of these on every assertion: "I want to make monthly report at this level".
+   *
+   * This archive has always said the same thing in prose -- every `limits`
+   * paragraph is a long apology for how much of the evidence is a vendor
+   * describing itself -- and prose at the bottom of a page does not reach the
+   * reader who is halfway down it forming a view. An unmarked claim reads as a
+   * measured one.
+   *
+   * Absent means `contested`, which is what most of this archive honestly is.
+   */
+  const MARK: Record<string, [string, string]> = {
+    data: ['data', 'A published measurement, checkable against its source.'],
+    contested: ['contested',
+      'The sources disagree, or the only source has an interest in the answer.'],
+    forecast: ['forecast', 'A projection, and therefore wrong in detail.'],
+  };
+  const mark = (c: unknown): string => {
+    // NORMALISED THROUGH THE SAME FUNCTION THE VALIDATOR USES, so a stored
+    // value this page does not recognise renders as `contested` rather than as
+    // an unstyled marker asserting something nobody defined.
+    const key = confidenceOf(c);
+    const [label, why] = MARK[key]!;
+    return ` <span class="mv-tag conf-${key}" title="${
+      escapeHtml(why)}">${escapeHtml(label)}</span>`;
+  };
+
   const facts = (label: string, v: unknown): string => {
     const t = String(v ?? '').trim();
     return t === '' ? ''
@@ -456,7 +562,7 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
         evidence that somebody would pay for it.</p>
       <div class="mv-items">${s.work.map((w) => claim(w.what, w.why, [], w.evidence,
     false, {
-      tag: ` <span class="mv-tag ${escapeHtml(w.horizon)}">${
+      tag: `${mark(w.confidence)} <span class="mv-tag ${escapeHtml(w.horizon)}">${
         escapeHtml(HORIZON[w.horizon] ?? w.horizon)}</span>`,
       facts: facts('What it needs', w.skills),
     })).join('')}</div>`,
@@ -465,6 +571,7 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
       <h2 class="sect">Where this is going</h2>
       <div class="mv-items">${s.direction.map((d) => claim(
     d.claim, d.reasoning, d.then, d.now, true, {
+      tag: mark(d.confidence),
       // THE FALSIFIER BELOW THE EVIDENCE, not above it. A reader who has just
       // looked at both ends is the one in a position to judge whether the
       // thing that would refute this has already happened.
@@ -476,7 +583,8 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
       <h2 class="sect">What each company appears to be betting on</h2>
       <div class="mv-items">${s.positioning.map((p) => claim(p.who, p.bet, [],
     p.evidence, false, {
-      tag: p.firstParty ? ' <span class="mv-tag watch">says so itself</span>' : '',
+      tag: `${mark(p.confidence)}${p.firstParty
+        ? ' <span class="mv-tag watch">says so itself</span>' : ''}`,
       after: p.firstParty ? `<div class="mv-caveat"><p><b>Read from what they
         say about themselves.</b> Good evidence of what they have decided to
         sell, and none at all that anybody bought it.</p></div>` : '',
@@ -489,13 +597,14 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
     // resolving the evidence and shows it still unresolved.
     (s.tensions ?? []).length === 0 ? '' : `
       <h2 class="sect">Where the evidence argues with itself</h2>
-      <div class="mv-items">${s.tensions.map((t) =>
-    claim(t.what, t.sides, [], t.evidence, false)).join('')}</div>`,
+      <div class="mv-items">${s.tensions.map((t) => claim(t.what, t.sides, [],
+    t.evidence, false, { tag: mark(t.confidence) })).join('')}</div>`,
 
     (s.openings ?? []).length === 0 ? '' : `
       <h2 class="sect">What nobody has taken</h2>
       <div class="mv-items">${s.openings.map((o) => claim(o.what, o.why, [],
-    o.evidence, false, { facts: facts('Who could take it', o.who) })).join('')}</div>`,
+    o.evidence, false, { tag: mark(o.confidence),
+      facts: facts('Who could take it', o.who) })).join('')}</div>`,
   ].filter(Boolean).join('');
 
   // WHOSE PERIOD THIS IS, ABOVE THE READING RATHER THAN IN ITS FOOTNOTES.
@@ -756,6 +865,8 @@ export async function renderPeriodReport(span: Span, key: string): Promise<strin
     { crumbs })}
 
     ${spanNav(span, siblingKeys(r.range))}
+
+    ${verdictBlock(r)}
 
     ${/* THE PERIOD'S OWN READING, FIRST. Everything below it is the evidence
         and the measurements; this is the report. It is absent until the period

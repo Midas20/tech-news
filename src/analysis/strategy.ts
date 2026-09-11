@@ -30,6 +30,39 @@ import type { PublicFigure } from './public.ts';
 
 export const STRATEGY_VERSION = 'strategy-v1';
 
+/**
+ * How much weight a claim can carry, marked on the claim itself.
+ *
+ * Asked for on 2026-09-11, by way of a labour-market report that puts one of
+ * these on every assertion it makes: "I want to make monthly report at this
+ * level". It is the single most useful thing that report does, and it is not a
+ * new idea here -- it is what every `limits` paragraph in this archive has been
+ * saying in prose, moved onto the claim where a reader meets it.
+ *
+ *   data       a published measurement. A download curve, a postings index, a
+ *              GitHub topic census, a figure the publisher stated in its own
+ *              announcement. Checkable by somebody else against the same source.
+ *   contested  the sources disagree, or the only source is a party with an
+ *              interest in the answer. Most of this archive is this: a vendor
+ *              describing its own product is good evidence of what it decided
+ *              to sell and no evidence that anybody bought it.
+ *   forecast   a projection, and therefore wrong in detail.
+ *
+ * THE DEFAULT IS `contested`, DELIBERATELY. An unmarked claim is not a
+ * measured one, and the failure mode worth engineering against is a reading
+ * that quietly inherits more authority than its evidence. Understating costs a
+ * reader a second look; overstating costs them a decision.
+ */
+export type Confidence = 'data' | 'contested' | 'forecast';
+
+export const CONFIDENCE: readonly Confidence[] = ['data', 'contested', 'forecast'];
+
+/** Unknown, absent or misspelled all mean the same thing: not measured. */
+export function confidenceOf(v: unknown): Confidence {
+  const t = String(v ?? '').trim().toLowerCase();
+  return (CONFIDENCE as readonly string[]).includes(t) ? t as Confidence : 'contested';
+}
+
 /** The start of the research window: LOOKBACK_DAYS before the report window. */
 function earlier(from: string): string {
   return new Date(Date.parse(from) - 180 * 86_400_000).toISOString();
@@ -65,6 +98,8 @@ export interface Direction {
   thenOutside: number[];
   /** Indices into today's corpus, 1-based. */
   now: number[];
+  /** How much weight this claim can carry. Defaults to `contested`. */
+  confidence: Confidence;
 }
 
 /**
@@ -101,6 +136,7 @@ export interface Shift {
 export interface Positioning {
   who: string;
   bet: string;
+  confidence: Confidence;
   evidence: number[];
   /** True when the evidence is that company talking about itself. */
   firstParty: boolean;
@@ -118,6 +154,7 @@ export interface Work {
   what: string;
   why: string;
   skills: string;
+  confidence: Confidence;
   /** now = the work exists today; months = when the change lands; watch = unproven. */
   horizon: 'now' | 'months' | 'watch';
   evidence: number[];
@@ -127,6 +164,7 @@ export interface Work {
 export interface Tension {
   what: string;
   sides: string;
+  confidence: Confidence;
   evidence: number[];
 }
 
@@ -134,6 +172,7 @@ export interface Opening {
   what: string;
   why: string;
   who?: string;
+  confidence: Confidence;
   evidence: number[];
 }
 
@@ -224,6 +263,7 @@ export function validateStrategy(
         claim: text(item.claim),
         reasoning: text(item.reasoning),
         falsifier: text(item.falsifier),
+        confidence: confidenceOf(item.confidence),
         then: ids(item.then, priorSize),
         thenOutside: ids(item.thenOutside, outsideSize),
         now: ids(item.now, todaySize),
@@ -258,6 +298,7 @@ export function validateStrategy(
       return {
         who: text(item.who),
         bet: text(item.bet),
+        confidence: confidenceOf(item.confidence),
         // Positioning may be read from today alone -- what a company ships and
         // chooses to talk about is visible in one post. It still has to cite it.
         evidence: ids(item.evidence, todaySize),
@@ -275,6 +316,7 @@ export function validateStrategy(
         what: text(item.what),
         why: text(item.why),
         skills: text(item.skills),
+        confidence: confidenceOf(item.confidence),
         // An unrecognised horizon becomes "watch" rather than being dropped.
         // Overstating how ready a piece of work is costs the reader a week;
         // understating it costs them a second look.
@@ -293,6 +335,7 @@ export function validateStrategy(
       return {
         what: text(item.what),
         sides: text(item.sides),
+        confidence: confidenceOf(item.confidence),
         evidence: ids(item.evidence, todaySize),
       };
     })
@@ -306,6 +349,7 @@ export function validateStrategy(
         what: text(item.what),
         why: text(item.why),
         ...(who ? { who } : {}),
+        confidence: confidenceOf(item.confidence),
         evidence: ids(item.evidence, todaySize),
       };
     })

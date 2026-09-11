@@ -38,7 +38,9 @@ import {
 // Re-exported: it used to be defined here, and the tests and the report
 // renderer import it from this module.
 export { corpusPacket };
-import { analyseField, type Strategy, type StrategyOutcome } from './strategy.ts';
+import {
+  analyseField, type Strategy, type StrategyOutcome, type Confidence,
+} from './strategy.ts';
 
 export type { Window };
 import { publicFigures, describeFigure, bySize, type PublicFigure } from './public.ts';
@@ -661,12 +663,14 @@ export function storedStrategy(b: Briefing) {
       } : null,
       work: b.strategy.work.map((w) => ({
         what: w.what, why: w.why, skills: w.skills, horizon: w.horizon,
+        confidence: w.confidence,
         evidence: w.evidence.map((n) => cite(b, n)).filter(Boolean),
       })),
       direction: b.strategy.direction.map((d) => ({
         claim: d.claim,
         reasoning: d.reasoning,
         falsifier: d.falsifier,
+        confidence: d.confidence,
         then: d.then.map(priorCite(b)).filter(Boolean),
         now: d.now.map((n) => cite(b, n)).filter(Boolean),
         // Kept alongside `then` for the readings written before the earlier end
@@ -676,14 +680,16 @@ export function storedStrategy(b: Briefing) {
       })),
       positioning: b.strategy.positioning.map((pz) => ({
         who: pz.who, bet: pz.bet, firstParty: pz.firstParty,
+        confidence: pz.confidence,
         evidence: pz.evidence.map((n) => cite(b, n)).filter(Boolean),
       })),
       tensions: b.strategy.tensions.map((t) => ({
-        what: t.what, sides: t.sides,
+        what: t.what, sides: t.sides, confidence: t.confidence,
         evidence: t.evidence.map((n) => cite(b, n)).filter(Boolean),
       })),
       openings: b.strategy.openings.map((o) => ({
         what: o.what, why: o.why, ...(o.who ? { who: o.who } : {}),
+        confidence: o.confidence,
         evidence: o.evidence.map((n) => cite(b, n)).filter(Boolean),
       })),
       limits: b.strategy.limits,
@@ -832,6 +838,12 @@ export interface StoredDirection {
   thenCount: number;
   /** What would show it wrong. Also what the standing section reports against. */
   falsifier?: string;
+  /**
+   * How much weight the claim can carry. Optional only because readings
+   * written before 2026-09-11 do not have it; absent is read as `contested`,
+   * which is what an unmarked claim has always meant here.
+   */
+  confidence?: Confidence;
 }
 
 /** What the field looked like then, what it looks like now, cited both ends. */
@@ -843,17 +855,21 @@ export interface StoredShift {
 }
 export interface StoredWork {
   what: string; why: string; skills: string;
+  confidence?: Confidence;
   horizon: 'now' | 'months' | 'watch';
   evidence: Citation[];
 }
 export interface StoredTension {
   what: string; sides: string; evidence: Citation[];
+  confidence?: Confidence;
 }
 export interface StoredPositioning {
   who: string; bet: string; firstParty: boolean; evidence: Citation[];
+  confidence?: Confidence;
 }
 export interface StoredOpening {
   what: string; why: string; who?: string; evidence: Citation[];
+  confidence?: Confidence;
 }
 export interface StoredMovement {
   slug: string; registry: string; package: string;

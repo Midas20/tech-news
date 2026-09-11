@@ -13,6 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { parseCsv, readPostings, readRemote, readAi } from '../src/collect/labour.ts';
 import { techGap, techOf, controlsOf, type LabourPicture } from '../src/analysis/labour.ts';
+import { verdictBlock, readingBlock } from '../src/ui/period.ts';
 
 const collector = readFileSync(
   new URL('../src/collect/labour.ts', import.meta.url), 'utf8');
@@ -150,5 +151,98 @@ describe('what the instrument says about itself', () => {
 
   it('averages a week at each end so a weekday never faces a weekend', () => {
     expect(analysis).toMatch(/export const EDGE = 7/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The verdict block, and the markers on every claim
+// ---------------------------------------------------------------------------
+//
+// "how about this report, I want to make monthly report at this level"
+// -- 2026-09-11, attaching a labour-market report that opens with four measured
+// figures and carries a confidence marker on every assertion after them.
+
+describe('the verdict block', () => {
+  const report = (over: Record<string, unknown> = {}) => ({
+    span: 'month', key: '2026-08',
+    range: { from: '2026-08-01', to: '2026-09-01', label: 'August 2026' },
+    days: 31, launches: [], market: [], names: [], movements: [], findings: [],
+    measured: { days: 31, series: 150 }, shift: null,
+    labour: {
+      country: 'US', days: 31, from: '2026-08-01', to: '2026-08-31',
+      postings: [
+        { sector: 'Software Development', start: 74.2, end: 74.7, changePct: 0.6, tech: true },
+        { sector: 'Nursing', start: 100, end: 103, changePct: 3, tech: false },
+      ],
+      remote: [{ sector: 'techsoftware', start: 31.5, end: 31.0, changePct: -1.6, tech: true }],
+      ai: { start: 6.34, end: 6.72, changePct: 6 },
+    },
+    totals: { launches: 0, market: 0 },
+    readings: { briefings: 0, withReading: 0, firstEver: '2026-09-09',
+      stories: 400, sources: 30, topPct: 30 },
+    ...over,
+  });
+
+  it('puts the measured figures before any prose, with who measured them', () => {
+    const html = verdictBlock(report() as never);
+    const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+    expect(text).toContain('74.7');
+    expect(text).toContain('Indeed Hiring Lab');
+    expect(text).toContain('6.72%');
+    expect(text).toContain('31.0%');
+  });
+
+  it('omits a figure it cannot measure rather than estimating one', () => {
+    const html = verdictBlock(report({
+      labour: { country: 'US', days: 0, from: null, to: null,
+        postings: [], remote: [], ai: null },
+    }) as never);
+    expect(html).toBe('');
+  });
+
+  it('does not count forming markets while a registry break is unresolved', () => {
+    // The curves are withheld, so the count computed from them would be a
+    // number produced by an instrument the page has just said is broken.
+    const html = verdictBlock(report({
+      movements: [{ slug: 'x', registry: 'npm', package: 'x', before: 5_000,
+        after: 20_000, changePct: 300, fromDay: '2026-08-01',
+        toDay: '2026-08-31', edge: 7 }],
+      shift: { day: '2026-08-25', registry: 'pypi', medianPct: -37,
+        agreed: 57, total: 60 },
+    }) as never);
+    expect(html).not.toContain('New markets forming');
+  });
+});
+
+describe('every claim says how much weight it can carry', () => {
+  const reading = (confidence: unknown) => ({
+    read: '', shift: null, work: [], positioning: [], tensions: [], openings: [],
+    direction: [{ claim: 'A claim', reasoning: 'Because.', falsifier: '',
+      confidence, then: [{ id: 'a', title: 'Then', when: '2026-01-01' }],
+      now: [{ id: 'b', title: 'Now', when: '2026-08-01' }] }],
+  });
+  const render = (c: unknown) => readingBlock(reading(c) as never,
+    { storiesRead: 10, historyRead: 4, historyFrom: '2026-01-01',
+      provider: 'operator session', sourcesRead: 5, topShare: 20 } as never,
+    'month');
+
+  it('marks a measured claim as data', () => {
+    expect(render('data')).toContain('conf-data');
+    expect(render('data')).toContain('>data<');
+  });
+
+  it('marks a projection as a forecast', () => {
+    expect(render('forecast')).toContain('conf-forecast');
+  });
+
+  it('treats an unmarked claim as contested, not as measured', () => {
+    // The failure mode worth engineering against is a reading that quietly
+    // inherits more authority than its evidence.
+    expect(render(undefined)).toContain('conf-contested');
+    expect(render('nonsense')).toContain('conf-contested');
+  });
+
+  it('explains what the marker means without making the reader leave', () => {
+    expect(render('contested')).toMatch(/title="[^"]*interest in the answer/);
   });
 });

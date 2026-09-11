@@ -1757,6 +1757,25 @@ h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
 .mv-tag.now{color:var(--good,#1a7f37);border-color:currentColor}
 .mv-tag.months{color:var(--ink-2)}
 .mv-tag.watch{color:var(--ink-4)}
+/* CONFIDENCE, THE SAME THREE WORDS EVERYWHERE. A reader who has learned what
+   "contested" means on one claim must not have to relearn it on the next, so
+   these are the only three and they never change colour by section. */
+.mv-tag.conf-data{color:var(--good,#1a7f37);border-color:currentColor}
+.mv-tag.conf-contested{color:var(--warn,#9a6700);border-color:currentColor}
+.mv-tag.conf-forecast{color:var(--ink-4);border-style:dashed}
+
+/* THE VERDICT BLOCK: measured figures, before any prose. Sized so four of them
+   fit on a laptop and one of them still looks deliberate on a phone. */
+.vd{margin:var(--s-6) 0}
+.vd-grid{display:grid;gap:var(--s-3);
+  grid-template-columns:repeat(auto-fit,minmax(190px,1fr));margin-top:var(--s-4)}
+.vd-card{border:1px solid var(--line);border-radius:6px;padding:var(--s-4);
+  background:var(--bg-2,transparent)}
+.vd-value{font:700 var(--t-27)/1.15 var(--sans);letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;color:var(--ink)}
+.vd-label{margin-top:var(--s-2);font:400 var(--t-14)/1.5 var(--sans);color:var(--ink-2)}
+.vd-source{margin-top:var(--s-2);font:600 var(--t-11)/1.6 var(--sans);
+  letter-spacing:.04em;text-transform:uppercase;color:var(--ink-4)}
 
 /* A detail page: the claim, then the facts that qualify it, as a definition
    list rather than as more prose. */
