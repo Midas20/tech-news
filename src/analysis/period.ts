@@ -517,6 +517,21 @@ export interface ReadingCoverage {
   withReading: number;
   /** The first day this archive ever wrote a briefing, or null if never. */
   firstEver: string | null;
+  /**
+   * HOW MANY PUBLISHERS STAND BEHIND THE PERIOD, and how much of it the three
+   * biggest account for.
+   *
+   * "Generate all report of 10 years" (2026-09-10). The archive does hold ten
+   * years and eight of them cannot be read, because 1,392 of the 1,402 stories
+   * before 2025 come from five vendor blogs with deep archives a backfill could
+   * walk. A reader looking at an unread 2019 needs to be told that, and told it
+   * in numbers, or the empty page reads as a failure of this software rather
+   * than an honest limit of the evidence under it.
+   */
+  stories: number;
+  sources: number;
+  /** Percentage of the period's stories from its three largest publishers. */
+  topPct: number;
 }
 
 /**
@@ -531,19 +546,40 @@ export async function readingCoverage(
   range: Range, query: Query = q,
 ): Promise<ReadingCoverage> {
   const [r] = await query<{ briefings: string; with_reading: string;
-    first_ever: string | null }>(
-    `SELECT
+    first_ever: string | null; stories: string; sources: string;
+    top_pct: string | null }>(
+    `WITH per_source AS (
+       SELECT s.source_id, count(*) AS c
+         FROM stories s
+        WHERE s.superseded_by IS NULL AND s.dismissed_at IS NULL
+          AND s.summary_en IS NOT NULL AND length(s.summary_en) >= 60
+          AND coalesce(s.published_at, s.collected_at) >= $1::timestamptz
+          AND coalesce(s.published_at, s.collected_at) <  $2::timestamptz
+        GROUP BY 1
+     ), ranked AS (
+       SELECT c, row_number() OVER (ORDER BY c DESC) AS rn,
+              sum(c) OVER () AS total
+         FROM per_source
+     )
+     SELECT
        (SELECT count(*)::text FROM field_briefings
          WHERE day >= $1::date AND day < $2::date) AS briefings,
        (SELECT count(*)::text FROM field_briefings
          WHERE day >= $1::date AND day < $2::date AND strategy IS NOT NULL)
          AS with_reading,
-       (SELECT min(day)::text FROM field_briefings) AS first_ever`,
+       (SELECT min(day)::text FROM field_briefings) AS first_ever,
+       (SELECT coalesce(max(total), 0)::text FROM ranked) AS stories,
+       (SELECT count(*)::text FROM per_source) AS sources,
+       (SELECT round(100.0 * sum(c) / nullif(max(total), 0))::text
+          FROM ranked WHERE rn <= 3) AS top_pct`,
     [range.from, range.to]);
   return {
     briefings: Number(r?.briefings ?? 0),
     withReading: Number(r?.with_reading ?? 0),
     firstEver: r?.first_ever ?? null,
+    stories: Number(r?.stories ?? 0),
+    sources: Number(r?.sources ?? 0),
+    topPct: Number(r?.top_pct ?? 0),
   };
 }
 

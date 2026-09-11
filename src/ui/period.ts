@@ -293,6 +293,51 @@ function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Span): st
       ${escapeHtml(SPAN_LABEL[span])}.</p>`;
 }
 
+/**
+ * Why this period has no reading of its own, in the numbers that decided it.
+ *
+ * "Generate all report of 10 years" (2026-09-10). The archive holds ten years
+ * and eight of them cannot be read. That is not a bug and it is not a provider
+ * outage: 1,392 of the 1,402 stories before 2025 come from five vendor blogs
+ * whose archives a backfill could walk, so a 2019 report would be Shopify and
+ * ClickHouse's 2019 posts wearing the title of a year in technology.
+ *
+ * AN UNREAD PERIOD THAT SAYS NOTHING IS INDISTINGUISHABLE FROM A BROKEN ONE.
+ * The reader has to be able to tell "too few publishers stand behind this" from
+ * "the model was rate-limited" from "this is being read shortly", because only
+ * one of those resolves by waiting and only one of them is ever fixed by adding
+ * sources.
+ */
+function notRead(r: PeriodReport, span: Span): string {
+  const c = r.readings;
+  const label = escapeHtml(SPAN_LABEL[span]);
+  const NUM2 = new Intl.NumberFormat('en-US');
+
+  if (c.stories < 25) {
+    return `<p class="note"><b>No reading for this ${label}.</b> The archive
+      holds ${NUM2.format(c.stories)} readable
+      ${c.stories === 1 ? 'story' : 'stories'} inside it, which is too few to
+      say anything about a ${label} that would not really be a statement about
+      those ${c.stories}.</p>`;
+  }
+
+  if (c.sources < 12 || c.topPct > 60) {
+    return `<p class="note"><b>No reading for this ${label}, and it is the
+      sources rather than the ${label}.</b> Its ${NUM2.format(c.stories)}
+      stories come from just ${c.sources}
+      ${c.sources === 1 ? 'publisher' : 'publishers'}, ${c.topPct}% of them from
+      the three largest. A reading drawn from that would be those publishers&rsquo;
+      ${label} presented as the industry&rsquo;s &mdash; so it is refused rather
+      than written. This resolves only by widening the sources behind the
+      ${label}, never by waiting.</p>`;
+  }
+
+  return `<p class="note"><b>Not read yet.</b> This ${label} has
+    ${NUM2.format(c.stories)} stories across ${c.sources} publishers, which is
+    enough to read. The <code>period-reading</code> job takes one unread period
+    an hour whenever a provider is reachable, so this fills in on its own.</p>`;
+}
+
 /** Citations as they come out of jsonb: shape-checked, never trusted. */
 function asCites(v: unknown): FindingCite[] {
   return (Array.isArray(v) ? v : [])
@@ -473,7 +518,8 @@ export async function renderPeriodReport(span: Span, key: string): Promise<strin
         and the measurements; this is the report. It is absent until the period
         has been read -- the `period-reading` job walks the recent spans -- and
         the page below stands on its own when it is. */
-      reading ? readingBlock(reading.strategy as StoredStrategy, reading, span) : ''}
+      reading ? readingBlock(reading.strategy as StoredStrategy, reading, span)
+        : notRead(r, span)}
 
     ${/* THE CAVEATS WERE A QUARTER OF THIS PAGE. Measured 2026-09-10 on
         /reports/month/2026-06: 27% of the rendered text was explanation of what

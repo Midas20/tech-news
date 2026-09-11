@@ -9727,6 +9727,115 @@ way. Only shift and direction assert change, so only they get two columns; the
 rest get one, headed "Evidence".
 
 
+## Ten years exist. Two of them can be read.
+
+*"Generate all report of 10 years"* and *"And extend news source so analysis as
+many as news"* — 2026-09-10.
+
+The archive does hold ten years. Measured that day, this is what they are:
+
+| year | stories | publishers | top 3 publishers |
+|---|---|---|---|
+| 2017 | 27 | 4 | 96% |
+| 2019 | 54 | 5 | 91% |
+| 2021 | 121 | 5 | 93% |
+| 2023 | 371 | 7 | 91% |
+| 2024 | 389 | 8 | 93% |
+| 2025 | 934 | 15 | 87% |
+| 2026 | 3,995 | 106 | **35%** |
+
+**1,392 of the 1,402 stories before 2025 come from five vendor blogs** — Hugging
+Face, ClickHouse, Shopify, Vercel and OpenAI. They are there because those blogs
+keep deep archives a backfill could walk, which is a fact about their publishing
+software and not about those years.
+
+A 2019 report written from that corpus would be Shopify and ClickHouse's 2019
+blog posts wearing the title of a year in technology. It would read plausibly —
+that is what makes it dangerous. This archive already refuses to count its own
+stories because the feed list is not the industry; publishing a year drawn from
+three publishers is the same error one level up.
+
+So `readPeriod` refuses, and the page says why in the numbers that decided it:
+
+> **No reading for this year, and it is the sources rather than the year.** Its
+> 54 stories come from just 5 publishers, 91% of them from the three largest…
+> This resolves only by widening the sources behind the year, never by waiting.
+
+The threshold is 60% from the top three, with a floor of 12 publishers. Measured,
+not guessed: the one year that clears it sits at 35% and the next-best at 87%,
+so the line is in the middle of a gap. The publisher floor is what catches 2023
+and 2024, which pass the share test *after* `diversify` has capped each publisher
+— diversifying a narrow corpus makes it look balanced without making it broad.
+
+### A year was being sampled as a fortnight
+
+`periodPool` orders by event kind, then importance, then recency. That is right
+for a day and wrong for a year. Before this was fixed, the 2026 corpus looked
+like:
+
+```
+2026-09  63     2026-06  11     2026-04   2
+2026-08  28     2026-07   9     2026-03   3
+2026-05   4
+```
+
+63 of 120 stories from the last two days of the span. A reading written from
+that is a September reading with a year's title on it, and the title is the part
+a reader would believe. `periodCorpus` now stratifies by month for multi-month
+spans — the same rotation `priorContext` already uses for history — and the 2026
+corpus is 13 or 14 stories from each of the nine months.
+
+**The fix immediately cost breadth, and that was the honest result.** Source
+count fell from 49 to 26 and independent stories from 11 to 1, because the
+archive's independent feeds were only subscribed in September 2026. The skew had
+been hiding it: 2026 looked broad because its last fortnight is broad.
+
+### Extending the sources
+
+Measured the same day, by approved source type: **44 vendor blogs, 6
+journalists, 2 market-analysis feeds.** Of the 120 stories in July's corpus, 119
+were first-party.
+
+Eight independent feeds were auditioned live — fetched, with every item run
+through the whole gauntlet in memory:
+
+```
+kept/recent  offered  source              top refusal
+  26/30        50     The Register        off_topic:business 2
+  22/26        26     The New Stack       not_an_event 3
+  16/20        20     Ars Technica IT     off_topic:crime 2
+  11/15        15     LWN                 too_short 4
+   9/15        15     InfoQ               not_an_event 6
+   8/13        13     TechCrunch Venture  off_topic:business 2
+   8/10        10     Crunchbase News     not_an_event 1
+   5/30        32     Phoronix            too_short 24
+```
+
+Sifted and SemiAnalysis cleared nothing in 90 days and are recorded as refused
+so the decision is not made twice.
+
+Six of the eight turned out to be **already in the registry**, added within the
+previous day or two and holding four to ten stories each. That is the finding
+that matters: the sources were not missing, and adding them does not widen
+history. A feed subscribed today brings stories forward from today. January
+through August 2026 stays first-party whatever is added now, and 2017 through
+2024 stay unreadable permanently — retention deleted the evidence, and no feed
+carries it back.
+
+All eight are filed `CONTENT`, never `PRIMARY`. A vendor post the parser cannot
+classify is recorded as "something changed, we cannot say what", because a
+company is authoritative about its own release. That rule is exactly wrong for
+an outlet writing about other people's products: an unparseable Register
+headline is not a change.
+
+### What was generated
+
+`month/2026-07` and `year/2026`, both written outside the provider chain through
+`--from` and both validated identically to a model's answer — every claim
+surviving its own citations. The 2026 reading's own `limits` states the problem
+this section is about: 119 of its 120 stories are vendors writing about
+themselves, so it is strong evidence of intent and none at all of adoption.
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.

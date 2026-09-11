@@ -106,18 +106,122 @@ export async function periodPool(
   return rows.map(shape);
 }
 
-/** The pool, capped so no publisher or project can speak for the period. */
+/**
+ * The pool, capped so no publisher and no month can speak for the period.
+ *
+ * STRATIFIED BY MONTH, and for a long span that is the difference between a
+ * report and a misdated one. `periodPool` orders by event kind, then importance,
+ * then recency, which is right for a day and wrong for a year: measured on the
+ * 2026 corpus before this existed,
+ *
+ *   2026-09  63     2026-06  11     2026-04   2
+ *   2026-08  28     2026-07   9     2026-03   3
+ *   2026-05   4
+ *
+ * -- 63 of 120 stories from the last two days of the span, two from April. A
+ * reading written from that is a September reading with a year's title on it,
+ * and the title is the part a reader would believe.
+ *
+ * So each month gets a fair share and they are taken round-robin, oldest first
+ * within each. A month that cannot fill its share gives the remainder back to
+ * the others rather than shrinking the corpus, because a quiet April is not a
+ * reason to read less of the year.
+ *
+ * `diversify` still runs per month, so one publisher cannot own a month either.
+ * The same rotation `priorContext` uses for history, for the same reason.
+ */
 export async function periodCorpus(
   range: Range, query: Query = q, cap = PERIOD_CORPUS,
 ): Promise<Item[]> {
-  return diversify(await periodPool(range, query), { ...CAPS, total: cap }, []);
+  const pool = await periodPool(range, query);
+
+  const months = new Map<string, Item[]>();
+  for (const it of pool) {
+    const key = it.when.slice(0, 7);
+    const bucket = months.get(key);
+    if (bucket) bucket.push(it); else months.set(key, [it]);
+  }
+
+  // One month is a month: nothing to stratify, and the existing behaviour is
+  // already right for it.
+  if (months.size <= 1) return diversify(pool, { ...CAPS, total: cap }, []);
+
+  const share = Math.max(2, Math.ceil((cap / months.size) * 2));
+  const ordered = [...months.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const pools = ordered.map(([, items]) =>
+    diversify(items, { ...CAPS, total: share }, []));
+
+  const picked: Item[] = [];
+  const seen = new Set<string>();
+  for (let round = 0; picked.length < cap && round < share; round += 1) {
+    let took = false;
+    for (const bucket of pools) {
+      const it = bucket[round];
+      if (!it || seen.has(it.id)) continue;
+      seen.add(it.id);
+      picked.push(it);
+      took = true;
+      if (picked.length >= cap) break;
+    }
+    if (!took) break;
+  }
+
+  return picked.sort((a, b) => a.when.localeCompare(b.when));
 }
 
 export type ReadOutcome =
   | { status: 'written'; span: Span; key: string; read: number; provider?: string }
   | { status: 'thin'; read: number }
+  /** Enough stories, too few publishers behind them. */
+  | { status: 'narrow'; read: number; sources: number; topShare: number }
   | { status: 'held'; why: string }
   | { status: 'unwritten'; why: string };
+
+/**
+ * How much of a period one publisher may account for before it is that
+ * publisher's year rather than the industry's.
+ *
+ * ASKED ON 2026-09-10: "Generate all report of 10 years." The archive does hold
+ * ten years -- and measured that day, this is what they are:
+ *
+ *   year   stories   sources   top 3 publishers
+ *   2017        27         4              96%
+ *   2019        54         5              91%
+ *   2021       121         5              93%
+ *   2023       371         7              91%
+ *   2024       389         8              93%
+ *   2025       934        15              87%
+ *   2026     3,995       106              35%
+ *
+ * 1,392 of the 1,402 stories before 2025 come from five vendor blogs: Hugging
+ * Face, ClickHouse, Shopify, Vercel and OpenAI. They are there because those
+ * blogs keep deep archives that a backfill could walk, which is a fact about
+ * their publishing software.
+ *
+ * A "2019 report" written from that corpus would be Shopify and ClickHouse's
+ * 2019 blog posts wearing the title of a year in technology. It would read
+ * plausibly -- that is what makes it dangerous -- and every claim in it would
+ * be a claim about three companies. This archive already refuses to count its
+ * own stories for exactly this reason; publishing a year drawn from three
+ * publishers is the same error one level up.
+ *
+ * SIXTY PER CENT, and the margin is why it is safe rather than lucky: the one
+ * year that can support a report sits at 35% and the next-best at 87%. The line
+ * is in the middle of a gap, not at the edge of either side.
+ */
+export const MAX_TOP_SHARE = 0.6;
+
+/** And a floor on how many publishers there are at all. */
+export const MIN_PERIOD_SOURCES = 12;
+
+/** The share of a corpus held by its three largest publishers. */
+export function topShare(items: Item[], top = 3): number {
+  if (items.length === 0) return 1;
+  const n = new Map<string, number>();
+  for (const it of items) n.set(it.source, (n.get(it.source) ?? 0) + 1);
+  const biggest = [...n.values()].sort((a, b) => b - a).slice(0, top);
+  return biggest.reduce((a, b) => a + b, 0) / items.length;
+}
 
 /**
  * Below this a period is not worth a model call.
@@ -155,6 +259,17 @@ export async function readPeriod(
   const corpus = await periodCorpus(range, query);
   if (corpus.length < MIN_PERIOD_CORPUS) {
     return { status: 'thin', read: corpus.length };
+  }
+
+  // ENOUGH STORIES IS NOT ENOUGH. See MAX_TOP_SHARE: 2024 holds 389 stories and
+  // 93% of them are three companies' blogs. A model handed that corpus will
+  // write a confident year in technology, because the corpus does not tell it
+  // that everything it is reading came from three publishers.
+  const sources = new Set(corpus.map((i) => i.source)).size;
+  const share = topShare(corpus);
+  if (sources < MIN_PERIOD_SOURCES || share > MAX_TOP_SHARE) {
+    return { status: 'narrow', read: corpus.length, sources,
+      topShare: Math.round(share * 100) };
   }
 
   // BEFORE THE MODEL CALL AND AFTER THE CORPUS. The corpus is one query; the
@@ -305,6 +420,9 @@ export function summariseRead(r: ReadOutcome & { pending?: number }): string {
       return `${r.span} ${r.key} read from ${r.read} stories`
         + (r.provider ? ` by ${r.provider}` : '') + left;
     case 'thin': return `too few stories to read (${r.read})${left}`;
+    case 'narrow':
+      return `${r.read} stories but only ${r.sources} publishers, `
+        + `${r.topShare}% of it from three of them -- too narrow to read${left}`;
     case 'held': return `${r.why}${left}`;
     default: return `not read: ${r.why}${left}`;
   }
