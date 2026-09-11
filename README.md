@@ -10029,6 +10029,39 @@ What still truncates, and should: a **cited story's title** at 100 characters.
 That is a link label with the full headline behind it at `/read/<id>`, which is
 the distinction — truncate a label that has a destination, never the analysis.
 
+### Four fields were written and shown to nobody
+
+*"Make all report more detail"* — 2026-09-11.
+
+The period report renders a reading through `readingBlock`. Counted across the
+nineteen stored readings, four things it stored had no route to a reader at all:
+
+| Field | Written | Rendered |
+| --- | --- | --- |
+| `work.skills` — what the work needs from whoever takes it | 71 | none |
+| `direction.falsifier` — what would show the claim wrong | 55 | none |
+| `openings.who` — who could take it | 40 | none |
+| `tensions` — the whole section | 19 | none |
+
+None of them is missing from the daily field report: `cardBody` in
+`briefing.ts` renders all four on `/field/<f>/report/<day>/<kind>/<n>`. This is
+the same cause as the truncation above — the period page was built from a card
+renderer whose other half is a detail page, and **a period has no detail page**,
+so a field left off that block is a field nobody can reach.
+
+Two of the four are the most directly usable lines in the reading. *What it
+needs* is the skills a reader would have to have; *who could take it* is who it
+is for. This archive exists to find work one person can take, and those are the
+two sentences that say whether they can take it.
+
+The falsifier goes **below** the evidence rather than above it: a reader who has
+just looked at both ends is the one in a position to judge whether the thing
+that would refute the claim has already happened.
+
+And the tensions section is the one part of a reading that cannot be mistaken
+for the vendors' account of themselves — it is where the reading stops resolving
+the evidence and shows it still unresolved.
+
 ### The push is blocked, and it is the token
 
 `68ba2ce` is committed and **not** pushed. With terminal prompting disabled the

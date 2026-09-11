@@ -182,11 +182,49 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
    * A long paragraph is a writing problem and is fixed by writing shorter, not
    * by hiding the end of it from the reader.
    */
+  /*
+   * THE FIELDS THAT WERE WRITTEN AND SHOWN TO NOBODY.
+   *
+   * "Make all report more detail" -- 2026-09-11. Four things were being stored
+   * in every period reading and rendered on no page: what a piece of work needs
+   * from whoever takes it, who could take an opening, what would show a
+   * direction claim wrong, and the tensions section entire. Counted the same
+   * day across the nineteen stored readings: 71 skills lines, 40 who-lines, 55
+   * falsifiers and 19 tensions, none of which had ever reached a reader.
+   *
+   * They were not missing from the daily field report -- `cardBody` in
+   * briefing.ts renders all four on /field/<f>/report/<day>/<kind>/<n>. This is
+   * the same bug as the truncation above and from the same cause: the period
+   * page was written against a card renderer whose other half is a detail page,
+   * and a period has no detail page. Whatever is not on this block is nowhere.
+   *
+   * The two most usable lines in the whole reading are among them. "What it
+   * needs" is the skills a reader would have to have; "who could take it" is
+   * who it is for. This archive exists to find work a person can take, and
+   * those are the two sentences that say whether they can take it.
+   */
+  const facts = (label: string, v: unknown): string => {
+    const t = String(v ?? '').trim();
+    return t === '' ? ''
+      : `<dl class="mv-facts"><dt>${label}</dt><dd>${escapeHtml(t)}</dd></dl>`;
+  };
+
+  interface Extras {
+    /** Appended inside the claim line, e.g. the horizon. */
+    tag?: string;
+    /** Between the reasoning and the evidence: what this needs, who it is for. */
+    facts?: string;
+    /** Below the evidence, where a caveat about the claim belongs. */
+    after?: string;
+  }
+
   const claim = (title: string, body: string, then: unknown, now: unknown,
-    compared: boolean, tag = '') => `<article class="pr-card">
-      <p class="pr-claim">${escapeHtml(title)}${tag}</p>
+    compared: boolean, x: Extras = {}) => `<article class="pr-card">
+      <p class="pr-claim">${escapeHtml(title)}${x.tag ?? ''}</p>
       ${body ? `<p class="mv-body">${escapeHtml(body)}</p>` : ''}
+      ${x.facts ?? ''}
       ${pair(then, now, compared)}
+      ${x.after ?? ''}
     </article>`;
 
   /**
@@ -236,25 +274,48 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
       <h2 class="sect">Where the work is</h2>
       <p class="note">Things one person could start on remotely, with the
         evidence that somebody would pay for it.</p>
-      <div class="mv-items">${s.work.map((w) => claim(w.what, w.why, [], w.evidence, false,
-    ` <span class="mv-tag ${escapeHtml(w.horizon)}">${
-      escapeHtml(HORIZON[w.horizon] ?? w.horizon)}</span>`)).join('')}</div>`,
+      <div class="mv-items">${s.work.map((w) => claim(w.what, w.why, [], w.evidence,
+    false, {
+      tag: ` <span class="mv-tag ${escapeHtml(w.horizon)}">${
+        escapeHtml(HORIZON[w.horizon] ?? w.horizon)}</span>`,
+      facts: facts('What it needs', w.skills),
+    })).join('')}</div>`,
 
     (s.direction ?? []).length === 0 ? '' : `
       <h2 class="sect">Where this is going</h2>
-      <div class="mv-items">${s.direction.map((d) =>
-    claim(d.claim, d.reasoning, d.then, d.now, true)).join('')}</div>`,
+      <div class="mv-items">${s.direction.map((d) => claim(
+    d.claim, d.reasoning, d.then, d.now, true, {
+      // THE FALSIFIER BELOW THE EVIDENCE, not above it. A reader who has just
+      // looked at both ends is the one in a position to judge whether the
+      // thing that would refute this has already happened.
+      after: d.falsifier ? `<div class="mv-caveat"><p><b>What would show this
+        wrong.</b> ${escapeHtml(d.falsifier)}</p></div>` : '',
+    })).join('')}</div>`,
 
     (s.positioning ?? []).length === 0 ? '' : `
       <h2 class="sect">What each company appears to be betting on</h2>
       <div class="mv-items">${s.positioning.map((p) => claim(p.who, p.bet, [],
-    p.evidence, false, p.firstParty
-      ? ' <span class="mv-tag watch">says so itself</span>' : '')).join('')}</div>`,
+    p.evidence, false, {
+      tag: p.firstParty ? ' <span class="mv-tag watch">says so itself</span>' : '',
+      after: p.firstParty ? `<div class="mv-caveat"><p><b>Read from what they
+        say about themselves.</b> Good evidence of what they have decided to
+        sell, and none at all that anybody bought it.</p></div>` : '',
+    })).join('')}</div>`,
+
+    // THE TENSIONS, WHICH THIS PAGE HAS NEVER RENDERED. Every stored reading
+    // has one and no reader has seen any of them. A tension is the place the
+    // sources disagree, which is the one section that cannot be mistaken for
+    // the vendors' own account of themselves -- it is where the reading stops
+    // resolving the evidence and shows it still unresolved.
+    (s.tensions ?? []).length === 0 ? '' : `
+      <h2 class="sect">Where the evidence argues with itself</h2>
+      <div class="mv-items">${s.tensions.map((t) =>
+    claim(t.what, t.sides, [], t.evidence, false)).join('')}</div>`,
 
     (s.openings ?? []).length === 0 ? '' : `
       <h2 class="sect">What nobody has taken</h2>
-      <div class="mv-items">${s.openings.map((o) =>
-    claim(o.what, o.why, [], o.evidence, false)).join('')}</div>`,
+      <div class="mv-items">${s.openings.map((o) => claim(o.what, o.why, [],
+    o.evidence, false, { facts: facts('Who could take it', o.who) })).join('')}</div>`,
   ].filter(Boolean).join('');
 
   // WHOSE PERIOD THIS IS, ABOVE THE READING RATHER THAN IN ITS FOOTNOTES.

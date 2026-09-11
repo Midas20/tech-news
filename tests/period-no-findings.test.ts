@@ -451,3 +451,94 @@ describe('a claim body long enough to have been cut', () => {
     expect(html).toContain('Chrome opens an origin trial for WebMCP');
   });
 });
+
+// ---------------------------------------------------------------------------
+// The fields that were stored and rendered to nobody
+// ---------------------------------------------------------------------------
+//
+// "Make all report more detail" -- 2026-09-11.
+//
+// Four things were written into every period reading and appeared on no page:
+// `work.skills`, `openings.who`, `direction.falsifier`, and the whole tensions
+// section. Across the nineteen stored readings that was 71 skills lines, 40
+// who-lines, 55 falsifiers and 19 tensions that no reader had ever seen.
+//
+// Each is rendered by `cardBody` in briefing.ts, on the per-claim detail page a
+// field report has and a period report does not. Same cause as the truncation
+// above: this page was built from a card renderer whose other half is a route,
+// and here there is no other half. What this block does not render is nowhere.
+
+describe('a reading with every field populated', () => {
+  const strategy = {
+    read: 'The lede.',
+    shift: null,
+    work: [{ what: 'Move telemetry off the incumbent', why: 'Because.',
+      skills: 'OpenTelemetry, cost modelling', horizon: 'now',
+      evidence: [{ id: 'a', title: 'A collector post', when: '2026-07-02' }] }],
+    direction: [{ claim: 'Consent granularity became the primitive',
+      reasoning: 'Because.',
+      falsifier: 'If task-based consent goes unused, this is a coincidence of '
+        + 'publication dates.',
+      then: [{ id: 'b', title: 'An older post', when: '2026-03-02' }],
+      now: [{ id: 'c', title: 'A newer post', when: '2026-08-19' }] }],
+    positioning: [{ who: 'Cloudflare', bet: 'Per task, not per application.',
+      firstParty: true,
+      evidence: [{ id: 'd', title: 'Their own post', when: '2026-08-20' }] }],
+    tensions: [{ what: 'The benchmark was published by one of its subjects',
+      sides: 'One reading: it is reproducible and open. The other: nobody has '
+        + 'rerun it and the author sells the winner.',
+      evidence: [{ id: 'e', title: 'The benchmark', when: '2026-07-24' }] }],
+    openings: [{ what: 'Nobody is reviewing the consents already granted',
+      why: 'Every remedy governs the next grant.',
+      who: 'identity consultants, application security contractors',
+      evidence: [{ id: 'f', title: 'The OAuth post', when: '2026-08-18' }] }],
+    limits: 'A reading of 44 publishers.',
+  };
+  const html = readingBlock(strategy as never,
+    { storiesRead: 120, historyRead: 40, historyFrom: '2026-02-19',
+      provider: 'operator session', sourcesRead: 44, topShare: 15 } as never,
+    'week');
+
+  it('says what a piece of work needs from whoever takes it', () => {
+    // The single most usable line in the reading: whether the reader can take
+    // this one. It was stored 71 times and printed none of them.
+    expect(html).toContain('What it needs');
+    expect(html).toContain('OpenTelemetry, cost modelling');
+  });
+
+  it('says who could take an opening', () => {
+    expect(html).toContain('Who could take it');
+    expect(html).toContain('identity consultants');
+  });
+
+  it('prints what would show a direction claim wrong', () => {
+    expect(strip(html)).toContain('What would show this wrong.');
+    expect(html).toContain('If task-based consent goes unused');
+  });
+
+  it('puts the falsifier after the evidence, not before it', () => {
+    // A reader who has just read both ends is the one able to judge whether the
+    // thing that would refute the claim has already happened.
+    const s = strip(html);
+    expect(s.indexOf('A newer post')).toBeLessThan(
+      s.indexOf('What would show this wrong.'));
+  });
+
+  it('renders the tensions section at all', () => {
+    expect(strip(html)).toContain('Where the evidence argues with itself');
+    expect(html).toContain('The benchmark was published by one of its subjects');
+    expect(html).toContain('nobody has rerun it');
+  });
+
+  it('marks a company bet read from that company', () => {
+    expect(strip(html)).toContain('Read from what they say about themselves.');
+    expect(strip(html)).toContain('none at all that anybody bought it');
+  });
+
+  it('does not report a comparison that was never attempted', () => {
+    // Work, positioning, tensions and openings were never paired. "No earlier
+    // story is held" under them invents a gap rather than describing one.
+    const s = strip(html);
+    expect(s).not.toContain('No earlier story on');
+  });
+});
