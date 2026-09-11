@@ -299,11 +299,30 @@ describe('a move shared by every subject is the instrument, not the market', () 
     expect(detectCohortBreak(cohort(5, -5, 20))).toBeNull();
   });
 
-  it('voids EVERY curve in the period, not the worst ones', () => {
-    // The step is in the instrument, so it is in every series: there is no
-    // subset that survives it, and publishing the two that moved least would be
-    // publishing the same error smaller.
-    expect(period).toMatch(/if \(shift\) return \{ movements: \[\], shift \}/);
+  it('voids every curve of the registry that broke, and no others', () => {
+    // The step is in the instrument, so it is in every series THAT REGISTRY
+    // publishes: there is no subset of those that survives it. The other
+    // registry is a separate instrument and its curves are unaffected.
+    //
+    // This was wrong until 2026-09-11. Detection ran across every tracked
+    // package at once, so when PyPI stepped on 2026-08-25 -- 57 of its 60
+    // series, median -37% -- agreement across the mixed set was 42%, under the
+    // 80% required, and nothing fired. The August report published fastapi at
+    // -47% and dbt at -47% as adoption for three weeks.
+    expect(period).toMatch(/const b = detectCohortBreak\(series, registry\)/);
+    expect(period).toMatch(/if \(broken\.has\(v\.registry\)\) continue;/);
+    expect(period).toMatch(/The cohort that shares an instrument is/);
+  });
+
+  it('detects a break in one registry that the other does not share', () => {
+    // The mixed cohort is the case that used to slip through: half the series
+    // step together, half do not, and the median across all of them is small.
+    const stepped = cohort(6, -37, 20);
+    const flat = cohort(6, 0, 20);
+    const mixed = new Map([...stepped].map(([k, v]) => [`pypi:${k}`, v]));
+    for (const [k, v] of flat) mixed.set(`npm:${k}`, v);
+    expect(detectCohortBreak(mixed)).toBeNull();
+    expect(detectCohortBreak(stepped, 'pypi')?.registry).toBe('pypi');
   });
 
   it('says on the page that the number is withheld, and why', () => {

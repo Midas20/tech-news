@@ -47,7 +47,7 @@
 
 import type { Query } from './corpus.ts';
 import { q } from '../ui/db.ts';
-import { detectCohortBreak, type CohortBreak } from './period.ts';
+import { detectCohortBreak, ZERO_IS_MISSING, type CohortBreak } from './period.ts';
 
 /** Days averaged at each end. A whole multiple of 7: downloads are weekly. */
 export const EDGE = 28;
@@ -152,6 +152,7 @@ export async function marketPicture(query: Query = q): Promise<MarketPicture> {
        JOIN adoption_lookup l ON l.slug = a.slug AND l.missing = false
         AND l.registry = a.registry AND l.package = a.package
       WHERE a.day >= (current_date - $1::int)
+        AND ${ZERO_IS_MISSING}
       ORDER BY a.slug, a.day`, [EDGE * 2 + 7]);
 
   const bySlug = new Map<string, { registry: string; package: string;

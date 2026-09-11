@@ -34,6 +34,7 @@ function report(readings: ReadingCoverage, over = {}): PeriodReport {
     range: { from: '2026-06-01', to: '2026-07-01', label: 'June 2026' },
     days: 30,
     launches: [], market: [], names: [], movements: [], findings: [],
+    measured: { days: 30, series: 150 },
     shift: null,
     totals: { launches: 0, market: 0 },
     readings,
@@ -355,54 +356,94 @@ describe('what is no longer explained', () => {
 // size the move is the registry's weekly cycle, not adoption.
 
 describe('the public-numbers table', () => {
-  const moves = (pcts: number[]) => pcts.map((changePct, i) => ({
-    slug: `p${i}`, registry: 'npm', package: `p${i}`,
-    before: 1000, after: 1000 * (1 + changePct / 100), changePct,
+  /** One measured curve, above the floor unless the test wants it below. */
+  const mv = (slug: string, before: number, after: number) => ({
+    slug, registry: 'npm', package: slug, before, after,
+    changePct: Math.round(((after - before) / before) * 100),
     fromDay: '2026-06-01', toDay: '2026-06-30', edge: 14,
-  }));
-
-  it('drops the packages that did not move, and says how many are listed', () => {
-    const html = bodyOf(report(
-      { briefings: 0, withReading: 0, firstEver: '2026-09-09',
-        stories: 400, sources: 30, topPct: 30 },
-      { movements: moves([56, 41, 3, 0, -1]) }), true);
-    expect(html).toContain('p0');
-    expect(html).toContain('p1');
-    expect(html).not.toContain('>p2<');
-    expect(html).not.toContain('>p4<');
-    expect(strip(html)).toContain('Of 5 tracked packages, the 2 that moved most');
   });
 
-  it('says so plainly rather than rendering an empty table', () => {
-    // A table with a header and no rows reads as a broken page. This is a
-    // quiet period in these packages, and that is worth one sentence.
+  it('separates a forming market from a big package having a good month', () => {
+    // The whole point of the split. Both of these are +80%; only one of them
+    // could plausibly be a market that did not exist before.
     const html = strip(bodyOf(report(
       { briefings: 0, withReading: 0, firstEver: '2026-09-09',
         stories: 400, sources: 30, topPct: 30 },
-      { movements: moves([4, -2, 0]) }), true));
-    expect(html).toContain('None of the 3 tracked packages moved');
-    expect(html).not.toContain('Start of period');
+      { movements: [
+        mv('newcomer', 5_000, 9_000),
+        mv('incumbent', 400_000, 720_000),
+      ] }), true));
+    const forming = html.indexOf('New markets forming');
+    const elsewhere = html.indexOf('What else moved');
+    expect(forming).toBeGreaterThan(-1);
+    expect(html.indexOf('newcomer')).toBeGreaterThan(forming);
+    expect(html.indexOf('newcomer')).toBeLessThan(elsewhere);
+    expect(html.indexOf('incumbent')).toBeGreaterThan(elsewhere);
   });
 
-  it('does not claim a quiet period is a quiet industry', () => {
+  it('says nothing formed rather than omitting the section', () => {
+    // "Nothing is forming" is the answer to the harder half of the question.
+    // An absent heading is indistinguishable from never having looked.
     const html = strip(bodyOf(report(
       { briefings: 0, withReading: 0, firstEver: '2026-09-09',
         stories: 400, sources: 30, topPct: 30 },
-      { movements: moves([1]) }), true));
-    expect(html).toMatch(/in these particular packages, not a quiet month/i);
+      { movements: [mv('steady', 50_000, 52_000)] }), true));
+    expect(html).toContain('New markets forming');
+    expect(html).toContain('Nothing formed in this month');
+  });
+
+  it('gives fading markets their own section', () => {
+    const html = strip(bodyOf(report(
+      { briefings: 0, withReading: 0, firstEver: '2026-09-09',
+        stories: 400, sources: 30, topPct: 30 },
+      { movements: [mv('sinking', 90_000, 40_000)] }), true));
+    expect(html).toContain('Markets fading');
+    expect(html).toContain('sinking');
+    expect(html).toContain('Losing a market is a market change too');
+  });
+
+  it('ignores packages too small to be a market either way', () => {
+    // Below the floor a percentage is one build server being switched on.
+    const html = strip(bodyOf(report(
+      { briefings: 0, withReading: 0, firstEver: '2026-09-09',
+        stories: 400, sources: 30, topPct: 30 },
+      { movements: [mv('tiny', 40, 400)] }), true));
+    expect(html).not.toContain('tiny');
+    expect(html).toContain('Nothing formed in this month');
   });
 
   it('caps a long tail rather than printing every tracked package', () => {
-    // June 2026 tracks 147 packages and 86 of them cleared the floor across a
-    // month -- a table longer than the reading above it, attached to no claim
-    // in it.
     const html = bodyOf(report(
       { briefings: 0, withReading: 0, firstEver: '2026-09-09',
         stories: 400, sources: 30, topPct: 30 },
-      { movements: moves(Array.from({ length: 40 }, (_, i) => 80 - i)) }), true);
+      { movements: Array.from({ length: 40 }, (_, i) =>
+        mv(`p${i}`, 400_000, 400_000 * (1 + (50 - i) / 100))) }), true);
     const rows = (html.match(/<tr>/g) ?? []).length - 1; // minus the header
     expect(rows).toBe(20);
-    expect(strip(html)).toContain('the 20 that moved most are listed');
+    expect(strip(html)).toContain('the 20 largest of 40');
+  });
+
+  it('names the registry whose counting changed, and keeps the other', () => {
+    // PyPI stepped on 2026-08-25 and npm did not. Withholding both would be
+    // publishing the same error in the other direction.
+    const html = strip(bodyOf(report(
+      { briefings: 0, withReading: 0, firstEver: '2026-09-09',
+        stories: 400, sources: 30, topPct: 30 },
+      { movements: [mv('survivor', 90_000, 120_000)],
+        shift: { day: '2026-08-25', registry: 'pypi', medianPct: -37,
+          agreed: 57, total: 60 } }), true));
+    expect(html).toContain('pypi curves for this month are withheld');
+    expect(html).toContain('57 of 60');
+    expect(html).toContain('The other registry did not move with them');
+    expect(html).toContain('survivor');
+  });
+
+  it('distinguishes an instrument that does not reach the period', () => {
+    const html = strip(bodyOf(report(
+      { briefings: 0, withReading: 0, firstEver: '2026-09-09',
+        stories: 400, sources: 30, topPct: 30 },
+      { movements: [], measured: { days: 0, series: 0 } }), true));
+    expect(html).toContain('daily download series begins on 13 March 2026');
   });
 });
 

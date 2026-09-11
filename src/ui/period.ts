@@ -9,6 +9,7 @@
 // what the caveats have to say, not in shape -- and building four pages that
 // drift apart is how the same question gets four different answers.
 
+import { FLOOR, NEW_CEILING, NEW_GROWTH } from '../analysis/market.ts';
 import { wrap, pageHead, empty, escapeHtml, truncate, niceDay } from './html.ts';
 import { crumbsFor } from './nav.ts';
 import { periodReading, type StoredPeriodReading } from '../analysis/periodread.ts';
@@ -31,16 +32,18 @@ const NUM = new Intl.NumberFormat('en-US');
  * "nothing moved", which is the opposite of what happened and worse than either
  * the wrong number or the right one.
  */
-function brokenCurves(shift: CohortBreak, span: Span): string {
+function brokenCurves(shift: CohortBreak, span: Span, survivors: number): string {
   const dir = shift.medianPct < 0 ? 'fell' : 'rose';
+  const reg = escapeHtml(shift.registry);
   return `
-    <h2 class="sect">What the public numbers did over this ${SPAN_LABEL[span]}</h2>
     <div class="mv-caveat">
-      <p><b>No curve is shown for this ${SPAN_LABEL[span]}, because the
-        measurement changed inside it.</b> On
+      <p><b>The ${reg} curves for this ${SPAN_LABEL[span]} are withheld,
+        because the measurement changed inside it.</b> On
         <b>${escapeHtml(shift.day)}</b>, ${shift.agreed} of ${shift.total}
-        tracked packages ${dir} together by a median of
-        ${Math.abs(shift.medianPct)}%, and stayed there.</p>
+        tracked ${reg} packages ${dir} together by a median of
+        ${Math.abs(shift.medianPct)}%, and stayed there.${survivors > 0
+    ? ` The other registry did not move with them, so its ${survivors} curves
+        are shown below.` : ''}</p>
       <p>Unrelated projects do not gain or lose a third of their downloads in the
         same week. A move shared by every subject is a fact about the instrument,
         not about adoption &mdash; the registry changed how it counts, which is
@@ -51,6 +54,14 @@ function brokenCurves(shift: CohortBreak, span: Span): string {
         publishing the same error smaller.</p>
       <p>Periods that lie wholly on one side of
         ${escapeHtml(shift.day)} are unaffected and still show their curves.</p>
+      ${/* WHY THIS IS PER REGISTRY, and what it cost to learn. The first
+           version of this check looked for a step across every tracked package
+           at once. PyPI stepped on 2026-08-25 -- 57 of its 60 series, a median
+           of -37% -- and npm did not, so agreement across the whole set was
+           42%, under the 80% the check requires, and it found nothing. The
+           August report published fastapi at -47%, ray at -48% and dbt at -47%
+           as adoption. A registry publishes its own counts, so a registry is
+           the cohort. */''}
     </div>`;
 }
 
@@ -68,8 +79,13 @@ function brokenCurves(shift: CohortBreak, span: Span): string {
  * For a week the reason is permanent and worth stating once rather than leaving
  * a reader to wonder every time.
  */
-function noCurves(span: Span, days: number): string {
-  const why = edgeFor(days) === 0
+function noCurves(span: Span, days: number, measured: { days: number; series: number }): string {
+  const why = measured.series === 0
+    ? `This archive's daily download series begins on 13 March 2026, and no
+       tracked package has a single day of it inside this
+       ${SPAN_LABEL[span]}. The instrument does not reach back here, which is a
+       fact about when the collection started and not about the market.`
+    : edgeFor(days) === 0
     ? `A ${SPAN_LABEL[span]} is too short to measure one. Downloads run on a
        seven-day cycle &mdash; a Sunday is a third of a Tuesday &mdash; so a
        comparison is only meaningful across whole weeks, and two whole weeks do
@@ -79,9 +95,7 @@ function noCurves(span: Span, days: number): string {
     : `The tracked packages do not yet have enough days inside this
        ${SPAN_LABEL[span]} for a comparison. A curve appears once the period
        holds two whole weeks of series at each end.`;
-  return `
-    <h2 class="sect">What the public numbers did over this ${SPAN_LABEL[span]}</h2>
-    <p class="note"><b>No curve for this ${SPAN_LABEL[span]}.</b> ${why}</p>`;
+  return `<p class="note"><b>No curve for this ${SPAN_LABEL[span]}.</b> ${why}</p>`;
 }
 
 /**
@@ -106,21 +120,8 @@ function noCurves(span: Span, days: number): string {
 const MOVED = 10;
 const SHOWN = 20;
 
-function curves(ms: PeriodMovement[], span: Span): string {
-  if (ms.length === 0) return '';
-  const head = `<h2 class="sect">What the public numbers did over this ${
-  SPAN_LABEL[span]}</h2>`;
-  const big = ms.filter((m) => Math.abs(m.changePct) >= MOVED);
-
-  if (big.length === 0) {
-    return `${head}
-      <p class="note">None of the ${ms.length} tracked packages moved by
-        ${MOVED}% or more across this ${SPAN_LABEL[span]}. That is a quiet
-        ${SPAN_LABEL[span]} in these particular packages, not a quiet
-        ${SPAN_LABEL[span]}.</p>`;
-  }
-
-  const shown = big.slice(0, SHOWN);
+/** One table of curves, with the registry alongside each package. */
+function curveTable(ms: PeriodMovement[]): string {
   const row = (m: PeriodMovement) => `<tr>
     <td><a href="/stack/${encodeURIComponent(m.slug)}">${escapeHtml(m.slug)}</a>
       <span class="muted">${escapeHtml(m.registry)}:${escapeHtml(m.package)}</span></td>
@@ -129,16 +130,88 @@ function curves(ms: PeriodMovement[], span: Span): string {
     <td class="num ${m.changePct >= 0 ? 'up' : 'down'}">${
   m.changePct >= 0 ? '+' : ''}${m.changePct}%</td>
   </tr>`;
-  return `${head}
-    <p class="note">Mean daily downloads over ${shown[0]!.edge} days at each end,
-      published by the registry. <b>Downloads are not users.</b>${
-  ms.length === shown.length ? '' : ` Of ${ms.length} tracked packages, the
-      ${shown.length} that moved most are listed; the rest moved less.`}</p>
-    <div class="mv-scroll"><table class="mv-curve">
+  return `<div class="mv-scroll"><table class="mv-curve">
       <thead><tr><th>Technology</th><th class="num">Start of period</th>
         <th class="num">End of period</th><th class="num">Change</th></tr></thead>
-      <tbody>${shown.map(row).join('')}</tbody>
+      <tbody>${ms.map(row).join('')}</tbody>
     </table></div>`;
+}
+
+/**
+ * The market, measured: what is forming, what is fading, what merely moved.
+ *
+ * "The report is focusing on only analysing news, but the purpose of this
+ * project is finding new market and market change" -- 2026-09-11, the second
+ * time this has been said. The first time produced /market, a whole page built
+ * from download counts and no stories at all. It did not change the reports,
+ * which still ended in one undifferentiated table headed "what the public
+ * numbers did" -- every package that moved by a tenth, sorted by size of move.
+ *
+ * A SORTED TABLE IS NOT AN ANSWER TO EITHER QUESTION. Sorting by absolute
+ * change puts the biggest movers on top, and the biggest movers are almost
+ * always large packages having an ordinary quarter. "What is forming" and "what
+ * is dying" are different questions with different arithmetic, and the top of a
+ * percentage list answers neither:
+ *
+ *   FORMING   small enough at the start to be genuinely new (under
+ *             ${NEW_CEILING} a day), big enough now to be real (over ${FLOOR}),
+ *             and up by more than ${NEW_GROWTH}%.
+ *   FADING    down by a fifth or more, from a base that was real.
+ *   MOVED     everything else that cleared the floor, capped and counted.
+ *
+ * The thresholds are `market.ts`'s, imported rather than reinvented, so this
+ * page and /market cannot disagree about what a forming market is.
+ *
+ * FORMING GOES FIRST EVEN WHEN IT IS EMPTY. "Nothing formed" is the answer to
+ * the harder half of the question and a reader cannot distinguish it from "we
+ * did not look" unless the page says which. It usually is empty: across every
+ * month this archive can measure, not one tracked package has cleared that bar.
+ */
+function marketBlock(ms: PeriodMovement[], span: Span): string {
+  const real = ms.filter((m) => m.after >= FLOOR || m.before >= FLOOR);
+  const forming = real
+    .filter((m) => m.before < NEW_CEILING && m.after >= FLOOR
+      && m.changePct >= NEW_GROWTH)
+    .sort((a, b) => b.changePct - a.changePct);
+  const fading = real.filter((m) => m.changePct <= -20)
+    .sort((a, b) => a.changePct - b.changePct);
+  const seen = new Set([...forming, ...fading].map((m) => m.slug));
+  const moved = real.filter((m) => !seen.has(m.slug)
+    && Math.abs(m.changePct) >= MOVED)
+    .sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct));
+  const shown = moved.slice(0, SHOWN);
+
+  return `
+    <h3 class="sect">New markets forming</h3>
+    ${forming.length === 0
+    ? `<p class="note">Nothing formed in this ${SPAN_LABEL[span]}. Of the
+        ${real.length} tracked packages with enough volume to judge, none went
+        from under ${NUM.format(NEW_CEILING)} installs a day to over
+        ${NUM.format(FLOOR)} while growing by ${NEW_GROWTH}% or more. That is
+        the measurement, not a survey: a package registry cannot see anything
+        sold rather than installed, which is most of a market.</p>`
+    : `<p class="note">Under ${NUM.format(NEW_CEILING)} installs a day at the
+        start, over ${NUM.format(FLOOR)} now, and up ${NEW_GROWTH}% or more
+        &mdash; small enough to have been new, large enough to be real.</p>
+      ${curveTable(forming)}`}
+
+    <h3 class="sect">Markets fading</h3>
+    ${fading.length === 0
+    ? `<p class="note">No tracked package fell by a fifth or more across this
+        ${SPAN_LABEL[span]}.</p>`
+    : `<p class="note">Down a fifth or more from a base that was real. Losing a
+        market is a market change too, and it is the half that gets written
+        about least.</p>
+      ${curveTable(fading)}`}
+
+    ${shown.length === 0 ? '' : `
+      <h3 class="sect">What else moved</h3>
+      <p class="note">Everything else that moved by ${MOVED}% or more${
+  moved.length === shown.length ? '' : `; the ${shown.length} largest of
+      ${moved.length}, the rest moved less`}. Mean daily downloads over
+      ${shown[0]!.edge} days at each end, published by the registry.
+      <b>Downloads are not users.</b></p>
+      ${curveTable(shown)}`}`;
 }
 
 /**
@@ -505,9 +578,19 @@ export function bodyOf(r: PeriodReport, hasReading: boolean): string {
         been read, the reading is the answer. */''}
     ${hasReading || r.findings.length === 0 ? '' : findings(r.findings, r.span)}
 
-    ${r.shift ? brokenCurves(r.shift, r.span)
-    : r.movements.length > 0 ? curves(r.movements, r.span)
-      : noCurves(r.span, r.days)}`;
+    ${/* THE MARKET, UNDER ONE HEADING, whatever the instrument managed to
+        see. A break, a period too short and a period the series does not reach
+        are three different answers and each says which it is. */''}
+    <h2 class="sect">What the market did over this ${SPAN_LABEL[r.span]}</h2>
+    ${r.shift ? brokenCurves(r.shift, r.span, r.movements.length) : ''}
+    ${r.movements.length > 0 ? marketBlock(r.movements, r.span)
+    : r.shift ? '' : noCurves(r.span, r.days, r.measured)}
+    <p class="note"><b>What this instrument can see.</b> Daily download counts
+      for the packages this archive has verified &mdash; 152 of the 2,460
+      technologies it tracks. Anything sold rather than installed has no curve
+      at all: a hosted product, a database with a licence, a consultancy. Every
+      number here was published by the registry and can be re-run by anybody
+      against the same public API.</p>`;
 }
 
 /** The other spans, as links, so a reader can widen or narrow the same view. */

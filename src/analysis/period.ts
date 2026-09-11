@@ -252,6 +252,26 @@ export function movementOver(
  */
 export interface CohortBreak {
   day: string;
+  /**
+   * The registry whose counting changed.
+   *
+   * A LATER CORRECTION, and the reason it matters. The rule above -- a move
+   * shared by every subject is a fact about the instrument -- was applied to
+   * every tracked package at once. This archive tracks two registries, and a
+   * registry changes how it counts on its own schedule.
+   *
+   * On 2026-08-25 PyPI stepped: fastapi went 21.6M to 12.9M, pip 24.4M to
+   * 16.0M, ray 2.2M to 0.4M, dbt 3.1M to 0.9M, and stayed. Every PyPI series
+   * moved. But PyPI is 62 of the 149 tracked packages and the 88 npm ones did
+   * not move, so agreement across the whole set was 42% -- under the 80% this
+   * detector requires -- and it returned null. The August report published
+   * those declines as adoption for three weeks.
+   *
+   * So detection runs per registry. The cohort that shares an instrument is
+   * the cohort that shares a registry, and that is the set the rule was always
+   * about.
+   */
+  registry: string;
   /** The median move across all series at that day, as a percentage. */
   medianPct: number;
   /** How many series moved together. */
@@ -264,6 +284,27 @@ const BREAK_EDGE = 7;
 const BREAK_PCT = 20;
 /** The share of series that must agree. */
 const BREAK_SHARE = 0.8;
+/**
+ * A ZERO IS AN ABSENCE, NOT A MEASUREMENT, and this is the line that says so.
+ *
+ * Found on 2026-09-11 while answering "the purpose of this project is finding
+ * new market and market change": 976 of the 16,016 npm rows in
+ * `adoption_series` are exactly 0, and not one of the 10,977 PyPI rows is. On
+ * 3, 7, 8 and 11 September, all 88 verified npm packages reported 0 on the same
+ * day -- express, rails, svelte, redux and the rest, together. Those are not
+ * days on which nobody installed Express. They are days the npm API answered
+ * with nothing and the collector wrote a zero.
+ *
+ * Averaged into a window, each of those days drags a mean down and manufactures
+ * a decline. That is how a report invents a market change: not by reasoning
+ * badly, but by treating a gap in the instrument as a reading of zero.
+ *
+ * So every query behind a published curve filters them out. A package that a
+ * registry declines to report on is a package we did not measure that day, and
+ * the honest arithmetic is over the days we did.
+ */
+export const ZERO_IS_MISSING = 'a.downloads > 0';
+
 /** Below this many series, "they all moved" is not evidence. */
 const BREAK_MIN_SERIES = 3;
 
@@ -275,6 +316,7 @@ function median(xs: number[]): number {
 
 export function detectCohortBreak(
   series: Map<string, Array<{ day: string; downloads: number }>>,
+  registry = 'all',
 ): CohortBreak | null {
   if (series.size < BREAK_MIN_SERIES) return null;
   const days = [...new Set([...series.values()].flatMap((p) => p.map((x) => x.day)))].sort();
@@ -300,7 +342,7 @@ export function detectCohortBreak(
       && Math.abs(p) >= BREAK_PCT / 2).length;
     if (agreed / pcts.length < BREAK_SHARE) continue;
     if (!worst || Math.abs(med) > Math.abs(worst.medianPct)) {
-      worst = { day: cut, medianPct: Math.round(med), agreed, total: pcts.length };
+      worst = { day: cut, registry, medianPct: Math.round(med), agreed, total: pcts.length };
     }
   }
   return worst;
@@ -309,7 +351,20 @@ export function detectCohortBreak(
 /** Every verified series, measured across the range. */
 export async function movementsIn(
   range: Range, days: number, query: Query = q,
-): Promise<{ movements: PeriodMovement[]; shift: CohortBreak | null }> {
+): Promise<{
+  movements: PeriodMovement[];
+  shift: CohortBreak | null;
+  /**
+   * What the instrument actually had for this period.
+   *
+   * WITHOUT THIS, EVERY EMPTY CURVE LOOKS THE SAME. A week has no curve
+   * because a seven-day cycle cannot be measured over seven days; 2023 has
+   * none because the daily series in this archive starts on 2026-03-13; and a
+   * month can have none because a registry changed how it counts inside it.
+   * Those are three different facts and only one of them is about the market.
+   */
+  measured: { days: number; series: number };
+}> {
   const rows = await query<{ slug: string; registry: string; package: string;
     day: string; downloads: string }>(
     `SELECT a.slug, a.registry, a.package, a.day::text AS day, a.downloads::text AS downloads
@@ -317,6 +372,7 @@ export async function movementsIn(
        JOIN adoption_lookup l ON l.slug = a.slug AND l.missing = false
         AND l.registry = a.registry AND l.package = a.package
       WHERE a.day >= $1::date AND a.day < $2::date
+        AND ${ZERO_IS_MISSING}
       ORDER BY a.slug, a.day`,
     [range.from, range.to]);
 
@@ -334,20 +390,42 @@ export async function movementsIn(
   // is the point rather than a limitation. The step is in the instrument, so it
   // is in every series: there is no subset that survives it, and publishing the
   // two that moved least would just be publishing the same error smaller.
-  const shift = detectCohortBreak(new Map(
-    [...bySlug].map(([slug, v]) => [slug, v.points])));
-  if (shift) return { movements: [], shift };
+  // PER REGISTRY, for the reason written on `CohortBreak.registry`: an
+  // instrument break belongs to the registry that publishes the counts, and
+  // looking for it across both at once hides it behind the one that did not
+  // move. A registry that broke inside the period has every one of its curves
+  // withheld; the other registry's are unaffected and still shown.
+  const byRegistry = new Map<string, Map<string, Array<{ day: string; downloads: number }>>>();
+  for (const [slug, v] of bySlug) {
+    const at = byRegistry.get(v.registry) ?? new Map();
+    at.set(slug, v.points);
+    byRegistry.set(v.registry, at);
+  }
+  const breaks: CohortBreak[] = [];
+  for (const [registry, series] of byRegistry) {
+    const b = detectCohortBreak(series, registry);
+    if (b) breaks.push(b);
+  }
+  const broken = new Set(breaks.map((b) => b.registry));
 
   const out: PeriodMovement[] = [];
   for (const [slug, v] of bySlug) {
+    if (broken.has(v.registry)) continue;
     const m = movementOver(slug, v.registry, v.package, v.points, days);
     if (m) out.push(m);
   }
+  // The worst break is the one the page explains; the rest are counted with it.
+  const shift = breaks.sort((a, b) => Math.abs(b.medianPct) - Math.abs(a.medianPct))[0] ?? null;
+  const measured = {
+    days: new Set(rows.map((r) => r.day)).size,
+    series: bySlug.size,
+  };
+  if (shift && out.length === 0) return { movements: [], shift, measured };
   // Largest absolute move first: a reader scanning for a trend wants the thing
   // that moved, in either direction, not the alphabet.
   return {
     movements: out.sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct)),
-    shift: null,
+    shift, measured,
   };
 }
 
@@ -489,6 +567,8 @@ export interface PeriodReport {
   market: NewThing[];
   names: NewName[];
   movements: PeriodMovement[];
+  /** What the download instrument had for this period. */
+  measured: { days: number; series: number };
   /** Set when a measurement break voids every curve in the period. */
   shift: CohortBreak | null;
   findings: PeriodFinding[];
@@ -619,7 +699,7 @@ export async function periodReport(
   return {
     span, key, range, days,
     launches: l.rows, market: m.rows, names, findings, readings,
-    movements: curves.movements, shift: curves.shift,
+    movements: curves.movements, shift: curves.shift, measured: curves.measured,
     totals: { launches: l.total, market: m.total },
   };
 }
