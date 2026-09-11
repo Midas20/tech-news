@@ -226,6 +226,27 @@ export function diversify(
   items: Item[], caps: DiversityCaps = CAPS, ignore: Iterable<string> = [],
 ): Item[] {
   const skip = new Set(ignore);
+  /**
+   * ONE STORY PER PUBLISHER PER TITLE PER DAY.
+   *
+   * "the amount of news that you analysis is still low" (2026-09-11) was
+   * answered by letting a period be read at four times the depth, and that
+   * immediately made an existing flaw four times more expensive: raising the
+   * per-publisher cap from 6 to 25 took the duplicate share of an August corpus
+   * from 5% to 20%. A hundred of the 499 slots were the same story twice.
+   *
+   * They are all same-publisher: a feed re-publishes an item under a new
+   * identifier and `superseded_by` does not catch it, so the corpus carries
+   * "Vercel Connect is now generally available" twice and a reading spends two
+   * of its citations saying one thing.
+   *
+   * THE DAY IS PART OF THE KEY AND HAS TO BE. GitHub's status feed published
+   * four separate posts titled "Incident with Actions" in August, on four
+   * different days, about four different incidents. Keying on title alone would
+   * silently drop three real outages -- which is the same class of error as
+   * every other one in this file: an absence that looks like a statement.
+   */
+  const seen = new Set<string>();
   const bySource = new Map<string, number>();
   const bySubject = new Map<string, number>();
   const hard = caps.perSubject * HARD_SUBJECT_MULTIPLE;
@@ -235,6 +256,10 @@ export function diversify(
   for (const it of items) {
     if (out.length >= caps.total) break;
     if (it.kind === 'release' && releases >= caps.maxReleases) continue;
+
+    const key = `${it.source}|${it.title.trim().toLowerCase()}|${
+      it.when.slice(0, 10)}`;
+    if (seen.has(key)) continue;
 
     const srcN = bySource.get(it.source) ?? 0;
     if (srcN >= caps.perSource) continue;
@@ -250,6 +275,7 @@ export function diversify(
     if (subjects.some((s) => count(s) >= hard)) continue;
 
     out.push(it);
+    seen.add(key);
     if (it.kind === 'release') releases += 1;
     bySource.set(it.source, srcN + 1);
     for (const s of subjects) bySubject.set(s, count(s) + 1);

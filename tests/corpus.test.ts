@@ -184,3 +184,53 @@ describe('subjects', () => {
       item({ stacks: [`s-${i}`] })), 5)).toHaveLength(5);
   });
 });
+
+// ---------------------------------------------------------------------------
+// One story per publisher per title per day
+// ---------------------------------------------------------------------------
+//
+// "the amount of news that you analysis is still low" (2026-09-11) was answered
+// by reading four times as much, which made an existing flaw four times more
+// expensive: at a per-publisher cap of 25, a hundred of an August corpus's 499
+// slots were the same story twice.
+
+describe('a story the feed published twice is read once', () => {
+  const item = (over: Partial<Item> = {}): Item => ({
+    id: Math.random().toString(36).slice(2), title: 'Vercel Connect is now GA',
+    summary: 'x'.repeat(80), url: 'https://example.com', source: 'Vercel Blog',
+    sourceType: 'PRIMARY_VENDOR', kind: 'launch', when: '2026-08-24',
+    stacks: ['vercel'], companies: [], platforms: [], importance: 5,
+    independent: false, ...over,
+  } as Item);
+
+  it('drops a republished item under a new identifier', () => {
+    const out = diversify([item(), item()]);
+    expect(out).toHaveLength(1);
+  });
+
+  it('keeps two posts with the same title on different days', () => {
+    // GitHub's status feed published four separate posts titled "Incident with
+    // Actions" in August, about four different incidents. Keying on title alone
+    // would silently drop three real outages.
+    const out = diversify([
+      item({ title: 'Incident with Actions', source: 'GitHub status', when: '2026-08-18' }),
+      item({ title: 'Incident with Actions', source: 'GitHub status', when: '2026-08-26' }),
+    ]);
+    expect(out).toHaveLength(2);
+  });
+
+  it('keeps the same headline from two different publishers', () => {
+    // Two outlets covering one launch is corroboration, which is the opposite
+    // of duplication and the thing this archive is short of.
+    const out = diversify([
+      item({ source: 'Vercel Blog' }),
+      item({ source: 'InfoQ', independent: true }),
+    ]);
+    expect(out).toHaveLength(2);
+  });
+
+  it('ignores case and surrounding space when comparing titles', () => {
+    const out = diversify([item({ title: '  Vercel Connect is now GA ' }), item()]);
+    expect(out).toHaveLength(1);
+  });
+});
