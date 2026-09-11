@@ -33,7 +33,7 @@ import { applyStoredSettings } from '../src/db/repos/settings.ts';
 import { configureFromEnv } from '../src/config.ts';
 import { loadDotEnv } from '../src/lib/dotenv.ts';
 import {
-  periodCorpus, readPeriod, readBacklog, summariseRead,
+  periodCorpus, readPeriod, readBacklog, summariseRead, storeReading, topShare,
 } from '../src/analysis/periodread.ts';
 import { rangeFor, isSpan, type Span } from '../src/analysis/period.ts';
 import { subjectsOf } from '../src/analysis/corpus.ts';
@@ -140,22 +140,15 @@ try {
           const shaped = storedStrategy({ field: span, corpus, strategy } as never);
           if (!shaped) throw new Error('nothing survived validation');
 
-          await query(
-            `INSERT INTO period_readings
-               (span, key, provider, covered_from, covered_to, stories_read,
-                history_read, history_from, strategy)
-             VALUES ($1,$2,$3,$4::timestamptz,$5::timestamptz,$6,$7,$8::date,$9::jsonb)
-             ON CONFLICT (span, key) DO UPDATE SET
-               generated_at = now(), provider = EXCLUDED.provider,
-               covered_from = EXCLUDED.covered_from,
-               covered_to = EXCLUDED.covered_to,
-               stories_read = EXCLUDED.stories_read,
-               history_read = EXCLUDED.history_read,
-               history_from = EXCLUDED.history_from,
-               strategy = EXCLUDED.strategy`,
-            [span, key, by, range.from, range.to, corpus.length,
-              strategy.history?.n ?? null, strategy.history?.from ?? null,
-              JSON.stringify(shaped)]);
+          await storeReading(query, {
+            span, key, range, corpus,
+            sources: new Set(corpus.map((i) => i.source)).size,
+            share: Math.round(topShare(corpus) * 100),
+            provider: by,
+            historyRead: strategy.history?.n ?? null,
+            historyFrom: strategy.history?.from ?? null,
+            strategy: shaped,
+          });
 
           console.log(`stored ${span} ${key}: read from ${corpus.length} stories`
             + `, against ${prior.length} earlier, by ${by}`);

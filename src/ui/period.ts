@@ -123,68 +123,6 @@ function curves(ms: PeriodMovement[], span: Span): string {
 }
 
 /**
- * Why the analysis is missing, when it is.
- *
- * "there aren't any report" (2026-09-10, about `/reports/month/2026-06`). That
- * page rendered four lists and a curve table and then simply stopped: the
- * findings section returns an empty string when it has nothing, so the analysis
- * half of the report was not absent-with-a-reason, it was invisible.
- *
- * FOR EVERY PERIOD BEFORE 2026-09-09 THAT SILENCE WAS A FALSE STATEMENT. The
- * archive did not begin writing daily readings until then, so June has no
- * analysis for a reason that has nothing whatever to do with June. A reader
- * looking at that page could not tell a quiet month from an unwatched one --
- * which is the distinction this whole project keeps insisting on, made against
- * itself here.
- *
- * The three cases are genuinely different and get three different sentences:
- * nothing was watching, something was watching and no model would answer, or
- * the readings ran and this period simply predates them.
- */
-function noFindings(r: PeriodReport): string {
-  const span = SPAN_LABEL[r.span];
-  const c = r.readings;
-
-  // Never wrote one anywhere, so this is not about this period at all.
-  if (c.firstEver === null) {
-    return `<h2 class="sect">What the readings found</h2>
-      <p class="note"><b>Nothing, because nothing has been read yet.</b> This
-        archive has not written a daily reading on any day, so there is no
-        analysis to collect for this ${escapeHtml(span)} or any other. The lists
-        above are the pipeline's own verdicts and stand on their own.</p>`;
-  }
-
-  // The period ended before the first reading was ever written.
-  if (r.range.to <= c.firstEver) {
-    return `<h2 class="sect">What the readings found</h2>
-      <p class="note"><b>Nothing, and that is a fact about this archive rather
-        than about the ${escapeHtml(span)}.</b> The daily reading did not exist
-        yet: the first one was written on ${escapeHtml(niceDay(c.firstEver))},
-        after this ${escapeHtml(span)} had ended. Everything above was
-        reconstructed from stories that were collected at the time; the analysis
-        was not, and cannot be recovered by looking harder at this page.</p>`;
-  }
-
-  // Briefings covered it and none of them got an answer out of a model.
-  if (c.briefings > 0) {
-    return `<h2 class="sect">What the readings found</h2>
-      <p class="note"><b>Nothing was read, though something was watching.</b>
-        ${c.briefings} field briefing${c.briefings === 1 ? '' : 's'} covered this
-        ${escapeHtml(span)} and none of them carried a strategic reading &mdash;
-        the summaries were written and the analysis half was not. That is a
-        provider failure, not a quiet ${escapeHtml(span)}; each briefing says on
-        its own page which model refused it and why.</p>`;
-  }
-
-  // Readings exist elsewhere, but no briefing was written inside this period.
-  return `<h2 class="sect">What the readings found</h2>
-    <p class="note"><b>Nothing, because no report ran over these days.</b> No
-      field briefing covers any day in this ${escapeHtml(span)}, so there is no
-      analysis to collect from it. The first reading this archive wrote was
-      ${escapeHtml(niceDay(c.firstEver))}.</p>`;
-}
-
-/**
  * The period's own reading, when it has one.
  *
  * 2026-09-10, against /reports/month/2026-07: "hey kidding me?" -- at a page
@@ -278,7 +216,26 @@ function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Span): st
     claim(o.what, o.why, [], o.evidence, false)).join('')}</div>`,
   ].filter(Boolean).join('');
 
+  // WHOSE PERIOD THIS IS, ABOVE THE READING RATHER THAN IN ITS FOOTNOTES.
+  //
+  // These years were refused outright until 2026-09-10 on exactly this number.
+  // Refusing was wrong -- a narrow corpus makes a reading partial, not false,
+  // and partial is what `limits` is for -- but the number is real and burying it
+  // under the analysis would be the other half of the same mistake. A reader who
+  // sees "2019" as a heading will assume the year; this is what stops them.
+  const narrow = (r.sourcesRead !== null && r.sourcesRead < 12)
+    || (r.topShare !== null && r.topShare > 60);
+
   return `
+    ${!narrow ? '' : `<div class="mv-caveat">
+      <p><b>This is a reading of ${r.sourcesRead} publishers, not of the
+        ${escapeHtml(SPAN_LABEL[span])}.</b> ${r.topShare}% of the
+        ${r.storiesRead} stories behind it come from the three largest, because
+        that is what this archive holds for the period &mdash; blogs with deep
+        archives a backfill could walk. Everything below describes what those
+        publishers did. It is not a survey of the industry and the difference
+        matters most exactly where the two would disagree.</p>
+    </div>`}
     ${s.read ? `<p class="mv-lede">${escapeHtml(s.read)}</p>` : ''}
     ${sections}
     ${s.limits ? `<p class="note"><b>What this cannot settle.</b>
@@ -308,34 +265,35 @@ function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Span): st
  * one of those resolves by waiting and only one of them is ever fixed by adding
  * sources.
  */
-function notRead(r: PeriodReport, span: Span): string {
+export function notRead(r: PeriodReport, span: Span): string {
   const c = r.readings;
   const label = escapeHtml(SPAN_LABEL[span]);
   const NUM2 = new Intl.NumberFormat('en-US');
 
   if (c.stories < 25) {
-    return `<p class="note"><b>No reading for this ${label}.</b> The archive
-      holds ${NUM2.format(c.stories)} readable
-      ${c.stories === 1 ? 'story' : 'stories'} inside it, which is too few to
-      say anything about a ${label} that would not really be a statement about
-      those ${c.stories}.</p>`;
+    return `<p class="note"><b>No reading for this ${label}:</b> the archive
+      holds only ${NUM2.format(c.stories)} readable
+      ${c.stories === 1 ? 'story' : 'stories'} inside it.</p>`;
   }
 
+  // THE ONE CASE WORTH A SENTENCE OF EXPLANATION, because it is permanent and
+  // because it is not what a reader would assume. Everything else here resolves
+  // itself; this one never does, and the reason is the sources rather than the
+  // period.
   if (c.sources < 12 || c.topPct > 60) {
     return `<p class="note"><b>No reading for this ${label}, and it is the
       sources rather than the ${label}.</b> Its ${NUM2.format(c.stories)}
-      stories come from just ${c.sources}
+      stories come from ${c.sources}
       ${c.sources === 1 ? 'publisher' : 'publishers'}, ${c.topPct}% of them from
-      the three largest. A reading drawn from that would be those publishers&rsquo;
-      ${label} presented as the industry&rsquo;s &mdash; so it is refused rather
-      than written. This resolves only by widening the sources behind the
-      ${label}, never by waiting.</p>`;
+      the three largest &mdash; a reading drawn from that would be those
+      publishers&rsquo; ${label} presented as the industry&rsquo;s.</p>`;
   }
 
-  return `<p class="note"><b>Not read yet.</b> This ${label} has
-    ${NUM2.format(c.stories)} stories across ${c.sources} publishers, which is
-    enough to read. The <code>period-reading</code> job takes one unread period
-    an hour whenever a provider is reachable, so this fills in on its own.</p>`;
+  // NOTHING ABOUT THE JOB. A reader does not have a scheduler and cannot act on
+  // one; "the period-reading job takes one unread period an hour whenever a
+  // provider is reachable" told them about this software instead of about the
+  // month. It is pending, and that is the whole of what they need.
+  return '<p class="note">Not read yet.</p>';
 }
 
 /** Citations as they come out of jsonb: shape-checked, never trusted. */
@@ -423,41 +381,39 @@ export function bodyOf(r: PeriodReport): string {
         a single conclusion, and the page read as news filtered by date. What
         the readings concluded, each against the story it revises, is the report;
         the measurements below are what supports it. */''}
-    ${r.findings.length > 0 ? findings(r.findings, r.span) : noFindings(r)}
+    ${/* ONE STATEMENT ABOUT MISSING ANALYSIS, NOT FOUR.
+        Shown on 2026-09-10, a month page carried, in order: "Not read yet ...
+        the period-reading job takes one unread period an hour"; "No model wrote
+        any of this"; "What the readings found -- Nothing, and that is a fact
+        about this archive rather than about the month" with three more
+        sentences; a one-item list under two lines of disclaimer; and a
+        paragraph explaining that twenty launches existed and were deliberately
+        not listed. Five blocks, four of them about the page rather than the
+        month. "Do you think this is correct report."
+
+        It was not, and every one of those blocks was added by me, each
+        individually defensible: an absence must say what it is. But the rule
+        is that an absence says what it is ONCE. Stacked, they stop being
+        honesty and become the thing they were meant to prevent -- a page that
+        is mostly about itself.
+
+        So: the daily-readings section is gone when the period has a reading of
+        its own (it is a different and lesser thing, and having both meant two
+        sections competing to explain the same silence), the launch-count
+        paragraph is gone entirely (explaining a removal forever is worse than
+        the removal), and the one-line disclaimers are gone from blocks small
+        enough to judge at a glance. */''}
+    ${r.findings.length > 0 ? findings(r.findings, r.span) : ''}
 
     ${r.names.length === 0 ? '' : `
       <h2 class="sect">Names this archive had never seen</h2>
-      <p class="note">Named in a headline and in none of the registries this
-        archive holds. <b>A weak test:</b> an absence here means nothing.</p>
       <ul class="mv-new-names">${r.names.map(nameCard).join('')}</ul>`}
 
     ${r.market.length === 0 ? '' : `
       <h2 class="sect">Money and ownership moved</h2>
-      <p class="note">Who was funded, who bought whom, and at what number &mdash;
-        the second of this archive&rsquo;s two collection targets.${
+      <p class="note">Who was funded, who bought whom, and at what number.${
   more(r.market.length, r.totals.market)}</p>
       <ul class="bf-cites">${r.market.map(line).join('')}</ul>`}
-
-    ${/* THE FORTY-HEADLINE LIST IS GONE. On /reports/month/2026-06 it was 35%
-        of the page and forty news links, against 3% for the analysis -- "I
-        can't find necessary infos in report because unnecessary info is more
-        than necessary info" (2026-09-10).
-
-        A list of every launch in a month is not a finding about the month, and
-        this archive's own rule says it cannot become one: the counts measure
-        the feed list, so the page was forbidden from drawing any conclusion
-        from the very thing that filled it. What remains is what the period
-        actually says -- names nobody had seen, money that moved, what the
-        public curves did, and what the readings concluded.
-
-        The launches are still on /whatsnew and on each field's page, which is
-        where a reader who wants a list of launches is going anyway. */''}
-    ${r.launches.length === 0 ? '' : `
-      <p class="note"><b>${r.totals.launches}</b> ${r.totals.launches === 1
-    ? 'story was' : 'stories were'} classed as introducing something rather than
-      updating it this ${SPAN_LABEL[r.span]}. They are not listed here &mdash;
-      a list of headlines is not a finding, and this page may not turn its own
-      counts into one. <a href="/whatsnew">See what is new</a>.</p>`}
 
     ${r.shift ? brokenCurves(r.shift, r.span)
     : r.movements.length > 0 ? curves(r.movements, r.span)

@@ -9836,6 +9836,78 @@ surviving its own citations. The 2026 reading's own `limits` states the problem
 this section is about: 119 of its 120 stories are vendors writing about
 themselves, so it is strong evidence of intent and none at all of adoption.
 
+## Reading eight years instead of refusing them
+
+*"I think you didn't read all news in 10 years, so you don't analysis news"* —
+2026-09-10.
+
+Correct, and it was the right objection. The guard added a few hours earlier
+refused any period whose three largest publishers held more than 60% of it, and
+eight of the archive's ten years failed. **The decision came out of an aggregate
+query. Not one of those 1,392 stories had been read.**
+
+The number was real and the veto was the wrong use of it. This archive withholds
+a curve when a cohort break makes it **wrong** — there is no honest version of a
+comparison spanning a measurement change. Narrow sourcing makes a reading
+**partial**, which is the condition every reading here is already in: each one
+ends with `limits`, and the 2026 reading's own limits say that 119 of its 120
+stories are vendors writing about themselves. The eight refused years were being
+held to a standard nothing published here has ever met.
+
+So the number became a label. `period_readings` gained `sources_read` and
+`top_share` (migration 0081), and the page leads with them:
+
+> **This is a reading of 5 publishers, not of the year.** 88% of the 120 stories
+> behind it come from the three largest, because that is what this archive holds
+> for the period — blogs with deep archives a backfill could walk. Everything
+> below describes what those publishers did.
+
+Six years are now read, each written against the six months before it:
+
+| year | stories | publishers | top 3 | what it found |
+|---|---|---|---|---|
+| 2021 | 119 | 5 | 93% | the database incorporated and raised $250M; the ML library bought its own interface |
+| 2022 | 120 | 5 | 88% | the projects became companies with release dates; Rust became the systems answer in a Rails shop |
+| 2023 | 120 | 6 | 80% | open weights acquired release cycles; a frontend company shipped an AI SDK and v0 |
+| 2024 | 120 | 7 | 88% | a dozen leaderboards in twelve months; the Postgres path bought rather than built |
+| 2025 | 120 | 10 | 84% | the agent went from essay to line item in nine months |
+| 2026 | 120 | 26 | 49% | the frontier model became a component clouds resell; Postgres became the interface |
+
+Read end to end they are one story, which is the argument for reading a narrow
+year rather than refusing it: ClickHouse incorporates in 2021, buys PeerDB for
+Postgres CDC in 2024, takes the connector to general availability in 2025, and
+ships an extension inside Postgres in December 2025 — and 2026 opens with
+Postgres as the interface every other engine speaks through. No single year
+shows that. Refusing four of them would have hidden it.
+
+### What the validator caught
+
+The 2024 reading was stored twice. The first attempt reported
+`dropped for missing citations: 2 direction` — two claims cited `then` indices
+from the wrong corpus, because the prior list for 2024 is 2023's second half and
+I had used numbers from the 2023 reading. Both claims were dropped rather than
+published with citations that resolve to nothing, which is exactly what that
+rule is for, and it caught an error in prose written by hand rather than by a
+model.
+
+### Two writers for one table, and they drifted within the hour
+
+Migration 0081 added the two columns and `readPeriod` was updated to write them.
+`scripts/read-period.ts` had its own copy of the same INSERT for the `--from`
+path, and it was not. Every reading stored through the script came back with
+both columns null — so the page that depends on them to say *"this is a reading
+of ten publishers"* silently said nothing, which is the precise failure this
+archive keeps writing down: an absence that looks like a statement. There is now
+one `storeReading`, and both paths call it.
+
+### A year was still being sampled as a fortnight
+
+`periodPool` orders by event kind, then importance, then recency — right for a
+day, wrong for a year. The 2026 corpus was 63 of 120 stories from the last two
+days of the span and 2 from April. `periodCorpus` now stratifies by month for
+multi-month spans, the same rotation `priorContext` uses for history. It cost
+breadth immediately — 49 sources to 26, 11 independent stories to 1 — and that
+was the honest result: 2026 looked broad because its last fortnight is broad.
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.

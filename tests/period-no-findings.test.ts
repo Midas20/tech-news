@@ -23,7 +23,8 @@
 // going to be fixed by waiting.
 
 import { describe, it, expect } from 'vitest';
-import { bodyOf } from '../src/ui/period.ts';
+import { readFileSync } from 'node:fs';
+import { bodyOf, notRead } from '../src/ui/period.ts';
 import type { PeriodReport, ReadingCoverage } from '../src/analysis/period.ts';
 
 /** A period report with nothing in it but the coverage under test. */
@@ -41,74 +42,6 @@ function report(readings: ReadingCoverage, over = {}): PeriodReport {
 }
 
 const strip = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
-
-describe('a period before the archive ever read anything', () => {
-  const html = strip(bodyOf(report(
-    { briefings: 0, withReading: 0, firstEver: '2026-09-09', stories: 400, sources: 30, topPct: 30 })));
-
-  it('says the reading did not exist yet, and when it started', () => {
-    expect(html).toContain('9 September 2026');
-    expect(html).toContain('fact about this archive');
-  });
-
-  it('does not let the reader take it as a quiet month', () => {
-    // The whole failure in one assertion. An empty section says "nothing was
-    // found"; this has to say "nothing was looking".
-    expect(html).not.toMatch(/nothing (happened|moved|was found)/i);
-    expect(html).toContain('What the readings found');
-  });
-
-  it('says the analysis cannot be recovered by reloading', () => {
-    // The stories were collected at the time and the analysis was not. A reader
-    // who thinks this is a rendering problem will come back tomorrow.
-    expect(html).toContain('cannot be recovered');
-  });
-});
-
-describe('a period something was watching, where no model would answer', () => {
-  const html = strip(bodyOf(report(
-    { briefings: 5, withReading: 0, firstEver: '2026-09-09', stories: 400, sources: 30, topPct: 30 },
-    { range: { from: '2026-09-01', to: '2026-10-01', label: 'September 2026' },
-      key: '2026-09' })));
-
-  it('says the summaries were written and the analysis was not', () => {
-    expect(html).toContain('5 field briefings');
-    expect(html).toContain('provider failure');
-  });
-
-  it('is explicitly not a statement about the period', () => {
-    // 2026-09-10 was exactly this: five fields briefed, five readings refused
-    // by every provider in the chain. Reporting that as a quiet month would
-    // have been the archive lying about the industry to cover its own budget.
-    expect(html).toContain('not a quiet');
-  });
-
-  it('points at where the actual reason is written down', () => {
-    expect(html).toContain('which model refused it');
-  });
-});
-
-describe('a period no report ever ran over, after readings began', () => {
-  const html = strip(bodyOf(report(
-    { briefings: 0, withReading: 0, firstEver: '2026-09-09', stories: 400, sources: 30, topPct: 30 },
-    { range: { from: '2026-10-01', to: '2026-11-01', label: 'October 2026' },
-      key: '2026-10' })));
-
-  it('says no report ran, rather than that nothing was found', () => {
-    expect(html).toContain('no report ran');
-  });
-});
-
-describe('an archive that has never written a reading at all', () => {
-  const html = strip(bodyOf(report(
-    { briefings: 0, withReading: 0, firstEver: null, stories: 400, sources: 30, topPct: 30 })));
-
-  it('says so without inventing a date', () => {
-    expect(html).toContain('nothing has been read yet');
-    expect(html).not.toContain('Invalid Date');
-    expect(html).not.toContain('null');
-  });
-});
 
 describe('a period that did find things', () => {
   const html = strip(bodyOf(report(
@@ -292,5 +225,95 @@ describe('a period that was refused for its sources', () => {
     // renderPeriodReport beside the reading. Asserted so the two do not
     // silently start duplicating each other.
     expect(html).not.toContain('it is the sources rather than');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// An absence says what it is ONCE
+// ---------------------------------------------------------------------------
+//
+// "Do you think this is correct report, Remove these content and give me
+// correct report" -- 2026-09-10, against a month page carrying, in order:
+//
+//   1. "Not read yet ... the period-reading job takes one unread period an
+//      hour whenever a provider is reachable"
+//   2. "No model wrote any of this."
+//   3. "What the readings found -- Nothing, and that is a fact about this
+//      archive rather than about the month" + three more sentences
+//   4. a one-item list under two lines of disclaimer
+//   5. "20 stories were classed as introducing something ... They are not
+//      listed here -- a list of headlines is not a finding"
+//
+// Five blocks, four about the page rather than the month. Every one of them was
+// added deliberately, each defensible on its own: an absence must say what it
+// is. The rule was right and the accumulation was not. Stacked, they became the
+// exact thing they were written to prevent -- a page mostly about itself.
+//
+// So the rule gains a second half: an absence says what it is once, and only
+// where a reader could otherwise draw a false conclusion. "This is pending" is
+// not a false conclusion. Neither is a missing section a reader never knew to
+// expect.
+
+describe('a period with no reading of its own', () => {
+  it('says nothing about the job that will produce it', () => {
+    // A reader does not have a scheduler and cannot act on one. This told them
+    // about the software instead of about the month.
+    //
+    // Asserted against the RENDERED note, not the source: the first version of
+    // this test read period.ts and failed on the comment that explains the
+    // removal, which is a test catching its own documentation.
+    const out = notRead(report(
+      { briefings: 0, withReading: 0, firstEver: '2026-09-09',
+        stories: 164, sources: 17, topPct: 40 }), 'month');
+    expect(out).not.toMatch(/job|hour|provider|reachable/i);
+    expect(strip(out).trim()).toBe('Not read yet.');
+  });
+
+  it('still explains the one case that never resolves itself', () => {
+    // Too few publishers is permanent and is not what a reader would assume,
+    // so it keeps its sentence. Everything else here fixes itself.
+    const page = readFileSync(
+      new URL('../src/ui/period.ts', import.meta.url), 'utf8');
+    expect(page).toMatch(/it is the\s+sources rather than the/);
+  });
+});
+
+describe('the daily-readings section no longer competes with the period reading', () => {
+  it('renders nothing at all when there are no findings', () => {
+    // Two sections used to explain the same silence in different words, one of
+    // them at four sentences. The period reading is the analysis; this section
+    // collects the daily ones, and having nothing to collect is not news.
+    const html = strip(bodyOf(report(
+      { briefings: 0, withReading: 0, firstEver: '2026-09-09',
+        stories: 400, sources: 30, topPct: 30 })));
+    expect(html).not.toContain('What the readings found');
+    expect(html).not.toContain('fact about this archive');
+  });
+
+  it('still renders them when there are some', () => {
+    const html = strip(bodyOf(report(
+      { briefings: 5, withReading: 5, firstEver: '2026-09-09',
+        stories: 400, sources: 30, topPct: 30 },
+      { findings: [finding()] })));
+    expect(html).toContain('What changed, and against what');
+    expect(html).toContain('allowed to touch');
+  });
+});
+
+describe('what is no longer explained', () => {
+  const page = readFileSync(
+    new URL('../src/ui/period.ts', import.meta.url), 'utf8');
+
+  it('does not describe the launch list it stopped showing', () => {
+    // Explaining a removal forever is worse than the removal. The launches are
+    // on /whatsnew, which is where somebody wanting a list of launches goes.
+    expect(page).not.toMatch(/They are not listed here/);
+  });
+
+  it('does not disclaim a block small enough to judge at a glance', () => {
+    // "Named in a headline and in none of the registries this archive holds. A
+    // weak test: an absence here means nothing." -- two lines of hedge over one
+    // name and its date.
+    expect(page).not.toMatch(/A weak test:/);
   });
 });

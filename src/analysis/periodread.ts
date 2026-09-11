@@ -261,16 +261,25 @@ export async function readPeriod(
     return { status: 'thin', read: corpus.length };
   }
 
-  // ENOUGH STORIES IS NOT ENOUGH. See MAX_TOP_SHARE: 2024 holds 389 stories and
-  // 93% of them are three companies' blogs. A model handed that corpus will
-  // write a confident year in technology, because the corpus does not tell it
-  // that everything it is reading came from three publishers.
+  // MEASURED AND CARRIED, NOT USED TO REFUSE.
+  //
+  // This was a veto until 2026-09-10: any period whose three largest publishers
+  // held more than 60% of it was declined, which was eight of the archive's ten
+  // years. "I think you didn't read all news in 10 years, so you don't analysis
+  // news" -- and that was right. The decision came out of an aggregate query and
+  // not one of those 1,392 stories had been read.
+  //
+  // The number is real and the veto was the wrong use of it. A cohort break
+  // makes a curve WRONG, so `brokenCurves` withholds it and there is no honest
+  // alternative. Narrow sourcing makes a reading PARTIAL -- which is the
+  // condition every reading here is already in, and which `limits` exists to
+  // state. The 2026 reading says in its own limits that 119 of its 120 stories
+  // are vendors writing about themselves; the refused years were being held to a
+  // standard nothing published here has ever met.
+  //
+  // So it travels with the reading and the page leads with it.
   const sources = new Set(corpus.map((i) => i.source)).size;
-  const share = topShare(corpus);
-  if (sources < MIN_PERIOD_SOURCES || share > MAX_TOP_SHARE) {
-    return { status: 'narrow', read: corpus.length, sources,
-      topShare: Math.round(share * 100) };
-  }
+  const share = Math.round(topShare(corpus) * 100);
 
   // BEFORE THE MODEL CALL AND AFTER THE CORPUS. The corpus is one query; the
   // research `analyseField` does is many, against public APIs, and there is no
@@ -306,24 +315,55 @@ export async function readPeriod(
     field: span, corpus, strategy: read.strategy,
   } as unknown as Briefing);
 
+  await storeReading(query, {
+    span, key, range, corpus, sources, share,
+    provider: read.strategy.provider ?? null,
+    historyRead: read.strategy.history?.n ?? null,
+    historyFrom: read.strategy.history?.from ?? null,
+    strategy: shaped,
+  });
+
+  return { status: 'written', span, key, read: corpus.length,
+    ...(read.strategy.provider ? { provider: read.strategy.provider } : {}) };
+}
+
+/**
+ * The only place a period reading is written.
+ *
+ * ONE STATEMENT, BECAUSE THERE WERE TWO AND THEY DRIFTED WITHIN THE HOUR.
+ * `scripts/read-period.ts` had its own copy for the `--from` path, and when
+ * 0081 added `sources_read` and `top_share` only this one was updated. Every
+ * reading stored through the script came back with both columns null, and the
+ * page that depends on them to say "this is a reading of ten publishers, not of
+ * the year" silently said nothing at all.
+ *
+ * That is the precise failure mode this archive keeps writing down: an absence
+ * that looks like a statement. Two functions writing the same table is two
+ * functions that will disagree, and the disagreement is invisible because both
+ * of them write valid rows.
+ */
+export async function storeReading(query: Query, r: {
+  span: Span; key: string; range: Range; corpus: Item[];
+  sources: number; share: number; provider: string | null;
+  historyRead: number | null; historyFrom: string | null; strategy: unknown;
+}): Promise<void> {
   await query(
     `INSERT INTO period_readings
        (span, key, provider, covered_from, covered_to, stories_read,
-        history_read, history_from, strategy)
-     VALUES ($1, $2, $3, $4::timestamptz, $5::timestamptz, $6, $7, $8::date, $9::jsonb)
+        sources_read, top_share, history_read, history_from, strategy)
+     VALUES ($1, $2, $3, $4::timestamptz, $5::timestamptz, $6, $7, $8, $9,
+             $10::date, $11::jsonb)
      ON CONFLICT (span, key) DO UPDATE SET
        generated_at = now(), provider = EXCLUDED.provider,
        covered_from = EXCLUDED.covered_from, covered_to = EXCLUDED.covered_to,
        stories_read = EXCLUDED.stories_read,
+       sources_read = EXCLUDED.sources_read, top_share = EXCLUDED.top_share,
        history_read = EXCLUDED.history_read,
        history_from = EXCLUDED.history_from,
        strategy = EXCLUDED.strategy`,
-    [span, key, read.strategy.provider ?? null, range.from, range.to,
-      corpus.length, read.strategy.history?.n ?? null,
-      read.strategy.history?.from ?? null, JSON.stringify(shaped)]);
-
-  return { status: 'written', span, key, read: corpus.length,
-    ...(read.strategy.provider ? { provider: read.strategy.provider } : {}) };
+    [r.span, r.key, r.provider, r.range.from, r.range.to, r.corpus.length,
+      r.sources, r.share, r.historyRead, r.historyFrom,
+      JSON.stringify(r.strategy)]);
 }
 
 export interface StoredPeriodReading {
@@ -331,6 +371,8 @@ export interface StoredPeriodReading {
   key: string;
   provider: string | null;
   storiesRead: number;
+  sourcesRead: number | null;
+  topShare: number | null;
   historyRead: number | null;
   historyFrom: string | null;
   generatedAt: string;
@@ -343,10 +385,11 @@ export async function periodReading(
 ): Promise<StoredPeriodReading | null> {
   const [r] = await query<{
     span: string; key: string; provider: string | null;
-    stories_read: number; history_read: number | null; history_from: string | null;
+    stories_read: number; sources_read: number | null; top_share: number | null;
+    history_read: number | null; history_from: string | null;
     generated_at: string; strategy: unknown;
   }>(
-    `SELECT span, key, provider, stories_read, history_read,
+    `SELECT span, key, provider, stories_read, sources_read, top_share, history_read,
             history_from::text AS history_from, generated_at::text AS generated_at,
             strategy
        FROM period_readings WHERE span = $1 AND key = $2`, [span, key]);
@@ -354,6 +397,8 @@ export async function periodReading(
   return {
     span: r.span, key: r.key, provider: r.provider,
     storiesRead: Number(r.stories_read),
+    sourcesRead: r.sources_read === null ? null : Number(r.sources_read),
+    topShare: r.top_share === null ? null : Number(r.top_share),
     historyRead: r.history_read === null ? null : Number(r.history_read),
     historyFrom: r.history_from, generatedAt: r.generated_at,
     strategy: r.strategy,
