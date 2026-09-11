@@ -20,27 +20,10 @@ import {
   type Span, type PeriodReport, type PeriodMovement, type PeriodFinding, type FindingCite,
   type PeriodRow, type CohortBreak,
 } from '../analysis/period.ts';
-import type { NewThing, NewName } from '../analysis/whatsnew.ts';
 
 const NUM = new Intl.NumberFormat('en-US');
 
 /** One story, as a line. First-party is marked, as it is everywhere else. */
-function line(t: NewThing): string {
-  return `<li>
-    <a href="/read/${escapeHtml(t.id)}">${escapeHtml(truncate(t.title, 110))}</a>
-    <span class="muted">${escapeHtml(t.source)} &middot; ${escapeHtml(t.when)}${
-  t.independent ? '' : ' &middot; <span class="bf-fp">says so itself</span>'}</span>
-  </li>`;
-}
-
-function nameCard(n: NewName): string {
-  return `<li>
-    <a href="/search?q=${encodeURIComponent(n.name)}">${escapeHtml(n.name)}</a>
-    <span class="muted">${n.sources === 1 ? 'one source' : `${n.sources} sources`}
-      &middot; ${escapeHtml(n.stories[0]!.when)}</span>
-  </li>`;
-}
-
 /**
  * The measurement moved, so no curve in this period means anything.
  *
@@ -101,8 +84,43 @@ function noCurves(span: Span, days: number): string {
     <p class="note"><b>No curve for this ${SPAN_LABEL[span]}.</b> ${why}</p>`;
 }
 
+/**
+ * A ROW THAT DID NOT MOVE IS NOT A ROW.
+ *
+ * "Hey I don't want to look raw news content in report page" (2026-09-10). The
+ * two story lists were the answer to that and this table was the other half of
+ * the same problem: `movementsIn` has no cap, so the page printed every tracked
+ * package sorted by absolute change, and a month page ended in a long tail of
+ * `+0%` and `-1%`. At that size the move is the registry's weekly cycle and the
+ * rounding, not adoption -- so those rows cost a reader scroll and told them
+ * nothing, which is the definition of the thing this page keeps being asked to
+ * stop doing.
+ *
+ * The floor alone was not enough. June 2026 tracks 147 packages and 86 of them
+ * moved by more than a tenth across a month, which is a table longer than the
+ * reading above it and still attached to no claim in it. So there is also a
+ * cap: the moves a reader would actually scan for, and a sentence saying the
+ * rest moved less. Both numbers are stated -- a table that quietly drops two
+ * thirds of its subjects is making a different claim from one that says so.
+ */
+const MOVED = 10;
+const SHOWN = 20;
+
 function curves(ms: PeriodMovement[], span: Span): string {
   if (ms.length === 0) return '';
+  const head = `<h2 class="sect">What the public numbers did over this ${
+  SPAN_LABEL[span]}</h2>`;
+  const big = ms.filter((m) => Math.abs(m.changePct) >= MOVED);
+
+  if (big.length === 0) {
+    return `${head}
+      <p class="note">None of the ${ms.length} tracked packages moved by
+        ${MOVED}% or more across this ${SPAN_LABEL[span]}. That is a quiet
+        ${SPAN_LABEL[span]} in these particular packages, not a quiet
+        ${SPAN_LABEL[span]}.</p>`;
+  }
+
+  const shown = big.slice(0, SHOWN);
   const row = (m: PeriodMovement) => `<tr>
     <td><a href="/stack/${encodeURIComponent(m.slug)}">${escapeHtml(m.slug)}</a>
       <span class="muted">${escapeHtml(m.registry)}:${escapeHtml(m.package)}</span></td>
@@ -111,14 +129,15 @@ function curves(ms: PeriodMovement[], span: Span): string {
     <td class="num ${m.changePct >= 0 ? 'up' : 'down'}">${
   m.changePct >= 0 ? '+' : ''}${m.changePct}%</td>
   </tr>`;
-  return `
-    <h2 class="sect">What the public numbers did over this ${SPAN_LABEL[span]}</h2>
-    <p class="note">Mean daily downloads over ${ms[0]!.edge} days at each end,
-      published by the registry. <b>Downloads are not users.</b></p>
+  return `${head}
+    <p class="note">Mean daily downloads over ${shown[0]!.edge} days at each end,
+      published by the registry. <b>Downloads are not users.</b>${
+  ms.length === shown.length ? '' : ` Of ${ms.length} tracked packages, the
+      ${shown.length} that moved most are listed; the rest moved less.`}</p>
     <div class="mv-scroll"><table class="mv-curve">
       <thead><tr><th>Technology</th><th class="num">Start of period</th>
         <th class="num">End of period</th><th class="num">Change</th></tr></thead>
-      <tbody>${ms.map(row).join('')}</tbody>
+      <tbody>${shown.map(row).join('')}</tbody>
     </table></div>`;
 }
 
@@ -370,10 +389,7 @@ function findings(all: PeriodFinding[], span: Span): string {
 }
 
 /** The three lists, shared by the period page and the lead card. */
-export function bodyOf(r: PeriodReport): string {
-  const more = (shown: number, total: number) =>
-    (total > shown ? ` <span class="muted">${total - shown} more not listed.</span>` : '');
-
+export function bodyOf(r: PeriodReport, hasReading: boolean): string {
   return `
     ${/* THE ANALYSIS IS THE FIRST THING ON THE PAGE, not the last.
         It used to sit under the new names, the funding list, the launch list
@@ -381,39 +397,30 @@ export function bodyOf(r: PeriodReport): string {
         a single conclusion, and the page read as news filtered by date. What
         the readings concluded, each against the story it revises, is the report;
         the measurements below are what supports it. */''}
-    ${/* ONE STATEMENT ABOUT MISSING ANALYSIS, NOT FOUR.
-        Shown on 2026-09-10, a month page carried, in order: "Not read yet ...
-        the period-reading job takes one unread period an hour"; "No model wrote
-        any of this"; "What the readings found -- Nothing, and that is a fact
-        about this archive rather than about the month" with three more
-        sentences; a one-item list under two lines of disclaimer; and a
-        paragraph explaining that twenty launches existed and were deliberately
-        not listed. Five blocks, four of them about the page rather than the
-        month. "Do you think this is correct report."
+    ${/* AND THEN THE INVENTORIES WENT ENTIRELY.
 
-        It was not, and every one of those blocks was added by me, each
-        individually defensible: an absence must say what it is. But the rule
-        is that an absence says what it is ONCE. Stacked, they stop being
-        honesty and become the thing they were meant to prevent -- a page that
-        is mostly about itself.
+        "Hey I don't want to look raw news content in report page"
+        (2026-09-10). Moving the analysis above the lists fixed the order and
+        not the substance: a month page still ended with "Names this archive had
+        never seen" (a name, a source count, a date), "Money and ownership
+        moved" (a headline, a publisher, a date, linked to the story) and the
+        curve table. Two of those three are the corpus with a heading on it,
+        and one of them is a list of news links on a page that had already been
+        told twice not to carry news links.
 
-        So: the daily-readings section is gone when the period has a reading of
-        its own (it is a different and lesser thing, and having both meant two
-        sections competing to explain the same silence), the launch-count
-        paragraph is gone entirely (explaining a removal forever is worse than
-        the removal), and the one-line disclaimers are gone from blocks small
-        enough to judge at a glance. */''}
-    ${r.findings.length > 0 ? findings(r.findings, r.span) : ''}
+        A report is what reading the stories produced. The stories themselves
+        are not evidence for it unless a claim cites them, and the reading cites
+        its own at both ends. So the period report now carries the reading and
+        the public numbers, and nothing else. Nothing is lost: launches, market
+        moves and new names are what `whatsnew.ts` renders, which is the page
+        that exists to be an inventory.
 
-    ${r.names.length === 0 ? '' : `
-      <h2 class="sect">Names this archive had never seen</h2>
-      <ul class="mv-new-names">${r.names.map(nameCard).join('')}</ul>`}
-
-    ${r.market.length === 0 ? '' : `
-      <h2 class="sect">Money and ownership moved</h2>
-      <p class="note">Who was funded, who bought whom, and at what number.${
-  more(r.market.length, r.totals.market)}</p>
-      <ul class="bf-cites">${r.market.map(line).join('')}</ul>`}
+        The daily findings survive only where the period has no reading of its
+        own. They are the same shape as a reading but lesser -- a day's claim
+        with the story at each end -- and printing both meant two sections
+        arguing the same month at different resolutions. When the period has
+        been read, the reading is the answer. */''}
+    ${hasReading || r.findings.length === 0 ? '' : findings(r.findings, r.span)}
 
     ${r.shift ? brokenCurves(r.shift, r.span)
     : r.movements.length > 0 ? curves(r.movements, r.span)
@@ -459,13 +466,18 @@ export async function renderPeriodReport(span: Span, key: string): Promise<strin
   }
 
   // A suppressed curve block is content: the page has something to say even
-  // when every list is empty, so it must not fall through to "nothing here".
-  const nothing = !r.shift && r.launches.length + r.market.length + r.names.length
-    + r.movements.length + r.findings.length === 0;
+  // when there is no curve, so it must not fall through to "nothing here".
+  //
+  // COUNTED OVER WHAT IS RENDERED, not over what was fetched. This used to
+  // include launches, market moves and new names, none of which the page shows
+  // any more -- so a period with forty funding stories and no curve would have
+  // claimed to be full while displaying nothing.
+  const nothing = !r.shift && r.movements.length === 0
+    && (reading !== null || r.findings.length === 0);
 
   return wrap(`
     ${pageHead(`${r.range.label}`,
-    `Everything that appeared, moved or was read over this ${SPAN_LABEL[span]}`,
+    `What this ${SPAN_LABEL[span]} changed, read against what came before it`,
     { crumbs })}
 
     ${spanNav(span, siblingKeys(r.range))}
@@ -483,19 +495,18 @@ export async function renderPeriodReport(span: Span, key: string): Promise<strin
         page is not the page. Each of these still says its one thing; none of
         them says it twice. */''}
     <p class="note">${reading
-    ? '<b>The reading above was written by a model, from the stories cited '
-      + 'under it and nothing else.</b> Everything below it was not: the figures '
-      + 'are from public package registries and the claims are quoted from the '
-      + 'daily readings that argued them.'
-    : '<b>No model wrote any of this.</b> The figures are from public package '
-      + 'registries; the claims are quoted from the daily readings that argued '
-      + 'them.'}</p>
+    ? '<b>The reading above was written from the stories cited under it and '
+      + 'nothing else.</b> The figures below it were not written at all: they '
+      + 'are download counts published by the package registries themselves.'
+    : '<b>No model wrote any of this.</b> The figures are download counts '
+      + 'published by the package registries; the claims are quoted from the '
+      + 'daily readings that argued them.'}</p>
 
     ${nothing
-    ? empty(`No launch, market move or public curve fell inside this ${SPAN_LABEL[span]}. `
-      + 'That is a statement about what these sources published and what this '
-      + 'archive caught, not about the industry.', 'sparkle')
-    : bodyOf(r)}
+    ? empty(`No public curve could be drawn across this ${SPAN_LABEL[span]}. `
+      + 'That is a statement about which packages this archive tracks and how '
+      + 'long the period is, not about the industry.', 'sparkle')
+    : bodyOf(r, reading !== null)}
 
     <p class="note"><b>What this cannot tell you.</b> Nothing here is counted:
       what this archive catches is a fact about its feed list, so no total on

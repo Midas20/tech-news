@@ -9956,6 +9956,47 @@ presenting a partial week as a whole one.
 
 `--backlog` now answers `every recent period is read`.
 
+### The inventories came off the report
+
+*"Hey I don't want to look raw news content in report page"* — 2026-09-10.
+
+Moving the analysis to the top of the page had fixed the order and not the
+substance. A month page still ended with three blocks that were the corpus with
+a heading on it:
+
+- **"Names this archive had never seen"** — a name, a source count, a date.
+- **"Money and ownership moved"** — a headline, a publisher, a date, each one
+  **linked to the story**, on a page that had already been asked twice not to
+  carry news links.
+- **the curve table** — every tracked package, uncapped, sorted by absolute
+  change, so June ended in a tail of `+0%` and `-1%` rows.
+
+The first two are gone from the period report entirely. Nothing is lost:
+launches, market moves and new names are what `whatsnew.ts` renders, and that
+page exists to be an inventory. The daily findings survive only where the period
+has no reading of its own — they are the same shape as a reading but lesser, and
+printing both meant two sections arguing the same month at different
+resolutions.
+
+**What stayed, and why.** A claim's own citations. `endOf` renders the story at
+each end of a `then`/`now` pair and links it, and the reading block uses the same
+function the findings block does. That pairing is the finding — it is what was
+asked for in the first place (*"the result that analysis the news in the period
+with old news that related to each news"*) — and a citation under a claim is not
+a news feed. The public-number table stayed too: it is the only evidence on the
+page that does not come from the corpus, and the rule here is that magnitudes
+come from public sources only.
+
+It did get a floor and a cap. June tracks 147 packages; 86 of them moved by more
+than a tenth across the month, which is a table longer than the reading above it.
+Now the twenty largest are listed and the note says so, because a table that
+quietly drops two thirds of its subjects is making a different claim from one
+that says it did.
+
+```
+/reports/month/2026-06   63,631 b  ->  36,514 b
+```
+
 ### The push is blocked, and it is the token
 
 `68ba2ce` is committed and **not** pushed. With terminal prompting disabled the

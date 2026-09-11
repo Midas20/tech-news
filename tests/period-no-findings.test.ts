@@ -52,7 +52,7 @@ describe('a period that did find things', () => {
       then: [{ title: 'Claude 3.5 Sonnet is the most capable model yet',
         when: '2026-03-04', source: 'Anthropic', id: 'a1' }],
       now: [{ title: 'AWS opens its Agent Registry with scoped identities',
-        when: '2026-09-10', source: 'AWS News Blog', id: 'b2' }] }] })));
+        when: '2026-09-10', source: 'AWS News Blog', id: 'b2' }] }] }), false));
 
   it('shows the findings and none of the explanations', () => {
     expect(html).toContain('allowed to touch');
@@ -94,7 +94,7 @@ const finding = (over = {}) => ({
 describe('a claim is shown against the story it revises', () => {
   const html = strip(bodyOf(report(
     { briefings: 5, withReading: 5, firstEver: '2026-09-09', stories: 400, sources: 30, topPct: 30 },
-    { findings: [finding()] })));
+    { findings: [finding()] }), false));
 
   it('shows both ends, labelled', () => {
     expect(html).toContain('Before');
@@ -110,20 +110,45 @@ describe('a claim is shown against the story it revises', () => {
     expect(html).toContain('2026-09-10');
   });
 
-  it('leads the page with the analysis, not with the inventories', () => {
+  it('carries no inventory of stories at all', () => {
+    // "Hey I don't want to look raw news content in report page" (2026-09-10).
+    // Putting the analysis above the lists fixed the order, not the substance:
+    // the page still ended with a name list, a funding list of linked headlines
+    // and the curve table. A claim's own citations stay -- that pairing is the
+    // finding -- but a list attached to no claim is the corpus with a heading
+    // on it, and `whatsnew.ts` is the page that exists to be an inventory.
     const full = bodyOf(report(
       { briefings: 5, withReading: 5, firstEver: '2026-09-09', stories: 400, sources: 30, topPct: 30 },
       { findings: [finding()],
-        names: [{ name: 'VCR', sources: 1, stories: [{ when: '2026-06-29' }] }] }));
-    expect(full.indexOf('What changed, and against what'))
-      .toBeLessThan(full.indexOf('Names this archive had never seen'));
+        names: [{ name: 'VCR', sources: 1, stories: [{ when: '2026-06-29' }] }],
+        market: [{ id: 'm1', title: 'Supabase Series F', source: 'Supabase Blog',
+          when: '2026-06-04', independent: false }],
+        totals: { launches: 0, market: 1 } }), false);
+    expect(full).not.toContain('Names this archive had never seen');
+    expect(full).not.toContain('Money and ownership moved');
+    expect(full).not.toContain('Supabase Series F');
+    expect(full).not.toContain('VCR');
+    // The claim and its two ends survive: that is the analysis, not a list.
+    expect(full).toContain('allowed to touch');
+    expect(full).toContain('Claude 3.5 Sonnet');
+  });
+
+  it('drops the daily findings entirely once the period has its own reading', () => {
+    // Two sections arguing the same month at different resolutions. When the
+    // period has been read, the reading is the answer and the day's claims are
+    // the lesser copy of it.
+    const full = bodyOf(report(
+      { briefings: 5, withReading: 5, firstEver: '2026-09-09', stories: 400, sources: 30, topPct: 30 },
+      { findings: [finding()] }), true);
+    expect(full).not.toContain('What changed, and against what');
+    expect(full).not.toContain('allowed to touch');
   });
 });
 
 describe('a claim with no earlier end', () => {
   const html = strip(bodyOf(report(
     { briefings: 5, withReading: 5, firstEver: '2026-09-09', stories: 400, sources: 30, topPct: 30 },
-    { findings: [finding({ then: [] })] })));
+    { findings: [finding({ then: [] })] }), false));
 
   it('says the earlier end is missing rather than implying there was none', () => {
     // The same rule as everywhere else on these pages: an absent half reads as
@@ -145,7 +170,7 @@ describe('a reading stored before the pairing existed', () => {
       text: 'Cost per solved task has moved out of the footnotes' };
     expect(() => bodyOf(report(
       { briefings: 4, withReading: 4, firstEver: '2026-09-09', stories: 400, sources: 30, topPct: 30 },
-      { findings: [old] }))).not.toThrow();
+      { findings: [old] }), false)).not.toThrow();
   });
 });
 
@@ -218,7 +243,7 @@ describe('a period that was refused for its sources', () => {
     { briefings: 0, withReading: 0, firstEver: '2026-09-09',
       stories: 389, sources: 8, topPct: 93 },
     { range: { from: '2024-01-01', to: '2025-01-01', label: '2024' },
-      span: 'year', key: '2024' })));
+      span: 'year', key: '2024' }), false));
 
   it('is not on the page at all -- this note belongs to the reading block', () => {
     // bodyOf renders the findings; the refusal note is rendered by
@@ -285,7 +310,7 @@ describe('the daily-readings section no longer competes with the period reading'
     // collects the daily ones, and having nothing to collect is not news.
     const html = strip(bodyOf(report(
       { briefings: 0, withReading: 0, firstEver: '2026-09-09',
-        stories: 400, sources: 30, topPct: 30 })));
+        stories: 400, sources: 30, topPct: 30 }), false));
     expect(html).not.toContain('What the readings found');
     expect(html).not.toContain('fact about this archive');
   });
@@ -294,7 +319,7 @@ describe('the daily-readings section no longer competes with the period reading'
     const html = strip(bodyOf(report(
       { briefings: 5, withReading: 5, firstEver: '2026-09-09',
         stories: 400, sources: 30, topPct: 30 },
-      { findings: [finding()] })));
+      { findings: [finding()] }), false));
     expect(html).toContain('What changed, and against what');
     expect(html).toContain('allowed to touch');
   });
@@ -315,5 +340,68 @@ describe('what is no longer explained', () => {
     // weak test: an absence here means nothing." -- two lines of hedge over one
     // name and its date.
     expect(page).not.toMatch(/A weak test:/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A row that did not move is not a row
+// ---------------------------------------------------------------------------
+//
+// "Hey I don't want to look raw news content in report page" -- 2026-09-10.
+//
+// The two story lists were the obvious half. The other half was this table:
+// `movementsIn` has no cap, so the page printed every tracked package sorted by
+// absolute change, and a month ended in a long tail of `+0%` and `-1%`. At that
+// size the move is the registry's weekly cycle, not adoption.
+
+describe('the public-numbers table', () => {
+  const moves = (pcts: number[]) => pcts.map((changePct, i) => ({
+    slug: `p${i}`, registry: 'npm', package: `p${i}`,
+    before: 1000, after: 1000 * (1 + changePct / 100), changePct,
+    fromDay: '2026-06-01', toDay: '2026-06-30', edge: 14,
+  }));
+
+  it('drops the packages that did not move, and says how many are listed', () => {
+    const html = bodyOf(report(
+      { briefings: 0, withReading: 0, firstEver: '2026-09-09',
+        stories: 400, sources: 30, topPct: 30 },
+      { movements: moves([56, 41, 3, 0, -1]) }), true);
+    expect(html).toContain('p0');
+    expect(html).toContain('p1');
+    expect(html).not.toContain('>p2<');
+    expect(html).not.toContain('>p4<');
+    expect(strip(html)).toContain('Of 5 tracked packages, the 2 that moved most');
+  });
+
+  it('says so plainly rather than rendering an empty table', () => {
+    // A table with a header and no rows reads as a broken page. This is a
+    // quiet period in these packages, and that is worth one sentence.
+    const html = strip(bodyOf(report(
+      { briefings: 0, withReading: 0, firstEver: '2026-09-09',
+        stories: 400, sources: 30, topPct: 30 },
+      { movements: moves([4, -2, 0]) }), true));
+    expect(html).toContain('None of the 3 tracked packages moved');
+    expect(html).not.toContain('Start of period');
+  });
+
+  it('does not claim a quiet period is a quiet industry', () => {
+    const html = strip(bodyOf(report(
+      { briefings: 0, withReading: 0, firstEver: '2026-09-09',
+        stories: 400, sources: 30, topPct: 30 },
+      { movements: moves([1]) }), true));
+    expect(html).toMatch(/in these particular packages, not a quiet month/i);
+  });
+
+  it('caps a long tail rather than printing every tracked package', () => {
+    // June 2026 tracks 147 packages and 86 of them cleared the floor across a
+    // month -- a table longer than the reading above it, attached to no claim
+    // in it.
+    const html = bodyOf(report(
+      { briefings: 0, withReading: 0, firstEver: '2026-09-09',
+        stories: 400, sources: 30, topPct: 30 },
+      { movements: moves(Array.from({ length: 40 }, (_, i) => 80 - i)) }), true);
+    const rows = (html.match(/<tr>/g) ?? []).length - 1; // minus the header
+    expect(rows).toBe(20);
+    expect(strip(html)).toContain('the 20 that moved most are listed');
   });
 });
