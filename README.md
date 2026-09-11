@@ -10062,6 +10062,52 @@ And the tensions section is the one part of a reading that cannot be mistaken
 for the vendors' account of themselves — it is where the reading stops resolving
 the evidence and shows it still unresolved.
 
+### Every period was read again, deeper
+
+*"Make all report more detail, I don't want to generate report by project, I want
+this session make all report."* — 2026-09-11.
+
+All nineteen stored readings were rewritten in one session through the `--from`
+path, against freshly dumped corpora, and every one passed `validateStrategy`
+with **every claim surviving its own citations**. The stored analysis doubled:
+
+| | before | after |
+| --- | --- | --- |
+| direction claims | 2–3 | 5–6 |
+| work items | 2–4 | 5–7 |
+| companies positioned | 3–6 | 5–10 |
+| tensions | 1 | 3 |
+| openings | 1–3 | 3–5 |
+| stored bytes | 521 KB | 1,029 KB |
+
+A period page now carries 33–48 KB of analysis where it carried 15–20 KB.
+
+**What went into `limits` is the more important half.** Counting the corpus while
+rewriting turned up four facts about this archive that the readings had not been
+stating, and every reading now states the ones that apply to it:
+
+```
+collected      every story in the archive was collected 9–11 Sept 2026
+sampled        a month is read from 120 of up to 2,439 readable stories
+duplicated     up to 18 of 120 entries duplicate another in the same sample
+backfilled     each feed reaches back a different distance
+```
+
+The last one is the one that could have produced a false finding. The trade
+press, aggregators and community feeds were added at the end of the collection
+window, so **a July week has no independent journalism and a September week has
+twenty-three** — and the September week is the first period in this archive that
+contains any funding news at all. That is a fact about the collector. Read as a
+change in the industry it would say that money and outside scrutiny arrived in
+September 2026, which is nonsense. Both September readings and the 31 Aug week
+say so in as many words, and the comparison between any two periods' *sourcing*
+is named as a comparison between two collections.
+
+The duplicate count is a real defect rather than a caveat: `diversify` caps
+publishers but nothing catches the same story entering the sample twice under
+one title. It costs the July month 15 of its 120 slots. It is written into each
+reading's `limits` and is not yet fixed.
+
 ### The push is blocked, and it is the token
 
 `68ba2ce` is committed and **not** pushed. With terminal prompting disabled the
