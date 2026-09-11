@@ -61,6 +61,37 @@ import { rangeFor, keyFor, type Span, type Range } from './period.ts';
  */
 export const PERIOD_CORPUS = 120;
 
+/**
+ * The caps that decide how much of a period a reading actually sees.
+ *
+ * "And I think the amount of news that you analysis is still low"
+ * -- 2026-09-11. Correct, and the 120 was the smaller half of the reason.
+ *
+ * `CAPS.perSource` is 6. A month in which one platform published forty posts
+ * contributed six of them, so the binding constraint on coverage was never the
+ * total: September 2026 holds 2,439 readable stories from 104 publishers and a
+ * reading saw 120 of them, because 45 publishers times six is where it stopped.
+ *
+ * THE INVARIANT IS THE RATIO, NOT THE SIX. The cap exists so that no publisher
+ * can speak for the period, and six out of a hundred and twenty is one in
+ * twenty. Scaling the caps with the total keeps that property exactly while
+ * letting a month be read at the depth a month deserves -- and a bigger corpus
+ * makes the diversity stronger rather than weaker, because the same 5% ceiling
+ * now admits more publishers rather than more of the same one.
+ *
+ * The default stays at 120 for the provider chain, which has to fit this into a
+ * prompt. A reading written through `--from` has no such limit and says what
+ * cap it used.
+ */
+export function capsFor(total: number): typeof CAPS {
+  return {
+    perSource: Math.max(6, Math.round(total / 20)),
+    perSubject: Math.max(5, Math.round(total / 24)),
+    maxReleases: Math.max(16, Math.round(total / 7.5)),
+    total,
+  };
+}
+
 /** How deep to draw from before diversifying. */
 const PERIOD_POOL = 900;
 
@@ -144,12 +175,12 @@ export async function periodCorpus(
 
   // One month is a month: nothing to stratify, and the existing behaviour is
   // already right for it.
-  if (months.size <= 1) return diversify(pool, { ...CAPS, total: cap }, []);
+  if (months.size <= 1) return diversify(pool, capsFor(cap), []);
 
   const share = Math.max(2, Math.ceil((cap / months.size) * 2));
   const ordered = [...months.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const pools = ordered.map(([, items]) =>
-    diversify(items, { ...CAPS, total: share }, []));
+    diversify(items, capsFor(share), []));
 
   const picked: Item[] = [];
   const seen = new Set<string>();

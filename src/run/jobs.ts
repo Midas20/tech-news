@@ -82,6 +82,7 @@ import {
 } from '../analysis/downloads.ts';
 import { applyStoredSettings } from '../db/repos/settings.ts';
 import { getConfig } from '../config.ts';
+import { refreshLabour, summariseLabour } from '../collect/labour.ts';
 import type { LlmContext } from '../llm/router.ts';
 
 export interface JobOptions {
@@ -205,6 +206,27 @@ export function buildJobs(opts: JobOptions = {}): Job[] {
         return tuned.faster || tuned.slower
           ? `${tuned.faster} faster, ${tuned.slower} slower; partitions through ${through}`
           : `partitions through ${through}`;
+      },
+    },
+
+    {
+      name: 'labour',
+      what: 'Refresh the job-postings, remote-share and AI-share trackers.',
+      // ONCE A DAY, BECAUSE THAT IS HOW OFTEN IT CHANGES. Indeed Hiring Lab
+      // pushes these CSVs daily and the series they carry are daily. Fetching
+      // hourly would re-download 222,000 rows to learn nothing, and the
+      // publisher is doing this for free.
+      //
+      // The whole file is re-read each time rather than only the tail: these
+      // trackers are seasonally adjusted and revise history, so a figure for
+      // last Tuesday changes when the next week lands. Storing the first value
+      // ever seen would leave this archive quietly disagreeing with the source.
+      everySeconds: 86_400,
+      leaseSeconds: 900,
+      async run({ worker }) {
+        return summariseLabour(await refreshLabour(worker, {
+          userAgent: getConfig().fetch.userAgent,
+        }));
       },
     },
 

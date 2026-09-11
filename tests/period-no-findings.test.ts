@@ -35,6 +35,8 @@ function report(readings: ReadingCoverage, over = {}): PeriodReport {
     days: 30,
     launches: [], market: [], names: [], movements: [], findings: [],
     measured: { days: 30, series: 150 },
+    labour: { country: 'US', postings: [], remote: [], ai: null,
+      from: null, to: null, days: 0 },
     shift: null,
     totals: { launches: 0, market: 0 },
     readings,

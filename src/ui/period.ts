@@ -10,6 +10,9 @@
 // drift apart is how the same question gets four different answers.
 
 import { FLOOR, NEW_CEILING, NEW_GROWTH } from '../analysis/market.ts';
+import {
+  techOf, controlsOf, techGap, EDGE as LABOUR_EDGE, type LabourPicture,
+} from '../analysis/labour.ts';
 import { wrap, pageHead, empty, escapeHtml, truncate, niceDay } from './html.ts';
 import { crumbsFor } from './nav.ts';
 import { periodReading, type StoredPeriodReading } from '../analysis/periodread.ts';
@@ -135,6 +138,110 @@ function curveTable(ms: PeriodMovement[]): string {
         <th class="num">End of period</th><th class="num">Change</th></tr></thead>
       <tbody>${ms.map(row).join('')}</tbody>
     </table></div>`;
+}
+
+/**
+ * Where the work is, which is the half of "market" this archive could not see.
+ *
+ * "the purpose of this project is finding new market and market change"
+ * (2026-09-11), followed by a report on the IT labour market and "I want to
+ * make monthly report at this level". That report runs on job postings. This
+ * archive had none, and no amount of re-reading vendor blogs produces any: a
+ * post is what a company chose to say, and a posting is what a company is
+ * willing to pay for.
+ *
+ * So the numbers here are Indeed Hiring Lab's, fetched daily from their public
+ * CSVs, indexed to 1 February 2020 = 100. Nothing in this section was written
+ * by this repository or by anybody selling anything in it.
+ *
+ * THE CONTROL COLUMN IS THE WHOLE POINT. A technology sector falling means
+ * nothing on its own -- postings fell across the economy after 2022 and one job
+ * board's share of hiring drifts. What can be read is the DIFFERENCE between
+ * the technology sectors and ten controls measured the same way by the same
+ * publisher over the same window. In 2023 software postings fell 43.8% while
+ * the control median fell 17.6%: the gap, not the fall, is the finding.
+ */
+function labourBlock(p: LabourPicture, span: Span): string {
+  const tech = techOf(p);
+  const gap = techGap(p);
+  const pct = (n: number) => `${n >= 0 ? '+' : ''}${n}%`;
+  const idx = (n: number) => n.toFixed(1);
+
+  if (p.days < LABOUR_EDGE * 2) {
+    return `
+      <h2 class="sect">Where the work is</h2>
+      <p class="note"><b>Not measurable over this ${SPAN_LABEL[span]}.</b> ${
+  p.days === 0
+    ? `The postings series holds no day inside it. Indeed Hiring Lab's
+       trackers begin in 2019 and this archive fetched them on 11 September
+       2026; a period outside that window has no postings data, which is a
+       fact about the source and not about hiring.`
+    : `It holds ${p.days} ${p.days === 1 ? 'day' : 'days'} of postings data,
+       and a comparison needs ${LABOUR_EDGE} at each end so that a weekday is
+       never measured against a weekend.`}</p>`;
+  }
+
+  const row = (m: { sector: string; start: number; end: number; changePct: number }) => `<tr>
+    <td>${escapeHtml(m.sector)}</td>
+    <td class="num">${idx(m.start)}</td>
+    <td class="num">${idx(m.end)}</td>
+    <td class="num ${m.changePct >= 0 ? 'up' : 'down'}">${pct(m.changePct)}</td>
+  </tr>`;
+
+  const software = tech.find((m) => m.sector === 'Software Development');
+  const remoteSw = p.remote.find((m) => m.sector === 'techsoftware');
+
+  return `
+    <h2 class="sect">Where the work is</h2>
+    <p class="note">Job postings on Indeed, indexed so that <b>100 is that
+      sector on 1 February 2020</b>. A sector at 75 has three quarters of the
+      postings it had then. These are postings, not jobs, and not hires.</p>
+
+    ${software ? `<p class="note"><b>Software Development is at
+      ${idx(software.end)}</b> &mdash; ${software.end >= 100
+    ? `${Math.round(software.end - 100)}% above`
+    : `${Math.round(100 - software.end)}% below`} its February 2020 level, and
+      ${pct(software.changePct)} across this ${SPAN_LABEL[span]}.</p>` : ''}
+
+    <div class="mv-scroll"><table class="mv-curve">
+      <thead><tr><th>Sector</th><th class="num">Start of period</th>
+        <th class="num">End of period</th><th class="num">Change</th></tr></thead>
+      <tbody>${tech.map(row).join('')}</tbody>
+    </table></div>
+
+    ${gap === null ? '' : `<div class="mv-caveat">
+      <p><b>Against the rest of the economy: ${pct(gap.gap)}.</b> The
+        technology sectors moved ${pct(gap.tech)} across this
+        ${SPAN_LABEL[span]} at the median; the ${controlsOf(p).length} control
+        sectors &mdash; nursing, construction, accounting, legal and the rest,
+        measured by the same publisher over the same days &mdash; moved
+        ${pct(gap.control)}.</p>
+      <p>${Math.abs(gap.gap) < 2
+    ? `That is close to no difference, which means this ${SPAN_LABEL[span]}
+       was about hiring in general rather than about technology.`
+    : gap.gap > 0
+      ? `Technology outpaced the rest of the economy by ${
+        Math.abs(gap.gap)} points.`
+      : `Technology fell behind the rest of the economy by ${
+        Math.abs(gap.gap)} points.`}</p>
+    </div>`}
+
+    ${!remoteSw && !p.ai ? '' : `<h3 class="sect">Remote, and how much of it mentions AI</h3>
+      <p class="note">${remoteSw ? `<b>${remoteSw.end.toFixed(1)}% of software
+        postings mention remote or hybrid work`
+    : ''}${remoteSw ? `</b>, from ${remoteSw.start.toFixed(1)}% at the start of
+        this ${SPAN_LABEL[span]}. ` : ''}${p.ai
+    ? `<b>${p.ai.end.toFixed(2)}% of all postings mention AI</b>, from
+        ${p.ai.start.toFixed(2)}%.` : ''}</p>
+      <p class="note">Remote here means the posting says so. It is a wider
+        measure than "fully remote" and the two are often quoted against each
+        other as if they were the same number.</p>`}
+
+    <p class="note"><b>What this instrument can see.</b> Postings on one job
+      board, in the United States. A posting is not a job and a job is not a
+      hire; senior and specialist roles are filled through networks that never
+      reach a board. Published by Indeed Hiring Lab under their own name and
+      re-fetchable by anybody from their public repositories.</p>`;
 }
 
 /**
@@ -581,6 +688,8 @@ export function bodyOf(r: PeriodReport, hasReading: boolean): string {
     ${/* THE MARKET, UNDER ONE HEADING, whatever the instrument managed to
         see. A break, a period too short and a period the series does not reach
         are three different answers and each says which it is. */''}
+    ${labourBlock(r.labour, r.span)}
+
     <h2 class="sect">What the market did over this ${SPAN_LABEL[r.span]}</h2>
     ${r.shift ? brokenCurves(r.shift, r.span, r.movements.length) : ''}
     ${r.movements.length > 0 ? marketBlock(r.movements, r.span)

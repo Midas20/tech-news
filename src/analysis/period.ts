@@ -44,6 +44,7 @@
 import type { Query } from './corpus.ts';
 import { q } from '../ui/db.ts';
 import { launches, marketMoves, newNames, type NewThing, type NewName } from './whatsnew.ts';
+import { labourPicture, type LabourPicture } from './labour.ts';
 
 /** The spans a report can cover, longest last. */
 export type Span = 'day' | 'week' | 'month' | 'year';
@@ -569,6 +570,14 @@ export interface PeriodReport {
   movements: PeriodMovement[];
   /** What the download instrument had for this period. */
   measured: { days: number; series: number };
+  /**
+   * What was being hired for, from the postings data.
+   *
+   * The other half of "market". Downloads say what is being installed; this
+   * says what somebody is willing to pay for, which is the half this archive
+   * exists to find and the half it could not see until 2026-09-11.
+   */
+  labour: LabourPicture;
   /** Set when a measurement break voids every curve in the period. */
   shift: CohortBreak | null;
   findings: PeriodFinding[];
@@ -687,10 +696,11 @@ export async function periodReport(
     (Date.parse(range.to) - Date.parse(range.from)) / DAY_MS));
   const cap = CAPS[span];
 
-  const [l, m, curves, findings, readings] = await Promise.all([
+  const [l, m, curves, labour, findings, readings] = await Promise.all([
     launches(range.from, range.to, cap.launch, query),
     marketMoves(range.from, range.to, cap.market, query),
     movementsIn(range, days, query),
+    labourPicture(range, 'US', query),
     findingsIn(range, query),
     readingCoverage(range, query),
   ]);
@@ -700,6 +710,7 @@ export async function periodReport(
     span, key, range, days,
     launches: l.rows, market: m.rows, names, findings, readings,
     movements: curves.movements, shift: curves.shift, measured: curves.measured,
+    labour,
     totals: { launches: l.total, market: m.total },
   };
 }

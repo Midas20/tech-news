@@ -83,7 +83,17 @@ try {
       // The corpus and its earlier end, built exactly as `readPeriod` builds
       // them, so a reading written against the dump cites the same indices the
       // store resolves.
-      const corpus = await periodCorpus(range, query);
+      // HOW MUCH OF THE PERIOD TO READ, and why it is a flag.
+      //
+      // "the amount of news that you analysis is still low" -- 2026-09-11. The
+      // default 120 exists because the provider chain has to fit the corpus
+      // into a prompt. A reading written here does not, so --cap raises it, and
+      // the same value MUST be used for the dump and the store: the validator
+      // resolves every citation against a corpus it rebuilds, and a reading
+      // written against 500 stories and stored against 120 would have its
+      // citations land on different stories entirely.
+      const cap = Number(flag('cap') ?? 0) || undefined;
+      const corpus = await periodCorpus(range, query, cap);
       const prior = await priorContext(
         span, { from: range.from, to: range.to }, subjectsOf(corpus, 20), query);
 
@@ -99,8 +109,8 @@ try {
             + 'entries as `then` by their n.',
           corpus: brief(corpus), prior: brief(prior),
         }, null, 1));
-        console.log(`${range.label}: ${corpus.length} in period, `
-          + `${prior.length} earlier -> ${dump}`);
+        console.log(`${range.label}: ${corpus.length} in period${
+          cap ? ` (cap ${cap})` : ''}, ${prior.length} earlier -> ${dump}`);
       }
 
       if (from) {
