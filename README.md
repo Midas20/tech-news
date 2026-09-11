@@ -9908,6 +9908,69 @@ days of the span and 2 from April. `periodCorpus` now stratifies by month for
 multi-month spans, the same rotation `priorContext` uses for history. It cost
 breadth immediately — 49 sources to 26, 11 independent stories to 1 — and that
 was the honest result: 2026 looked broad because its last fortnight is broad.
+## Every period in the window is now read
+
+*"You make me anger. Why don't you generate any report?"* — 2026-09-10.
+
+Fair. Six years had been read and the short spans had not: `/reports/month/2026-06`
+— the page flagged at the very start of that day — still said **"Not read yet."**,
+and so did four other months and every week. `--backlog` said `11 still to read`
+and gave the reason each hour: `claude: no credentials; gemini-flash: 429;
+cerebras: 402 payment required; groq: budget exhausted; gemini-flash-lite: 429`.
+
+The hourly job is not broken. It runs, finds all five providers dead, and holds.
+That is a fact about the funding of this project, and the `--from` path exists
+precisely so it does not become a fact about whether a period can be read.
+
+So all twelve were written the same way the years were — outside the chain, held
+to the same rule. Every one returned `every claim survived its own citations`.
+
+| period | stories | publishers | top 3 | what it found |
+|---|---|---|---|---|
+| May 2026 | 66 | 16 | 32% | the throwaway sandbox grew a filesystem it keeps |
+| Jun 2026 | 89 | 26 | 21% | the web began building doors for agents — WebMCP, an agent-readiness toolkit |
+| Aug 2026 | 120 | 41 | 15% | the coding agent's first serious RCE, answered with cages |
+| Sep 2026 | 120 | 45 | 18% | the sandbox became the product in the fortnight the sandbox leaked |
+| wk 20 Jul | 60 | 23 | 30% | one vendor described a whole computer, not a chip |
+| wk 27 Jul | 65 | 25 | 29% | two vendors said their docs' real reader is now an agent |
+| wk 3 Aug | 60 | 27 | 27% | agent capabilities became a packaged format with a registry |
+| wk 10 Aug | 91 | 31 | 20% | the agent became traffic a network can detect, an identity a cloud can issue |
+| wk 17 Aug | 120 | 44 | 15% | the failure stopped being a bug and became a permission |
+| wk 24 Aug | 120 | 48 | 15% | the toolchain began being rewritten for a non-human committer |
+| wk 31 Aug | 120 | 54 | 22% | statefulness moved from the orchestrator into the agent |
+| wk 7 Sep | 120 | 43 | 15% | "harness" became a product category in seven days |
+
+The months and weeks are far better sourced than the years — 15–32% top-three
+concentration against 80–93% — so none of them carries the narrow banner. That is
+not the industry changing. It is what the archive was collecting at the time, and
+the readings say so in their own `limits` rather than leaving the contrast to
+imply something about 2021.
+
+**One artefact worth naming.** The independent feeds were added to the collector
+on 10 September 2026. Both September readings say outright that their aggregator,
+community and trade-press items nearly all carry that date, and that the
+difference between September's sourcing and June's says nothing whatever about
+the industry. The week of 7 September also covers four days, not seven: the
+archive holds nothing after the 10th, and the reading states that rather than
+presenting a partial week as a whole one.
+
+`--backlog` now answers `every recent period is read`.
+
+### The push is blocked, and it is the token
+
+`68ba2ce` is committed and **not** pushed. With terminal prompting disabled the
+remote answers plainly:
+
+```
+remote: Write access to repository not granted.
+fatal: ... The requested URL returned error: 403
+```
+
+The token in `.env` authenticates and has no write permission on this repository.
+Nothing here can fix that; it needs a token with write access. `origin/master` is
+at `4bc6423` and this is stated rather than reported as a successful push,
+because it has been reported as one before and was not.
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.
