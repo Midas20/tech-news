@@ -159,11 +159,33 @@ function curves(ms: PeriodMovement[], span: Span): string {
  * route. A period is composed on demand, so the evidence is inline: the two
  * ends under each claim, and nothing deeper to click into.
  */
-function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Span): string {
+export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Span): string {
+  /*
+   * THE REASONING IS NOT TRUNCATED, and that is the whole point of the note
+   * four paragraphs up.
+   *
+   * "why does the end is ..." -- 2026-09-11, against /reports/month/2026-07,
+   * where a shift paragraph stopped at "and Inkling Small ...". This body used
+   * to render through `truncate(body, 420)`, copied from `strategyBlock` in
+   * briefing.ts where it is correct: there, every card LINKS to
+   * `/field/<f>/report/<day>/<kind>/<n>`, so 190 characters is a summary with
+   * the rest one click away.
+   *
+   * A period has no such page -- it is composed on demand and the evidence is
+   * inline, which is written down directly above. So the same call here is not
+   * a summary. It is deletion, mid-sentence, of the only copy on the page, and
+   * it is deletion of the reasoning specifically: the part that says why the
+   * claim follows from the stories under it. Measured on 2026-09-11, 147 of
+   * 313 bodies across the stored readings were over the cap -- 47% of the
+   * analysis on these pages ended in an ellipsis that led nowhere.
+   *
+   * A long paragraph is a writing problem and is fixed by writing shorter, not
+   * by hiding the end of it from the reader.
+   */
   const claim = (title: string, body: string, then: unknown, now: unknown,
     compared: boolean, tag = '') => `<article class="pr-card">
       <p class="pr-claim">${escapeHtml(title)}${tag}</p>
-      ${body ? `<p class="mv-body">${escapeHtml(truncate(body, 420))}</p>` : ''}
+      ${body ? `<p class="mv-body">${escapeHtml(body)}</p>` : ''}
       ${pair(then, now, compared)}
     </article>`;
 

@@ -24,7 +24,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { bodyOf, notRead } from '../src/ui/period.ts';
+import { bodyOf, notRead, readingBlock } from '../src/ui/period.ts';
 import type { PeriodReport, ReadingCoverage } from '../src/analysis/period.ts';
 
 /** A period report with nothing in it but the coverage under test. */
@@ -403,5 +403,51 @@ describe('the public-numbers table', () => {
     const rows = (html.match(/<tr>/g) ?? []).length - 1; // minus the header
     expect(rows).toBe(20);
     expect(strip(html)).toContain('the 20 that moved most are listed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The reasoning is not truncated
+// ---------------------------------------------------------------------------
+//
+// "why does the end is ..." -- 2026-09-11, against /reports/month/2026-07,
+// where a shift paragraph stopped at "and Inkling Small ...".
+//
+// The body rendered through `truncate(body, 420)`, copied from `strategyBlock`
+// in briefing.ts where it is right: there every card links to its own page, so
+// the cap is a summary. A period report has no such page -- it is composed on
+// demand and the evidence is inline -- so the cap was deletion of the only copy,
+// mid-sentence, of the part that says why the claim follows. 147 of 313 stored
+// bodies were over it.
+
+describe('a claim body long enough to have been cut', () => {
+  const long = `In the earlier corpus the agent work is on the agent's side: a `
+    + 'vendor moving its coding agents into the cloud, an orchestration layer '
+    + 'for enterprise AI, a model announced as intelligence with action. In June '
+    + 'the same subject appears from the opposite direction. Chrome opens an '
+    + 'origin trial for WebMCP, in which a site declares structured tools an '
+    + 'agent may call; it publishes a toolkit for making a site agent-ready; it '
+    + 'exposes DevTools runtime data so agents can see behaviour rather than '
+    + 'only source. Declaring an interface is the opposite of being scraped.';
+
+  const html = readingBlock(
+    { read: '', shift: null, work: [], positioning: [], tensions: [],
+      openings: [],
+      direction: [{ claim: 'The web began publishing an interface for agents',
+        reasoning: long, falsifier: '', then: [], now: [] }] } as never,
+    { storiesRead: 89, historyRead: 40, historyFrom: '2025-12-03',
+      provider: 'operator session', sourcesRead: 26, topShare: 21 } as never,
+    'month');
+
+  it('renders to the last word', () => {
+    expect(long.length).toBeGreaterThan(420);
+    expect(html).toContain('the opposite of being scraped');
+    expect(html).not.toContain('…');
+  });
+
+  it('keeps the sentence that says why the claim follows', () => {
+    // The cap fell inside the reasoning, which is the half a reader needs to
+    // disagree with the claim. The claim alone is an assertion.
+    expect(html).toContain('Chrome opens an origin trial for WebMCP');
   });
 });

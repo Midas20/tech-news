@@ -9997,6 +9997,38 @@ that says it did.
 /reports/month/2026-06   63,631 b  ->  36,514 b
 ```
 
+### The reasoning was being cut mid-sentence
+
+*"why does the end is ..."* — 2026-09-11, against `/reports/month/2026-07`,
+where a shift paragraph stopped at *"and Inkling Small …"*.
+
+`readingBlock` rendered the body through `truncate(body, 420)`. That call was
+copied from `strategyBlock` in `briefing.ts`, where it is correct: there every
+card is an `<a>` to `/field/<f>/report/<day>/<kind>/<n>`, so 190 characters is a
+summary and the rest is one click away.
+
+**A period report has no such page.** Its own comment says so four paragraphs
+above the bug — *"NO DETAIL PAGES ... a period is composed on demand, so the
+evidence is inline"*. So the same call here was not a summary. It was deletion,
+mid-sentence, of the only copy on the page, and specifically of the reasoning:
+the half that says why the claim follows from the stories cited under it. The
+claim without it is an assertion.
+
+Measured across the stored readings on 2026-09-11:
+
+```
+313 claim bodies       147 over the 420-char cap   (47%)
+longest                961 chars — more than half of it hidden
+per page               5–13 passages ending in an ellipsis that led nowhere
+```
+
+The cap is gone. A long paragraph is a writing problem, fixed by writing
+shorter, not by hiding the end of it from the reader.
+
+What still truncates, and should: a **cited story's title** at 100 characters.
+That is a link label with the full headline behind it at `/read/<id>`, which is
+the distinction — truncate a label that has a destination, never the analysis.
+
 ### The push is blocked, and it is the token
 
 `68ba2ce` is committed and **not** pushed. With terminal prompting disabled the
