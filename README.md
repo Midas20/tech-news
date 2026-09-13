@@ -10584,6 +10584,46 @@ DevOps 35% → 28%, design 10% → 5%. Fewest candidates per role: security, ask
 in 6.5% of roles and offered by 2.3% of seekers. Skills: AI agents 8.7% → 17%,
 LLM evaluation 0 → 5%, MCP 0 → 3.8%.
 
+### Fifteen years of the same threads
+
+Backfilled on 2026-09-13: 183 "Who is hiring?" threads from April 2011, 146 "Who
+wants to be hired?" from July 2014, 173 freelance threads to October 2025. Monthly
+averages per calendar year, as the year pages print them (2026 to September; the
+seeker thread began mid-2014, so 2014 is half a year):
+
+| year | roles posted | job seekers | seekers per role | remote roles | contract roles | seekers open to contract | freelancers offering / clients seeking | AI & LLM roles | frontend roles | security roles / seekers |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2012 | 216 | — | — | 9.9% | 2.5% | — | 73 / 16 | 0.1% | 25% | 0.3% / — |
+| 2016 | 670 | 173 | 0.26 | 17% | 2.7% | 9.1% | 105 / 8 | 0% | 39% | 2.7% / 0.9% |
+| 2018 | 807 | 93 | 0.12 | 22% | 3.4% | 16% | 72 / 9 | 0.2% | 44% | 3.3% / 1.3% |
+| 2020 | 594 | 291 | 0.49 | 55% | 3.7% | 16% | 109 / 15 | 0.7% | 47% | 5.4% / 1.7% |
+| 2021 | 857 | 196 | 0.23 | 75% | 4.6% | 15% | 76 / 18 | 0.4% | 48% | 4.9% / 1.6% |
+| 2022 | 632 | 229 | 0.36 | 79% | 4.8% | 16% | 92 / 12 | 1.2% | 45% | 5.4% / 2.6% |
+| 2023 | 348 | 387 | 1.11 | 65% | 4.5% | 18% | 130 / 7 | 7.9% | 36% | 4.4% / 2.3% |
+| 2024 | 328 | 418 | 1.27 | 57% | 4.1% | 15% | 134 / 8 | 15% | 34% | 3.6% / 2.2% |
+| 2025 | 337 | 374 | 1.11 | 53% | 4.2% | 19% | 122 / 4 | 23% | 35% | 4.5% / 2.4% |
+| 2026 | 303 | 491 | 1.62 | 50% | 4.7% | 27% | thread ended | 29% | 31% | 5.0% / 2.6% |
+
+Read as a freelancer would:
+
+- **Competition flipped in 2023.** Until 2022 there were four roles for every
+  person posting that they wanted work; since 2023 there are more people than
+  roles, and in 2026 1.6 per role.
+- **Remote peaked in 2022 and has fallen every year since** — the same shape the
+  Indeed remote tracker shows, measured on a completely different population.
+- **More people want contract work than ever, and the contract share of roles has
+  not moved.** Seekers open to contract work rose from 16% to 27%; contract roles
+  stayed between 4% and 5% for five years. The freelance thread shows the same
+  from its own side: freelancers offering work rose to 134 a month while clients
+  seeking one fell from 18 to 4, and then the thread stopped.
+- **AI and LLM engineering went from nothing to the largest single kind of work
+  after backend** in three years, and in 2026 more seekers offer it (34%) than
+  roles ask for it (29%).
+- **Security has had fewer candidates than roles every year measured**, roughly
+  two roles per candidate share.
+- **Frontend has shrunk from 48% of roles to 31%** while about half of all seekers
+  still offer it.
+
 ### Unattended
 
 Two jobs: `work-market` every six hours counts forty threads a run, recounting
