@@ -64,7 +64,8 @@
     "build:app": "node --experimental-strip-types scripts/build-app.ts",
     "app": "node --experimental-strip-types src/launcher/launch.ts",
     "read:period": "node --experimental-strip-types scripts/read-period.ts",
-    "seed:independent": "node --experimental-strip-types scripts/seed-independent.ts"
+    "seed:independent": "node --experimental-strip-types scripts/seed-independent.ts",
+    "seed:releases": "tsx scripts/seed-release-feeds.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",

@@ -75,3 +75,59 @@ describe('a tag page from a release feed', () => {
       .toEqual(isBuildNoise('Announcing Rust 1.99.0', NOTES, { url, fromReleaseFeed: true }));
   });
 });
+
+// ---------------------------------------------------------------------------
+// The rule was right. Nothing ever asked it the question.
+// ---------------------------------------------------------------------------
+//
+// 2026-09-12, against "The news scope still low". The tests above passed the
+// whole time. `fromReleaseFeed` was wired to `source.kind === 'releases'` and
+// no row in the registry has ever had that value -- 325 GitHub release feeds,
+// every one filed as 'news' by the seed scripts. So the flag was false for
+// every source that needed it, 323 feeds stored nothing, and the suite was
+// green because it tested the rule and never the wiring.
+//
+// These test the wiring: the thing a unit test of a pure function cannot see.
+
+import { readFileSync } from 'node:fs';
+import { isReleaseFeed } from '../src/vocab/buildnoise.ts';
+
+const ingest = readFileSync(new URL('../src/collect/ingest.ts', import.meta.url), 'utf8');
+const audition = readFileSync(new URL('../src/collect/audition.ts', import.meta.url), 'utf8');
+
+describe('recognising a release feed by its address', () => {
+  it('knows the shapes the registry actually holds', () => {
+    for (const url of [
+      'https://github.com/oven-sh/bun/releases.atom',
+      'https://github.com/apache/echarts/releases.atom',
+      'https://github.com/PrefectHQ/prefect/tags.atom',
+      'https://gitlab.com/gitlab-org/gitlab/-/releases.rss',
+    ]) expect(isReleaseFeed(url), url).toBe(true);
+  });
+
+  it('does not mistake an editorial feed for a build log', () => {
+    for (const url of [
+      'https://go.dev/blog/feed.atom',
+      'https://elixir-lang.org/blog/feed.xml',
+      'https://github.blog/feed/',
+      'https://example.com/releases-roundup.atom',
+      null, undefined, '',
+    ]) expect(isReleaseFeed(url), String(url)).toBe(false);
+  });
+});
+
+describe('the escape hatch is not left to a column nobody sets', () => {
+  it('ingest asks the feed address, not only source.kind', () => {
+    // The regression that silenced 325 sources was exactly this line reading
+    // one of the two and not the other.
+    expect(ingest).toMatch(/fromReleaseFeed:\s*source\.kind === 'releases'\s*\|\|\s*isReleaseFeed\(source\.feed_url\)/);
+  });
+
+  it('the audition refuses what ingest refuses, and no more', () => {
+    // A release feed auditioning under the blanket rule keeps zero of thirty
+    // and is rejected before it is ever added -- the same bug, one step
+    // earlier, and the one that would have kept the fix from sticking.
+    expect(audition).toMatch(/isReleaseFeed\(r\.feed\)/);
+    expect(audition).toMatch(/isBuildNoise\([^)]*fromReleaseFeed[^)]*\)/);
+  });
+});

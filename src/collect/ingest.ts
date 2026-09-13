@@ -22,7 +22,7 @@ import * as stories from '../db/repos/stories.ts';
 import type { FeedItem } from './feed.ts';
 import { gateItem, DropCounter, type DropReason } from './filters.ts';
 import { judgeTopic, topicVocabulary } from './topical.ts';
-import { isBuildNoise } from '../vocab/buildnoise.ts';
+import { isBuildNoise, isReleaseFeed } from '../vocab/buildnoise.ts';
 import { classifyEvent, isEvent } from './eventful.ts';
 import { fetchConditional, type PolitenessGate } from './fetcher.ts';
 import { extractArticle } from './extract.ts';
@@ -342,7 +342,12 @@ export async function ingestItems(
     // they are a machine writing to tags. Refused before the event test,
     // because they classify as releases and would otherwise sail through it.
     const noise = isBuildNoise(title, item.content || item.summary || '', {
-      url: canonical, fromReleaseFeed: source.kind === 'releases',
+      url: canonical,
+      // The column OR the address. `kind` is the declared answer and it was
+      // wrong for every release feed in the registry; the feed URL is the
+      // observed one and cannot be forgotten at seed time. See isReleaseFeed.
+      fromReleaseFeed: source.kind === 'releases'
+        || isReleaseFeed(source.feed_url),
     });
     if (noise.noise) {
       drops.record('build_noise');

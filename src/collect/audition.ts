@@ -19,7 +19,7 @@
 import { parseFeed, type FeedItem } from './feed.ts';
 import { judgeTopic, isTechnicalTitle } from './topical.ts';
 import { classifyEvent, isEvent } from './eventful.ts';
-import { isBuildNoise } from '../vocab/buildnoise.ts';
+import { isBuildNoise, isReleaseFeed } from '../vocab/buildnoise.ts';
 import { gateItem } from './filters.ts';
 import { extractArticle } from './extract.ts';
 import { checkLength } from '../lib/text.ts';
@@ -254,7 +254,7 @@ async function bodyFor(item: FeedItem, userAgent: string): Promise<string> {
 /** Every gate ingest applies, in ingest's order, on one item. */
 function runGauntlet(
   item: FeedItem, primary: boolean, body: string, vocab: StackVocabulary | undefined,
-  allowArticles = false,
+  allowArticles = false, fromReleaseFeed = false,
 ): { keep: boolean; why: string } {
   if (!item.link) return { keep: false, why: 'no_link' };
   if (!item.title?.trim()) return { keep: false, why: 'no_title' };
@@ -264,7 +264,11 @@ function runGauntlet(
   const topic = judgeTopic(item.title, body, { vocab, sourceKind: 'news', sourceRoles: roles });
   if (!topic.keep) return { keep: false, why: `off_topic:${topic.category}` };
 
-  const noise = isBuildNoise(item.title, body, { url: item.link });
+  // Carried through, because the audition is only worth anything if it refuses
+  // exactly what ingest refuses. Without this a release feed auditions at zero
+  // kept -- every entry is a tag page -- and is rejected before it is ever
+  // added, which is the same bug that silenced 325 of them after they were.
+  const noise = isBuildNoise(item.title, body, { url: item.link, fromReleaseFeed });
   if (noise.noise) return { keep: false, why: `build:${noise.why}` };
 
   // Judged as it would be FILED. Everything admitted here is filed
@@ -290,6 +294,7 @@ export async function auditionFeed(opts: AuditionOptions): Promise<AuditionResul
   r.feed = await findFeed(opts.site, opts.userAgent);
   if (!r.feed) return r;
 
+  const releaseFeed = isReleaseFeed(r.feed);
   const got = await get(r.feed, opts.userAgent);
   const items = (parseFeed(got.body, r.feed)?.items ?? []) as FeedItem[];
   r.offered = items.length;
@@ -311,7 +316,8 @@ export async function auditionFeed(opts: AuditionOptions): Promise<AuditionResul
     if (dom) r.linkDomains.set(dom, (r.linkDomains.get(dom) ?? 0) + 1);
 
     const body = await bodyFor(item, opts.userAgent);
-    const v = runGauntlet(item, opts.primary, body, opts.vocab, opts.allowArticles);
+    const v = runGauntlet(item, opts.primary, body, opts.vocab, opts.allowArticles,
+      releaseFeed);
     if (v.keep) {
       r.kept++;
       const named = opts.vocab

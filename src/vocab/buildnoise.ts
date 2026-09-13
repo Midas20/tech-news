@@ -115,6 +115,29 @@ export interface NoiseVerdict {
  */
 const TAG_PAGE = /^https?:\/\/(?:www\.)?github\.com\/[^/]+\/[^/]+\/releases\/tag\//i;
 
+/**
+ * A feed that IS a build log: every entry in it is a tag by construction.
+ *
+ * `source.kind` was supposed to carry this and does not. Measured 2026-09-12:
+ * 325 GitHub `releases.atom` feeds are registered, every one of them with
+ * `kind = 'news'`, and no row in the registry has ever been set to 'releases'.
+ * So the tag-page escape hatch below never fired for a single source, and all
+ * 325 feeds fetched cleanly every hour and stored nothing -- 3,778 refusals
+ * across 326 sources, the most recent one this morning.
+ *
+ * Reading the ADDRESS rather than the column is what stops that returning. A
+ * column is a claim somebody has to remember to make when they seed a row;
+ * `/releases.atom` is what the feed is. A source seeded tomorrow by a script
+ * that forgets the column still works.
+ */
+const RELEASE_FEED =
+  /(?:^|\/)(?:releases|tags)\.atom(?:[?#]|$)|\/releases\.rss(?:[?#]|$)/i;
+
+/** Is this feed a repository's release log rather than an editorial channel? */
+export function isReleaseFeed(feedUrl: string | null | undefined): boolean {
+  return RELEASE_FEED.test((feedUrl ?? '').trim());
+}
+
 /** Is this address a repository tag page rather than a published article? */
 export function isTagPage(url: string): boolean {
   return TAG_PAGE.test((url ?? '').trim());

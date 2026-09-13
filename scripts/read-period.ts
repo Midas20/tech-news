@@ -35,7 +35,10 @@ import { loadDotEnv } from '../src/lib/dotenv.ts';
 import {
   periodCorpus, readPeriod, readBacklog, summariseRead, storeReading, topShare,
 } from '../src/analysis/periodread.ts';
-import { rangeFor, isSpan, type Span } from '../src/analysis/period.ts';
+import {
+  rangeFor, isSpan, movementsIn, type Span,
+} from '../src/analysis/period.ts';
+import { labourPicture, techGap, techOf, controlsOf } from '../src/analysis/labour.ts';
 import { subjectsOf } from '../src/analysis/corpus.ts';
 import { priorContext, historySpan } from '../src/analysis/context.ts';
 import { validateStrategy } from '../src/analysis/strategy.ts';
@@ -98,6 +101,53 @@ try {
         span, { from: range.from, to: range.to }, subjectsOf(corpus, 20), query);
 
       if (dump) {
+        // THE MEASURED FIGURES GO IN THE DUMP, and this is the whole reason a
+        // reading can honestly mark a claim `data`.
+        //
+        // 2026-09-12, against "upgrade all report's quality". The page already
+        // renders a verdict block, a labour block and a market block from
+        // `labour_series` and `adoption_series` -- real numbers, published by
+        // somebody else, re-fetchable by the reader. The READING was written
+        // against the stories alone and never saw any of them. So the prose at
+        // the top of the page and the figures underneath it were produced from
+        // different evidence, every claim was `contested` because nothing
+        // measured was in front of the writer, and the one instrument in this
+        // archive whose numbers nobody has an interest in went uncited.
+        //
+        // These are not corpus entries and carry no citation index. The pairing
+        // rule is about our own stories and is unchanged; a figure here is
+        // context, and a claim resting on it says `data` and names the source
+        // in its own reasoning so a reader can go and check it.
+        const days = Math.max(1, Math.round(
+          (Date.parse(range.to) - Date.parse(range.from)) / 86_400_000));
+        const [curves, labour] = await Promise.all([
+          movementsIn(range, days, query),
+          labourPicture(range, 'US', query),
+        ]);
+        const gap = techGap(labour);
+        const measured = {
+          note: 'Published measurements for this period. NOT corpus entries and '
+            + 'NOT citable by index: a claim resting on one of these marks itself '
+            + '`data` and names the publisher in its own reasoning.',
+          labour: {
+            source: 'Indeed Hiring Lab, job postings indexed to 2026-02-01 = 100',
+            country: labour.country,
+            daysOfData: labour.days,
+            from: labour.from, to: labour.to,
+            technology: techOf(labour),
+            controls: controlsOf(labour),
+            techVersusControls: gap,
+            remoteShare: labour.remote,
+            aiShareOfAllPostings: labour.ai,
+          },
+          downloads: {
+            source: 'npm and PyPI public download APIs',
+            daysCovered: curves.measured.days,
+            seriesCovered: curves.measured.series,
+            registryBreak: curves.shift,
+            movements: curves.movements,
+          },
+        };
         const brief = (xs: typeof corpus) => xs.map((it, i) => ({
           n: i + 1, when: it.when, kind: it.kind, source: it.source,
           independent: it.independent, title: it.title,
@@ -107,6 +157,7 @@ try {
           span, key, label: range.label, from: range.from, to: range.to,
           note: 'Cite corpus entries as `now`/`evidence` by their n; cite prior '
             + 'entries as `then` by their n.',
+          measured,
           corpus: brief(corpus), prior: brief(prior),
         }, null, 1));
         console.log(`${range.label}: ${corpus.length} in period${

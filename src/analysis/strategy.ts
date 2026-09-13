@@ -147,7 +147,7 @@ export interface Positioning {
  *
  * The reader is one person deciding what to learn, build and quote for. An
  * opening that can only be taken by a vendor is not a finding for them, so
- * this is kept separate from  rather than folded into it: they
+ * this is kept separate from `Opening` rather than folded into it: they
  * answer different questions and only one of them pays.
  */
 export interface Work {

@@ -10123,6 +10123,154 @@ Nothing here can fix that; it needs a token with write access. `origin/master` i
 at `4bc6423` and this is stated rather than reported as a successful push,
 because it has been reported as one before and was not.
 
+## 325 release feeds, fetching cleanly and storing nothing
+
+"The news scope still low, extend source list" (2026-09-12).
+
+The registry held 475 healthy sources and **357 of them had never produced a
+single story**. Not broken, and that is what made it hard to see: they were
+fetched every hour, they returned 200, they recorded no error, their
+`consecutive_failures` sat at 0, and the health board called them healthy
+because by every check it runs they were.
+
+323 of the 357 were refused for one reason, `build:tag_page`, most recently at
+01:51 that morning.
+
+### The rule was right. Nothing ever asked it the question
+
+`isBuildNoise` refuses a `github.com/<owner>/<repo>/releases/tag/<v>` address on
+sight, because an aggregator posting one is a bot writing to a tag. That is the
+correct call and it is tested.
+
+It carries an escape hatch for the one case where the address is not evidence of
+anything -- a repository's *own* `releases.atom`, where every entry has that
+shape by construction. The hatch was added on 2026-09-09 after this exact
+failure was found once already (see *The release feeds were registered, never
+polled, and pruned for it*), and `ingest.ts` asked for it like this:
+
+```ts
+fromReleaseFeed: source.kind === 'releases',
+```
+
+**No row in `sources` has ever had `kind = 'releases'`.** The enum has carried
+the value since the schema was written; every seed script files its rows as
+`'news'`. So the hatch never opened once, the finer rules that do the actual
+judging -- prerelease suffixes, templated bodies, a bare version with nothing to
+say -- never got to run, and 325 GitHub release feeds spent their whole lives
+being refused wholesale.
+
+The test suite was green throughout. `tests/release-feed-noise.test.ts` passes
+`fromReleaseFeed: true` by hand and asserts the rule does the right thing with
+it. It does. Nothing tested that anything ever passed `true`.
+
+### Read the address, not the column
+
+```ts
+fromReleaseFeed: source.kind === 'releases' || isReleaseFeed(source.feed_url),
+```
+
+A column is a claim somebody has to remember to make at seed time. `/releases.atom`
+is what the feed *is*. A source seeded tomorrow by a script that forgets the
+column still works, which is the property the column never had.
+
+The same blind spot was in `audition.ts`, one step earlier and worse: a release
+feed auditioned under the blanket rule keeps 0 of 30 and is rejected *before* it
+is ever added. So the audition now carries the flag too, and refuses exactly
+what ingest refuses -- which is the only property that makes an audition mean
+anything.
+
+Migration `0083` sets `kind = 'releases'` on the 325 so the column is honest as
+well, and clears the 3,778 accumulated `build:tag_page` rejects, which were an
+audit log rather than a deferral -- the tag-page rule never wrote to
+`refused_items`, so nothing had to be released from a waiting list.
+
+### What it was worth, measured
+
+One poll of the 325, with the conditional-fetch state cleared:
+
+```
+TOTAL seen 3172 kept 1946 across 325 release feeds
+```
+
+The finer rules still refuse the real noise, which is the point -- Linux, Kotlin,
+SurrealDB and Gleam publish bare version tags and all ten of their front-page
+entries are still refused, while Weaviate, uv, ESLint, Poetry, Litestar and
+Flux CD keep all ten.
+
+The archive went from 13,568 stories to 15,654 in a single pass. **Publisher
+diversity is the number that matters more**, because `diversify` caps any one
+publisher at 6 stories and a report is bounded by how many publishers exist:
+
+| month | publishers before | after |
+| --- | --- | --- |
+| 2026-09 | 104 | 235 |
+| 2026-08 | 72 | 244 |
+| 2026-07 | 38 | 174 |
+| 2026-06 | 30 | 132 |
+| 2026-05 | 18 | 88 |
+
+Silent healthy sources: 357 -> 74.
+
+## Every technology this archive tracks, given a release feed
+
+The same message asked to extend the source list, and with the gate fixed there
+was an obvious list to extend it with.
+
+`stacks` holds 2,460 technologies, 1,038 of them with a GitHub repository, and
+**436 of those had no release feed registered**. Each one is something this
+archive already decided was worth tracking, publishing to an address nobody was
+reading.
+
+`npm run seed:releases` auditions all 436 against the same gauntlet ingest runs
+and adds what passes. A repository with no releases, or one whose tags are all
+nightlies, is refused here rather than discovered as a dead row in a month:
+
+```
+REFUSED 108: 68 only N of N entries are releases, 29 no releases at all,
+             11 fetch error
+ADD 328 release feeds, 2589 releases already on their front pages.
+327 added. Registry: 844 sources, 652 release feeds.
+```
+
+Polled every three hours rather than hourly: a repository ships on a human
+schedule, GitHub's feed carries the last ten whatever happens, and 400 more
+hourly fetches buy nothing but rate limit.
+
+**Why a release feed and not more publications.** The collection target is two
+things -- new stacks, tools and platforms, and market moves -- and articles are
+noise. A repository's `releases.atom` is the least article-shaped source that
+exists: the technology itself saying what it did, dated, with the notes its
+maintainers wrote. There is no editorial layer to see through.
+
+**What is deliberately NOT built on top of this**: a count of releases per
+month. The archive's own story count is not a measurement of anything -- it
+measures which feeds happen to be registered, and that number just moved by 652.
+A "releases per month" chart would show a vertical cliff on 2026-09-12 that is
+entirely about this commit. Magnitudes come from public sources; see *Counting
+our own stories was the fake measurement*.
+
+## The reading never saw the numbers the page prints
+
+"upgrade all report's quality" (2026-09-12).
+
+A period report renders a verdict block, a labour block and a market block --
+postings by sector against controls, remote share, AI share, download curves.
+Real figures, published by somebody else, re-fetchable by the reader.
+
+The **reading** -- the prose at the top of the same page -- was written against
+the stories alone and never saw any of them. Two halves of one page, produced
+from different evidence. And since `confidence` defaults to `contested` and
+nothing measured was ever in front of the writer, every claim in every stored
+reading was `contested`: the one instrument in this archive whose numbers nobody
+has an interest in went uncited, on the page that prints it.
+
+`--dump` now carries a `measured` block: the labour picture with its controls
+and the technology-versus-control gap, the download movements, the days and
+series actually covered, and any registry break. It is explicitly *not* corpus
+and carries no citation index -- the pairing rule is about our own stories and is
+unchanged. A claim resting on a measured figure marks itself `data` and names
+the publisher in its own reasoning, so a reader can go and check it.
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.

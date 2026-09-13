@@ -92,8 +92,26 @@ export function capsFor(total: number): typeof CAPS {
   };
 }
 
-/** How deep to draw from before diversifying. */
+/**
+ * How deep to draw from before diversifying, when nobody says.
+ *
+ * A FLOOR, NOT A CEILING, since 2026-09-12. It used to be both, and that made
+ * it the last thing throttling the corpus after everything upstream had been
+ * widened: August 2026 held 3,006 stories from 244 publishers and this drew 900
+ * of them, so raising `--cap` from 500 to 600 handed `diversify` the same 900
+ * rows and produced FEWER stories, not more. The scope complaint that was
+ * supposedly about collection was, by then, about this constant.
+ *
+ * `poolFor` scales it with the cap instead. Six rows offered per row kept is
+ * enough slack for the per-publisher and per-subject ceilings to have real
+ * choices at every step rather than taking whatever is left.
+ */
 const PERIOD_POOL = 900;
+
+/** How deep to draw for a given cap: enough that diversify can be choosy. */
+export function poolFor(cap: number): number {
+  return Math.max(PERIOD_POOL, cap * 6);
+}
 
 /**
  * Every readable story in the period, across the whole archive.
@@ -164,7 +182,7 @@ export async function periodPool(
 export async function periodCorpus(
   range: Range, query: Query = q, cap = PERIOD_CORPUS,
 ): Promise<Item[]> {
-  const pool = await periodPool(range, query);
+  const pool = await periodPool(range, query, poolFor(cap));
 
   const months = new Map<string, Item[]>();
   for (const it of pool) {
