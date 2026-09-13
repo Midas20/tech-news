@@ -29,7 +29,10 @@ produces `dist\NewsTrack\NewsTrack.exe`, which sets itself up on the first run a
 opens the reader when it is ready. See **Running it on a PC**.
 
 Runs on **162.246.23.43:3000** — the durable scheduler in `job_runs` does the
-collecting, fourteen jobs, read-only to anyone off the host.
+collecting, fourteen jobs, read-only to anyone off the host. It is kept running
+by `scripts/host.mjs` under the `NewsTrack` scheduled task, installed once with
+`powershell -ExecutionPolicy Bypass -File scripts\install-host-task.ps1` from an
+elevated prompt; see **Port 3000 was dark for four days**.
 
 The reader is also on the edge: **https://newstrack-site.market-research.workers.dev**
 — the same routes through the same handler, reading the same database as
@@ -10352,6 +10355,53 @@ The `GITHUB_TOKEN` in `.env` still has read access only. Pushes go through the
 machine's system credential manager, which does have write access; clearing the
 credential helpers to force the `.env` token is what produced the 403 recorded
 above. The earlier "push is blocked" note is superseded.
+
+## Port 3000 was dark for four days
+
+Reported on 2026-09-13: *"http://162.246.23.43:3000/ don't work"*.
+
+Nothing was listening on the port. The host had not rebooted since 9 August, and
+`server.log` ends at 18:21 on 9 September mid-run, with no error and no
+shutdown line — the process was killed from outside, almost certainly along with
+the shell that had started it. This is the gap recorded in **Nothing had
+reloaded the code**: `npm start` is a foreground process and nothing restarts
+it. The fix then was to kill eleven copies and start one; this time there were
+none, and the site stayed down until someone looked.
+
+It was restarted the same way (`npm start >> server.log`), and answered 200 on
+`/login` over 162.246.23.43 within half a second once warm. That restores the
+site. It does not close the gap, so two files were added.
+
+**`scripts/host.mjs`** supervises one `src/main.ts`. When the child exits it is
+restarted after 5 s, doubling on quick failures up to five minutes and resetting
+after ten minutes of uptime — the same shape as the scheduler's own backoff, so a
+database outage costs a few hundred restarts a day rather than a restart loop. It
+writes the child's output to `server.log`, rotating once at 20 MB. If the port is
+already held — a hand-started `npm start` — it waits for the port to free and
+takes over, rather than starting a second web server into `EADDRINUSE`. A lock in
+`.run/host.lock` holding the supervisor's pid makes every extra copy exit at
+once.
+
+**`scripts/install-host-task.ps1`** registers the `NewsTrack` scheduled task:
+at boot and every five minutes, `node scripts\host.mjs`, as the installing
+account with S4U logon (no stored password, runs whether or not anyone is logged
+on), no time limit, one instance. The five-minute repetition is what replaces a
+supervisor that has itself died; the lock is what makes it harmless otherwise.
+
+### Not yet installed
+
+Registering an elevated, persistent scheduled task was refused by the session's
+permission guard when this was written, and that is a reasonable thing to want a
+person to approve. So as of this commit the site is up on a hand-started process
+with **no supervisor**, which is exactly the state that failed. One command from
+an elevated PowerShell, once, closes it:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-host-task.ps1
+```
+
+The running hand-started instance does not need stopping first: the supervisor
+waits for the port and takes over the next time that process exits.
 
 ## Not built, and why
 
