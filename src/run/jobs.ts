@@ -25,6 +25,10 @@
 //   discover     6h   propose vocabulary entries from what arrived, then refresh
 //                     the rarity table the niche queries read.
 //   releases     6h   make the release feeds match Settings, both directions.
+//   work-market  6h   count the monthly HN hiring, job-seeker and freelance
+//                     threads by kind of work -- the demand and supply the
+//                     reports lead with.
+//   work-boards 12h   read the remote job boards and bounty feeds.
 //   tune         1h   move each source's interval toward its observed rate, and
 //                     make sure next month's partition exists.
 //   period-rd    1h   read one unread week, month or year against what came
@@ -83,6 +87,9 @@ import {
 import { applyStoredSettings } from '../db/repos/settings.ts';
 import { getConfig } from '../config.ts';
 import { refreshLabour, summariseLabour } from '../collect/labour.ts';
+import {
+  refreshHnWork, summariseHn, refreshBoards, summariseBoards,
+} from '../collect/workmarket.ts';
 import type { LlmContext } from '../llm/router.ts';
 
 export interface JobOptions {
@@ -225,6 +232,36 @@ export function buildJobs(opts: JobOptions = {}): Job[] {
       leaseSeconds: 900,
       async run({ worker }) {
         return summariseLabour(await refreshLabour(worker, {
+          userAgent: getConfig().fetch.userAgent,
+        }));
+      },
+    },
+
+    {
+      name: 'work-market',
+      what: 'Count the monthly Hacker News hiring, job-seeker and freelance threads by kind of work.',
+      // EVERY SIX HOURS, FORTY THREADS A RUN. A new thread appears on the first
+      // of the month and gains posts for weeks, so anything under 45 days old is
+      // recounted each run. The fifteen-year backfill -- about 500 threads --
+      // drains forty at a time instead of holding a lease for half an hour.
+      everySeconds: 21_600,
+      leaseSeconds: 1_800,
+      async run({ worker }) {
+        return summariseHn(await refreshHnWork(worker, {
+          userAgent: getConfig().fetch.userAgent, max: 40,
+        }));
+      },
+    },
+
+    {
+      name: 'work-boards',
+      what: 'Read the remote job boards and bounty feeds, and keep what they carry.',
+      // TWICE A DAY: inside the strictest terms among these feeds (Remotive asks
+      // for four reads a day at most) and faster than any of them turns over.
+      everySeconds: 43_200,
+      leaseSeconds: 900,
+      async run({ worker }) {
+        return summariseBoards(await refreshBoards(worker, {
           userAgent: getConfig().fetch.userAgent,
         }));
       },

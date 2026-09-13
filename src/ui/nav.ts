@@ -117,7 +117,9 @@ export const SECTIONS: NavSection[] = [
     // '/market' belongs here too and is the odd one out on purpose: it is the
     // only report whose content is a MEASUREMENT rather than a reading of
     // stories, so it must sit beside the others to be compared with them.
-    owns: ['/reports', '/trends/report', '/new', '/market'],
+    // '/work' is where a report's "where to take the work" leads, so it sits
+    // with the reports that point at it.
+    owns: ['/reports', '/trends/report', '/new', '/market', '/work'],
     // '/field/<slug>/report' and '/field/<slug>/report/<day>', which live under
     // Explore's '/field/' prefix and are not Explore's pages.
     claims: [/^\/field\/[^/]+\/report(\/|$)/],
@@ -283,6 +285,8 @@ export const ANALYSE_ITEMS: NavItem[] = [
 export const REPORT_ITEMS: NavItem[] = [
   { href: '/reports', label: 'Every report', icon: 'book',
     blurb: 'Every briefing written so far, by day and by field.' },
+  { href: '/work', label: 'Where to find work', icon: 'gem',
+    blurb: 'Platforms for each kind of paid technical work, and what they carry now.' },
   // Administrators only, filtered out in rail.ts and refused at the route.
   { href: '/market', label: 'Market', icon: 'trending',
     blurb: 'What is being installed more, and less, than it was. No story is read.' },

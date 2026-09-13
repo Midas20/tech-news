@@ -1763,6 +1763,12 @@ h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
 .mv-tag.conf-data{color:var(--good,#1a7f37);border-color:currentColor}
 .mv-tag.conf-contested{color:var(--warn,#9a6700);border-color:currentColor}
 .mv-tag.conf-forecast{color:var(--ink-4);border-style:dashed}
+/* THE WORK MARKET: new, growing, steady, shrinking. New is dashed because it is
+   growing from almost nothing, and a reader should see that it is young. */
+.mv-tag.wm-new{color:var(--good,#1a7f37);border-color:currentColor;border-style:dashed}
+.mv-tag.wm-growing{color:var(--good,#1a7f37);border-color:currentColor}
+.mv-tag.wm-steady{color:var(--ink-4)}
+.mv-tag.wm-shrinking{color:var(--warn,#9a6700);border-color:currentColor}
 
 /* THE VERDICT BLOCK: measured figures, before any prose. Sized so four of them
    fit on a laptop and one of them still looks deliberate on a phone. */

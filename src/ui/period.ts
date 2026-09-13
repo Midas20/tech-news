@@ -19,8 +19,10 @@ import { crumbsFor } from './nav.ts';
 import { periodReading, type StoredPeriodReading } from '../analysis/periodread.ts';
 import type { StoredStrategy } from '../analysis/briefing.ts';
 import { fieldLabel } from '../vocab/fields.ts';
+import { workPicture } from '../analysis/workmarket.ts';
+import { workMarketBlock, workPlatforms, workSummary } from './workmarket.ts';
 import {
-  periodReport, spanKeys, latestDay, periodIndex, keyFor, edgeFor,
+  periodReport, spanKeys, latestDay, periodIndex, keyFor, edgeFor, rangeFor,
   SPAN_LABEL, SPANS,
   type Span, type PeriodReport, type PeriodMovement, type PeriodFinding, type FindingCite,
   type PeriodRow, type CohortBreak,
@@ -551,13 +553,17 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
     watch: 'plausible, unproven',
   };
 
-  const sections = [
-    s.shift ? `<h2 class="sect">What changed over this ${SPAN_LABEL[span]}</h2>
-      <div class="mv-items">${claim(s.shift.moved, s.shift.after ?? '',
-    s.shift.then, s.shift.now, true)}</div>` : '',
-
+  // THE WORK FIRST, THE PROJECTS UNDER A FOLD.
+  //
+  // "The report still focus on projects" (2026-09-13). A reading has six
+  // sections and four of them -- what changed, where it is going, what each
+  // company is betting on, where the evidence argues -- are about what vendors
+  // shipped. They stay, because a new market usually starts as somebody's
+  // launch, but they are background to the question the page answers, so they
+  // sit in one collapsed block after the work a person could take.
+  const primary = [
     (s.work ?? []).length === 0 ? '' : `
-      <h2 class="sect">Where the work is</h2>
+      <h2 class="sect">Work the news points to</h2>
       <p class="note">Things one person could start on remotely, with the
         evidence that somebody would pay for it.</p>
       <div class="mv-items">${s.work.map((w) => claim(w.what, w.why, [], w.evidence,
@@ -566,6 +572,18 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
         escapeHtml(HORIZON[w.horizon] ?? w.horizon)}</span>`,
       facts: facts('What it needs', w.skills),
     })).join('')}</div>`,
+
+    (s.openings ?? []).length === 0 ? '' : `
+      <h2 class="sect">What nobody has taken</h2>
+      <div class="mv-items">${s.openings.map((o) => claim(o.what, o.why, [],
+    o.evidence, false, { tag: mark(o.confidence),
+      facts: facts('Who could take it', o.who) })).join('')}</div>`,
+  ].filter(Boolean).join('');
+
+  const sections = [
+    s.shift ? `<h2 class="sect">What changed over this ${SPAN_LABEL[span]}</h2>
+      <div class="mv-items">${claim(s.shift.moved, s.shift.after ?? '',
+    s.shift.then, s.shift.now, true)}</div>` : '',
 
     (s.direction ?? []).length === 0 ? '' : `
       <h2 class="sect">Where this is going</h2>
@@ -595,12 +613,6 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
       <h2 class="sect">Where the evidence argues with itself</h2>
       <div class="mv-items">${s.tensions.map((t) => claim(t.what, t.sides, [],
     t.evidence, false, { tag: mark(t.confidence) })).join('')}</div>`,
-
-    (s.openings ?? []).length === 0 ? '' : `
-      <h2 class="sect">What nobody has taken</h2>
-      <div class="mv-items">${s.openings.map((o) => claim(o.what, o.why, [],
-    o.evidence, false, { tag: mark(o.confidence),
-      facts: facts('Who could take it', o.who) })).join('')}</div>`,
   ].filter(Boolean).join('');
 
   // THE READING AND NOTHING ABOUT HOW IT WAS READ.
@@ -612,8 +624,11 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
   // not source of report." The confidence marker on each claim already says how
   // much weight it carries, and the stories under it say where it came from.
   return `
+    <h2 class="sect">What the news adds</h2>
     ${s.read ? `<p class="mv-lede">${escapeHtml(s.read)}</p>` : ''}
-    ${sections}`;
+    ${primary}
+    ${sections ? `<details class="bf-more"><summary>Background: what companies shipped
+      and bet on this ${escapeHtml(SPAN_LABEL[span])}</summary>${sections}</details>` : ''}`;
 }
 
 /**
@@ -806,10 +821,13 @@ function siblingKeys(range: { from: string }): Record<Span, string> {
 }
 
 export async function renderPeriodReport(span: Span, key: string): Promise<string> {
-  const [r, reading] = await Promise.all([
+  const range = rangeFor(span, key);
+  const [r, reading, work, platforms] = await Promise.all([
     periodReport(span, key).catch(() => null),
     span === 'day' ? Promise.resolve(null)
       : periodReading(span, key).catch(() => null),
+    range ? workPicture(range).catch(() => null) : Promise.resolve(null),
+    workPlatforms(),
   ]);
   const crumbs = crumbsFor('/reports', 'Reports');
 
@@ -835,6 +853,11 @@ export async function renderPeriodReport(span: Span, key: string): Promise<strin
     { crumbs })}
 
     ${spanNav(span, siblingKeys(r.range))}
+
+    ${/* THE MARKET FOR WORK, FIRST. Which kinds of work grew, appeared or
+        shrank, how crowded each is, and where to take it -- counted from
+        public hiring posts. Everything below it is about technology. */
+      work ? workMarketBlock(work, span, platforms) : ''}
 
     ${verdictBlock(r)}
 
@@ -885,8 +908,15 @@ export async function renderPeriodReport(span: Span, key: string): Promise<strin
  */
 export async function leadCard(): Promise<string> {
   const day = await latestDay().catch(() => new Date().toISOString().slice(0, 10));
-  const r = await periodReport('day', day).catch(() => null);
-  if (!r) return '';
+  // THE MARKET FOR WORK LEADS THE REPORTS INDEX (2026-09-13), ahead of the
+  // day's launches: this month's thread against the same month a year earlier.
+  const monthRange = rangeFor('month', day.slice(0, 7));
+  const [r, work] = await Promise.all([
+    periodReport('day', day).catch(() => null),
+    monthRange ? workPicture(monthRange).catch(() => null) : Promise.resolve(null),
+  ]);
+  const workLead = work && monthRange ? workSummary(work, monthRange.label, day.slice(0, 7)) : '';
+  if (!r) return workLead;
   const today = new Date().toISOString().slice(0, 10);
 
   const counts: string[] = [];
@@ -896,6 +926,7 @@ export async function leadCard(): Promise<string> {
   if (r.movements.length) counts.push(`${r.movements.length} public curve${r.movements.length === 1 ? '' : 's'}`);
 
   return `
+    ${workLead}
     <h2 class="sect">${day === today ? 'Today' : escapeHtml(r.range.label)},
       across every field</h2>
     <p class="note">What appeared rather than what happened inside a category

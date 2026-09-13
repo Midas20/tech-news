@@ -37,6 +37,7 @@ import { renderSources } from './sources.ts';
 import { renderWhatsNew } from './whatsnew.ts';
 import { renderPeriodReport, renderPeriodIndex } from './period.ts';
 import { renderMarket } from './market.ts';
+import { renderWorkPage } from './workmarket.ts';
 import { isSpan, keyFor } from '../analysis/period.ts';
 import { renderIntel } from './intel.ts';
 import {
@@ -928,6 +929,10 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
     // MEASUREMENT, WITH NO STORY ON IT. The only page whose answer does not
     // depend on which 512 feeds are subscribed or whether a model was reachable.
     if (path === '/market') return render('Market', await renderMarket());
+    // WHERE TO TAKE THE WORK. "we can use which platform to attend to this
+    // market" (2026-09-13): each kind of work, the platforms that carry it, and
+    // what the measured ones are carrying now.
+    if (path === '/work') return render('Where to find work', await renderWorkPage());
     if (path === '/fields') return render('Fields', await renderFields());
     if (path.startsWith('/field/')) {
       const rest = path.slice('/field/'.length);

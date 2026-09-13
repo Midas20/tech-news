@@ -39,6 +39,7 @@ import {
   rangeFor, isSpan, movementsIn, type Span,
 } from '../src/analysis/period.ts';
 import { labourPicture, techGap, techOf, controlsOf } from '../src/analysis/labour.ts';
+import { workPicture } from '../src/analysis/workmarket.ts';
 import { subjectsOf } from '../src/analysis/corpus.ts';
 import { priorContext, historySpan } from '../src/analysis/context.ts';
 import { validateStrategy } from '../src/analysis/strategy.ts';
@@ -120,9 +121,13 @@ try {
         // in its own reasoning so a reader can go and check it.
         const days = Math.max(1, Math.round(
           (Date.parse(range.to) - Date.parse(range.from)) / 86_400_000));
-        const [curves, labour] = await Promise.all([
+        const [curves, labour, work] = await Promise.all([
           movementsIn(range, days, query),
           labourPicture(range, 'US', query),
+          // THE MARKET FOR WORK, so a reading can say which kinds of work grew
+          // and where they are posted rather than only what vendors shipped
+          // (2026-09-13: "The report still focus on projects").
+          workPicture(range, query),
         ]);
         const gap = techGap(labour);
         const measured = {
@@ -139,6 +144,17 @@ try {
             techVersusControls: gap,
             remoteShare: labour.remote,
             aiShareOfAllPostings: labour.ai,
+          },
+          work: {
+            source: 'Hacker News monthly "Who is hiring?", "Who wants to be hired?" and '
+              + '"Freelancer? Seeking freelancer?" threads, counted by kind of work, against '
+              + 'the same threads a year earlier; remote boards and Superteam Earn bounties',
+            now: work.now,
+            yearEarlier: work.before,
+            markets: work.markets,
+            skills: work.skills,
+            boards: work.boards,
+            bounties: work.bounties,
           },
           downloads: {
             source: 'npm and PyPI public download APIs',

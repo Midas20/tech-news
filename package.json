@@ -46,6 +46,7 @@
     "import:topics": "node --experimental-strip-types scripts/import-topics.ts",
     "import:vocab": "node --experimental-strip-types scripts/import-vocab.ts",
     "seed:platforms": "node --experimental-strip-types scripts/seed-platforms.ts",
+    "seed:work": "node --experimental-strip-types scripts/seed-work-platforms.ts",
     "tag": "node --experimental-strip-types scripts/tag.ts",
     "links": "node --experimental-strip-types scripts/check-links.ts",
     "seed:primary": "node --experimental-strip-types scripts/seed-primary.ts",

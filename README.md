@@ -10487,6 +10487,111 @@ node --experimental-strip-types scripts/scrub-report-meta.ts --apply  # write
 It is idempotent, touches prose only — citations, confidence and measured figures
 are left as they were — and a second run reports nothing to change.
 
+## The market for work, counted where the work is posted
+
+Reported on 2026-09-13:
+
+> *"The report still focus on projects, I want clear report - which market like
+> freelancing, jobs are changes, which market appear newly and we can use which
+> platform to attend to this market and so on."*
+
+The reports were about projects because every source they read was a project
+talking: 844 feeds of engineering blogs, release notes and forums. A vendor post
+says what a company decided to sell. It cannot say which kind of work is being
+paid for, whether it is remote or contract, how many other people want the same
+work, or where to go to get it. Those are questions about **postings**, and the
+archive had one postings source (Indeed Hiring Lab, by sector, with no notion of
+"frontend" or "security").
+
+### Three public records that answer it
+
+| record | what it gives | depth |
+|---|---|---|
+| Hacker News **"Who is hiring?"** | demand: which kinds of work companies ask for, how much is remote, how much is contract | monthly, 2011– |
+| Hacker News **"Who wants to be hired?"** | supply: what the people looking for work offer, and whether they will take contract work | monthly, 2014– |
+| Hacker News **"Freelancer? Seeking freelancer?"** | the freelance market directly, both sides | monthly, 2011 – **October 2025, when it stopped** |
+| Himalayas, We Work Remotely, Remote OK, Jobicy, Working Nomads | what remote boards carry now, by kind of work and employment type | twice daily, from 2026-09-13 |
+| Superteam Earn | open crypto bounties, rewards, and how many people already submitted | twice daily, from 2026-09-13 |
+
+Every post in the HN threads is public, so every share on the page can be
+recounted by anybody from the same thread. No post text is stored — a thread is
+~500 KB and there are 500 of them — only the counts and the thread id
+(`work_counts`). Board listings keep title, category, type, tags and pay, and a
+link back (`work_listings`), never the description. Probed and not used:
+Remotive exposes 16 jobs delayed 24 hours; Arbeitnow is German on-site work
+(9 of 250 remote); Upwork, Toptal and Malt answer 403 and publish no feed;
+CryptoJobsList sits behind a bot challenge; web3.career's API needs a token.
+
+### Kinds of work, not technologies
+
+`src/vocab/workmarkets.ts` names sixteen markets as someone choosing work would —
+AI and LLM engineering, AI training and evaluation work, security, frontend,
+mobile, crypto, design, IT support and the rest — and twenty skills measured the
+same way (AI agents, MCP, RAG, LLM evaluation, Rust, Go, TypeScript…). The
+patterns were tuned against real threads from 2019 to 2026, and the traps are
+written beside the rules: "SOC 2" put every B2B startup in security, `\bgo\b`
+matched "go live", React Native is mobile and not frontend, "Unity" must not
+match "community". Hiring posts are read for remote and contract from the
+**header line only** (`Company | Role | REMOTE | Contract`): the whole-text rule
+counted "our contractors" in benefits paragraphs, 27 contract posts against 16.
+Remote OK is classified by title alone, because it attaches `infosec, sys admin,
+exec` to almost every listing and put 21 of 99 jobs in security.
+
+### What the report now says
+
+`src/analysis/workmarket.ts` compares a period's threads with **the same threads a
+year earlier** (hiring has a calendar), and every period page opens with
+`workMarketBlock`:
+
+1. **The market for work** — companies posting roles, people posting that they
+   want work, job seekers per role, remote share, contract share, seekers open to
+   contract work.
+2. **Which kinds of work are growing, new or shrinking** — share of roles now and
+   a year earlier, the change in points, the share of job seekers offering it, and
+   **competition**: asked for in more roles than seekers offer it is *few
+   candidates*; the reverse is *crowded*. New is under 2% a year earlier and at
+   least 4% now; growing and shrinking are ±3 points or a 1.5× / 0.6× ratio.
+3. **Skills newly asked for**, named.
+4. **Where to take the work** — for each growing, new or under-supplied market,
+   the measured boards carrying most of it, then the platforms that serve it,
+   specialised before general (HackerOne before Upwork for security, Outlier and
+   Mercor for AI training work).
+5. What the remote boards carry, and open crypto bounties.
+
+The news reading follows as **What the news adds**: its work items and openings
+first, and what companies shipped and bet on folded into one collapsed
+*Background* block. `/reports` opens with the month's work-market summary, and
+**`/work`** lists 33 platforms by kind — freelance marketplaces, vetted networks,
+AI training work, remote boards, community threads, bounties, security contests —
+with what the measured ones carry now. The platforms are seeded by
+`npm run seed:work`, every address checked; seven answer 403 to a script and are
+kept with that status, because they serve people normally.
+
+September 2026 against September 2025, as the page prints it:
+
+| | Sep 2026 | Sep 2025 |
+|---|---|---|
+| companies posting roles | 261 | 299 |
+| people posting that they want work | 563 | 342 |
+| job seekers per role | 2.2 | 1.1 |
+| roles that are remote | 53% | 50% |
+| roles that are contract or freelance | 6.5% | 4.3% |
+| job seekers open to contract work | 33% | 22% |
+
+Growing: AI and LLM engineering, 26% → 30% of roles — but offered by 40% of job
+seekers, so crowded. Shrinking: frontend 38% → 25%, backend 44% → 34%, cloud and
+DevOps 35% → 28%, design 10% → 5%. Fewest candidates per role: security, asked for
+in 6.5% of roles and offered by 2.3% of seekers. Skills: AI agents 8.7% → 17%,
+LLM evaluation 0 → 5%, MCP 0 → 3.8%.
+
+### Unattended
+
+Two jobs: `work-market` every six hours counts forty threads a run, recounting
+any thread under 45 days old because threads gain posts for weeks; `work-boards`
+twice a day, inside the strictest of the boards' terms. Listings unseen for 400
+days are deleted; the counts are kept. `scripts/read-period.ts --dump` now
+includes the work picture, so a written reading can cite it.
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.
