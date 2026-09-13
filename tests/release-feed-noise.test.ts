@@ -131,3 +131,51 @@ describe('the escape hatch is not left to a column nobody sets', () => {
     expect(audition).toMatch(/isBuildNoise\([^)]*fromReleaseFeed[^)]*\)/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// A maintenance calendar is not news
+// ---------------------------------------------------------------------------
+//
+// Found 2026-09-12 while reading September: 33 scheduled-maintenance notices,
+// every one from a single status feed, one per datacentre per window, taking
+// eighteen slots of a 600-story month.
+
+describe('a status page announcing work it intends to do', () => {
+  const BODY = 'Sep 8 , 14:40 UTC Scheduled - We will be performing scheduled '
+    + 'maintenance in DEN (Denver) datacenter on 2026-09-10 between 09:00 and '
+    + '13:00 UTC. Traffic might be re-routed away from this location.';
+
+  it('is refused, whatever tense the notice is in', () => {
+    expect(isBuildNoise('DEN (Denver) on 2026-09-10', BODY).why)
+      .toBe('planned_maintenance');
+    expect(isBuildNoise('AMS (Amsterdam) on 2026-09-08',
+      'Sep 8 , 22:00 UTC In Progress - Scheduled maintenance is currently in '
+      + 'progress. We will provide updates as necessary.').why)
+      .toBe('planned_maintenance');
+    expect(isBuildNoise('FUK (Fukuoka) on 2026-09-08',
+      'Sep 8 , 18:00 UTC Completed - The scheduled maintenance has been '
+      + 'completed.').why).toBe('planned_maintenance');
+  });
+
+  it('keeps an incident on the same feed', () => {
+    // The difference is tense. What a provider says it WILL do is a calendar;
+    // what went wrong is a fact about a platform somebody depends on, and the
+    // August reading cites GitHub's 17 August post-mortem by its duration.
+    expect(isBuildNoise('Incident with GitHub.com',
+      'On August 17, 2026, from 13:28-21:15 UTC (7h 47m), GitHub.com '
+      + 'experienced elevated errors and latency across Issues, Pull Requests, '
+      + 'APIs, Actions, and Copilot.').noise).toBe(false);
+    expect(isBuildNoise('The August 17 outage, and the work ahead',
+      'On August 17, GitHub experienced an outage that lasted 7 hours and 47 '
+      + 'minutes. It disrupted github.com, authentication, GitHub Actions, '
+      + 'APIs, pull requests, issues, and Copilot.').noise).toBe(false);
+  });
+
+  it('does not refuse a release that merely mentions maintenance', () => {
+    expect(isBuildNoise('PostgreSQL 18.6, 17.11, 16.15, 15.19 and 14.24 Released!',
+      'The PostgreSQL Global Development Group has released an update to all '
+      + 'supported versions, including this maintenance release which contains '
+      + 'fixes for several issues found over the last three months.').noise)
+      .toBe(false);
+  });
+});

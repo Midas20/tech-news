@@ -93,10 +93,36 @@ const MACHINE_TITLE = [
   /\bprototype-v?\d/i,
 ];
 
+/**
+ * A status page announcing work it intends to do.
+ *
+ *   DUB (Dublin) on 2026-09-10
+ *   "We will be performing scheduled maintenance in DUB (Dublin) datacenter
+ *    on 2026-09-10 between 02:00 and 05:00 UTC."
+ *
+ * Found 2026-09-12 reading September: 33 of these, every one from one status
+ * feed, one per datacentre per window, and they took eighteen slots of a
+ * 600-story month. A CDN moving traffic off a rack for four hours is not a new
+ * platform and it is not a market move; it is a maintenance calendar, and the
+ * archive collects neither calendars nor the weather.
+ *
+ * DELIBERATELY NOT A RULE ABOUT STATUS PAGES. An INCIDENT on the same feed is
+ * worth keeping -- an outage with a published duration is a fact about a
+ * platform somebody depends on, and GitHub's 17 August post-mortem is cited in
+ * the August reading. The difference is tense: this refuses work a provider
+ * says it WILL do, and keeps what went wrong.
+ */
+const PLANNED_MAINTENANCE = [
+  /\bwill be performing scheduled maintenance\b/i,
+  /\bscheduled maintenance is currently in progress\b/i,
+  /\bthe scheduled maintenance has been completed\b/i,
+];
+
 export interface NoiseVerdict {
   noise: boolean;
   /** Which rule fired, for the audit log. */
-  why?: 'prerelease' | 'templated' | 'no_content' | 'machine' | 'tag_page';
+  why?: 'prerelease' | 'templated' | 'no_content' | 'machine' | 'tag_page'
+    | 'planned_maintenance';
 }
 
 /**
@@ -182,6 +208,13 @@ export function isBuildNoise(
 
   const t = (title ?? '').trim();
   if (!t) return { noise: true, why: 'no_content' };
+
+  // A maintenance window somebody has announced in advance. Checked on the
+  // body rather than the title, because the title is a three-letter airport
+  // code and a date, which is unsearchable and also matches nothing else.
+  if (PLANNED_MAINTENANCE.some((re) => re.test(body ?? ''))) {
+    return { noise: true, why: 'planned_maintenance' };
+  }
 
   // A machine wrote this title: a build bot, a CI ref, a merge commit, a
   // conventional-commit prefix. None of them is somebody telling you something.

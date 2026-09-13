@@ -83,7 +83,7 @@ export function detectCompanies(
 export function stripUrls(text: string): string {
   return text
     .replace(/https?:\/\/\S+/gi, ' ')
-    .replace(/[\w-]+\.(com|org|io|dev|net|ai|co|cloud|sh|app)/gi, ' ');
+    .replace(/\b[\w-]+\.(com|org|io|dev|net|ai|co|cloud|sh|app)\b/gi, ' ');
 }
 
 function escapeRegex(s: string): string {
