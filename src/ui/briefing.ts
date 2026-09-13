@@ -58,21 +58,13 @@ function stamp(iso: string): string {
   return iso.slice(0, 16).replace('T', ' ');
 }
 
-/**
- * The citations under one finding.
- *
- * First-party is marked, not hidden. A vendor announcing its own release is
- * authoritative about what shipped and worthless as evidence that anyone wanted
- * it, and a reader can only weigh a claim if they can see which of the two they
- * are being given.
- */
+/** The citations under one finding: title, publisher, date. */
 function citations(evidence: StoredTheme['evidence']): string {
   if (evidence.length === 0) return '';
   return `<ul class="bf-cites">${evidence.map((e) => `<li>
     <a href="/read/${escapeHtml(e.id)}">${escapeHtml(truncate(e.title, 120))}</a>
     <span class="muted">${escapeHtml(e.source)} &middot; ${escapeHtml(e.kind)}
-      &middot; ${escapeHtml(e.when)}${e.independent ? ''
-    : ' &middot; <span class="bf-fp">first-party</span>'}</span>
+      &middot; ${escapeHtml(e.when)}</span>
   </li>`).join('')}</ul>`;
 }
 
@@ -100,23 +92,11 @@ function figuresBlock(figures: PublicFigure[]): string {
     return `<p class="note">No public figure has been measured for the technologies in
       this briefing, so it states no size or adoption number at all.</p>`;
   }
-  return `<p class="note">Measured outside this archive, by GitHub. These are the only
-      quantities on this page &mdash; nothing here counts our own stories, because how
-      much of a subject this archive happens to catch is a fact about the feed list.</p>
+  return `<p class="note">Measured by GitHub.</p>
     <ul class="bf-figs">${figures.map((f) => `<li>
       <a href="/trend/${encodeURIComponent(f.slug)}">${escapeHtml(f.name)}</a>
       <span class="muted">${escapeHtml(describeFigure(f).replace(`${f.name}: `, ''))}</span>
     </li>`).join('')}</ul>`;
-}
-
-/** How much reading a briefing rests on. A fact about the evidence, not the field. */
-function readLine(b: StoredField): string {
-  const r = b.read;
-  return `Written from ${r.read} ${r.read === 1 ? 'story' : 'stories'} across `
-    + `${r.sources} ${r.sources === 1 ? 'source' : 'sources'}: `
-    + `${r.independent} independent, ${r.firstParty} speaking for the subject. `
-    + `Published between ${stamp(b.coveredFrom)} and ${stamp(b.coveredTo)}, capped so `
-    + 'that no publisher and no project can speak for the field.';
 }
 
 function fieldSection(b: StoredField, open: boolean): string {
@@ -131,9 +111,8 @@ function fieldSection(b: StoredField, open: boolean): string {
       <summary>${b.themes.length} finding${b.themes.length === 1 ? '' : 's'},
         with the stories behind them</summary>
       ${b.themes.map(themeBlock).join('')}</details>`}
-    ${b.gaps ? `<p class="note bf-gap"><b>What these stories could not tell us.</b>
+    ${b.gaps ? `<p class="note bf-gap"><b>Still undecided.</b>
       ${escapeHtml(b.gaps)}</p>` : ''}
-    <p class="note">${escapeHtml(readLine(b))}</p>
   </section>`;
 }
 
@@ -146,65 +125,7 @@ function watchBlock(items: string[]): string {
 /** What a report covered, said rather than implied. */
 function coverNote(a: { coveredFrom: string | null; coveredTo: string | null }): string {
   if (!a.coveredFrom || !a.coveredTo) return '';
-  return `Everything published between ${escapeHtml(stamp(a.coveredFrom))} and
-    ${escapeHtml(stamp(a.coveredTo))} that this archive caught and could read.`;
-}
-
-/**
- * Fields that had evidence and got no briefing anyway.
- *
- * A SEPARATE LINE FROM "quiet", and the separation is the point. On 2026-09-01 a
- * fortnight of back reports was generated; the model hit its rate limit after
- * four days and the remaining ten came back as fourteen quiet fields each. The
- * page would have told the reader that the industry was silent for ten days
- * while the archive held some 1,800 readable stories from them.
- *
- * So this says what actually happened, names the fields, and says how much went
- * unread -- because the size of a gap is the reader's business.
- */
-function missingBlock(unwritten: StoredArchive['unwritten']): string {
-  if (!unwritten || unwritten.length === 0) return '';
-  const n = unwritten.length;
-  const read = unwritten.reduce((t, u) => t + (u.read ?? 0), 0);
-  const why = [...new Set(unwritten.map((u) => u.why))];
-  return `<li><b>${n} field${n === 1 ? '' : 's'} had stories and no briefing.</b>
-    ${unwritten.map((u) => escapeHtml(fieldLabel(u.field))).join(', ')} &mdash;
-    ${read.toLocaleString('en-US')} ${read === 1 ? 'story was' : 'stories were'} selected
-    and went unread. ${escapeHtml(why.join('; '))}. This is a gap in the archive's
-    account of the period, not a quiet spell: something happened in
-    ${n === 1 ? 'that field' : 'those fields'} and this report does not say what.</li>`;
-}
-
-/**
- * Said once, on every analysis page.
- *
- * A reader who does not know that this archive is a sample will read a briefing
- * as a survey of the industry. That misunderstanding is the one this rewrite
- * exists to prevent, so it is stated rather than buried in a footer.
- */
-function limits(a: StoredArchive): string {
-  const quiet = a.quiet.map((s) => fieldLabel(s));
-  return `<ul class="mv-list">
-    <li><b>This is a sample and the sample is not measured.</b> The archive holds what
-      its sources publish. Everything technology publishes anywhere is the denominator,
-      nobody has it, and so nothing here counts stories to make a point. A finding is
-      something the text of several stories says; it is never something their number
-      implies.</li>
-    <li><b>Every finding is capped and cited.</b> No publisher contributes more than four
-      stories to a field and no project more than three, so a project that ships daily
-      cannot out-argue an industry. A finding that cited nothing was discarded before
-      this page was written, not marked.</li>
-    <li><b>Absence is not evidence.</b> ${quiet.length === 0
-    ? 'Every field had enough text to read this period.'
-    : `${quiet.length} field${quiet.length === 1 ? '' : 's'} produced too little to write
-        from: ${quiet.map(escapeHtml).join(', ')}. That is a statement about coverage,
-        not about ${quiet.length === 1 ? 'that field' : 'those fields'}.`}</li>
-    ${missingBlock(a.unwritten)}
-    <li><b>Written by a model, from the stories and nothing else.</b> It was given their
-      text and forbidden to name anything absent from it. Open the citations under any
-      claim and it is either there or it is not &mdash; which is the only guarantee
-      worth offering.</li>
-  </ul>`;
+  return `Covers ${escapeHtml(stamp(a.coveredFrom))} to ${escapeHtml(stamp(a.coveredTo))}.`;
 }
 
 const NOT_YET = `The <code>report</code> job writes one briefing a day, reading everything
@@ -237,7 +158,6 @@ export async function renderArchiveReport(day: string | null): Promise<string> {
   const ordered = [...a.briefings].sort(
     (x, y) => (y.read?.independent ?? 0) - (x.read?.independent ?? 0));
   const watch = ordered.flatMap((f) => f.watch.map((w) => `${f.label}: ${w}`));
-  const providers = [...new Set(ordered.map((f) => f.provider).filter(Boolean))];
   const seen = new Set<string>();
   const uniqueFigures = ordered.flatMap((f) => f.figures ?? [])
     .filter((f) => (seen.has(f.slug) ? false : seen.add(f.slug)))
@@ -261,13 +181,7 @@ export async function renderArchiveReport(day: string | null): Promise<string> {
     <h2 class="sect">What to watch</h2>
     ${watch.length === 0
     ? '<p class="note">Nothing this period was firm enough to follow.</p>'
-    : watchBlock(watch)}
-
-    <h2 class="sect">What this cannot tell you</h2>
-    ${limits(a)}
-    <p class="note">Written ${escapeHtml(a.day)} by
-      ${providers.length ? escapeHtml(providers.join(', ')) : 'an unnamed model'},
-      from the stories cited above and nothing else.</p>`);
+    : watchBlock(watch)}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -284,8 +198,7 @@ function fieldHistory(slug: string, days: FieldDay[], current: string): string {
     <a href="/field/${encodeURIComponent(slug)}/report/${d.day}">
       <span class="bf-when">${escapeHtml(niceDay(d.day))}</span>
       <span class="bf-what">${escapeHtml(truncate(d.headline, 100))}</span></a>
-    <span class="muted">${d.themes} finding${Number(d.themes) === 1 ? '' : 's'} &middot;
-      ${d.independent} independent of ${d.read} read</span>
+    <span class="muted">${d.themes} finding${Number(d.themes) === 1 ? '' : 's'}</span>
   </li>`).join('')}</ul>`;
 }
 
@@ -316,8 +229,7 @@ export async function renderFieldBriefing(
       day ? `Nothing written for this field on ${niceDay(day)}.`
         : 'Nothing written for this field yet.', { crumbs })}
       ${empty(history.length > 0
-    ? `No briefing for ${field.label} on that day. Too little arrived to write from, `
-      + 'which is a statement about coverage rather than about the field.'
+    ? `No briefing for ${field.label} on that day.`
     : NOT_YET, 'book')}
       ${history.length > 0 ? `<h2 class="sect">Briefings for ${escapeHtml(field.label)}</h2>
         ${fieldHistory(slug, history, '')}` : ''}
@@ -388,27 +300,20 @@ export async function renderFieldBriefing(
       <p class="note">Nothing yet &mdash; this is the first reading written for
       ${escapeHtml(field.label)}. This section fills as they accumulate.</p>`}
 
-    ${/* EVERY CAVEAT IN ONE BLOCK, and now a short one. What limits the reading
-        is worth a reader's attention; how many stories were counted, which
-        provider wrote it and what dates the history spans are provenance, and
-        provenance belongs in one grey line at the bottom, not in four
-        paragraphs under a heading of their own. */''}
-    ${!b.strategy?.limits && !b.gaps ? '' : `
-      <h2 class="sect">What this cannot tell you</h2>
-      <div class="mv-caveat">
-        ${b.strategy?.limits ? `<p>${escapeHtml(b.strategy.limits)}</p>` : ''}
-        ${b.gaps ? `<p>${escapeHtml(b.gaps)}</p>` : ''}
-      </div>`}
+    ${/* WHAT THE MARKET HAS NOT DECIDED, AND NOTHING ABOUT THE EVIDENCE.
+        This block was "What this cannot tell you": the reading's `limits`
+        paragraph, then a provenance line counting the stories, the sources and
+        the provider. Rejected on 2026-09-13 -- "You have to say about new
+        market and market change in report, not source of report." `gaps` is
+        now written as the prices, dates and licences nobody has announced. */
+      !b.gaps ? '' : `
+      <h2 class="sect">Still undecided</h2>
+      <p class="mv-body">${escapeHtml(b.gaps)}</p>`}
 
     <h2 class="sect">Earlier briefings for ${escapeHtml(field.label)}</h2>
     ${fieldHistory(slug, history, b.day)}
 
-    <p class="note">${escapeHtml(readLine(b))} Written ${escapeHtml(b.day)} by
-      ${escapeHtml(b.strategy?.provider ?? b.provider ?? 'an unnamed model')}${
-  b.strategy?.history ? `, against ${b.strategy.history.n} earlier
-      ${b.strategy.history.n === 1 ? 'story' : 'stories'} from
-      ${escapeHtml(b.strategy.history.from)}` : ''}. Nothing above counts stories
-      to make a point. <a href="/field/${encodeURIComponent(slug)}">See the
+    <p class="note"><a href="/field/${encodeURIComponent(slug)}">See the
       stories themselves</a>.</p>`);
 }
 
@@ -439,9 +344,7 @@ function dayBlock(d: ReportDay, open: boolean): string {
     <h3 class="bf-h"><a href="/reports/${d.day}">${escapeHtml(niceDay(d.day))}</a></h3>
     <p class="bf-head">${escapeHtml(d.title)}</p>
     <p class="note">${d.fields} field${d.fields === 1 ? '' : 's'} briefed,
-      ${d.themes} finding${d.themes === 1 ? '' : 's'}, written from ${d.read}
-      ${d.read === 1 ? 'story' : 'stories'} across ${d.sources}
-      ${d.sources === 1 ? 'source' : 'sources'}.${d.quiet.length
+      ${d.themes} finding${d.themes === 1 ? '' : 's'}.${d.quiet.length
     ? ` Too little to write from in ${d.quiet.map(
       (s) => escapeHtml(fieldLabel(s))).join(', ')}.` : ''}${(d.unwritten ?? []).length
     ? ` <span class="bf-fp">Not written for ${d.unwritten.map(
@@ -680,8 +583,7 @@ function strategyBlock(s: StoredStrategy, base: string): string {
   const positioning = s.positioning.length === 0 ? '' : `
     <h2 class="sect">What each company appears to be betting on</h2>
     <div class="mv-items">${s.positioning.map((pz, i) =>
-    card('positioning', i, pz.who, pz.bet,
-      pz.firstParty ? ' <span class="mv-tag watch">says so itself</span>' : '')).join('')}</div>`;
+    card('positioning', i, pz.who, pz.bet)).join('')}</div>`;
 
   const tensions = !s.tensions?.length ? '' : `
     <h2 class="sect">Where the evidence argues with itself</h2>
@@ -838,9 +740,6 @@ export async function renderReportItem(
     title = pz.who;
     body = `
       <p class="mv-body">${escapeHtml(pz.bet)}</p>
-      ${pz.firstParty ? `<div class="mv-caveat"><p><b>Read from what they say
-        about themselves.</b> Good evidence of what they have decided to sell,
-        and none at all that anybody bought it.</p></div>` : ''}
       ${cited(pz.evidence, 'What this was read from')}`;
   } else if (kind === 'tension' && s.tensions?.[i]) {
     const t = s.tensions[i]!;
@@ -867,22 +766,13 @@ export async function renderReportItem(
   return wrap(`
     ${pageHead(title, `${field.label}, ${niceDay(day)}`, { crumbs })}
     ${body}
-    <div class="mv-caveat">
-      <p><b>${escapeHtml(readLine(b))}</b></p>
-      ${s.history ? `<p>The reading was set against ${s.history.n} earlier
-        ${s.history.n === 1 ? 'story' : 'stories'}, from
-        ${escapeHtml(s.history.from)} to ${escapeHtml(s.history.to)}.</p>` : ''}
-      ${s.limits ? `<p><b>On the reading as a whole.</b>
-        ${escapeHtml(s.limits)}</p>` : ''}
-    </div>
     ${back}`);
 }
 
 /** Said plainly when there is no reading, so an absence is never a finding. */
 function noStrategy(why: string): string {
-  return `<p class="note"><b>No strategic reading for this field today.</b>
-    ${escapeHtml(why)}. That is a statement about what this archive holds, not a
-    statement that nothing changed.</p>`;
+  void why;
+  return '<p class="note"><b>No strategic reading for this field today.</b></p>';
 }
 
 /**

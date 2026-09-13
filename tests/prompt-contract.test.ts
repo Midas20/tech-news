@@ -64,7 +64,9 @@ describe('field_strategy openings, the case that cost a day of readings', () => 
     // omitted it twice, so "the key appears somewhere" was demonstrably not
     // enough for the weakest model in the chain -- which is the one that
     // answers on a day the other four are out of quota.
-    const para = /openings: 2 to 4\.[\s\S]*?\n(?=[a-z]+:)/.exec(prompt)?.[0] ?? '';
+    // Ends at the next key's paragraph or at a blank line: `limits` used to
+    // follow it and was removed on 2026-09-13.
+    const para = /openings: 2 to 4\.[\s\S]*?\n(?=[a-z]+:|\n)/.exec(prompt)?.[0] ?? '';
     expect(para, 'openings paragraph not found').not.toBe('');
     for (const key of ['what', 'who', 'why']) {
       expect(para, `openings paragraph does not describe \`${key}\``)

@@ -109,7 +109,7 @@ describe('the writer is forbidden to count', () => {
   });
 
   it('was re-versioned when the rules changed, so the cache cannot serve v2', () => {
-    expect(JOBS.field_briefing!.promptVersion).toBe('v3');
+    expect(JOBS.field_briefing!.promptVersion).toBe('v4');
   });
 
   it('does not fail over silently to nothing', () => {

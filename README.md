@@ -10403,6 +10403,90 @@ powershell -ExecutionPolicy Bypass -File scripts\install-host-task.ps1
 The running hand-started instance does not need stopping first: the supervisor
 waits for the port and takes over the next time that process exits.
 
+## A report says what the market did, not what the archive read
+
+Reported on 2026-09-13, quoting a stored field reading:
+
+> *"Thirty developer-community sources were added to this registry today, so
+> today's corpus is drawn from a wider set of publishers than the earlier one.
+> Every citation in the shift above is from a source this archive already held
+> in March, on purpose ..."*
+>
+> *"These are unnecessary content in report, You have to say about new market
+> and market change in report, not source of report."*
+
+That paragraph was not a model going off-script. It was the `limits` field,
+which the `field_strategy` prompt asked for by name — "what the evidence cannot
+show, which claim here is weakest" — and every answer to that question is about
+the evidence. The same habit ran through the whole report surface:
+
+| where | what it said |
+|---|---|
+| `limits`, 27 stored readings | "Every one of today's eleven stories is first-party", "The archive relies heavily on vendor release notes" |
+| period readings' ledes | "The 382 stories from 49 publishers — 56% from Vercel, ClickHouse and Hugging Face —" |
+| period readings' tensions | four whole tensions about funding looking larger "because this archive started reading venture desks" |
+| cross-references | "this archive's September 2026 reading records Shopify leaving React Native" |
+| briefing bodies | "The first-party announcement states that the model provides ..." |
+| period page | "This is a reading of 44 publishers, not of the year", "What this cannot settle", "Read from 120 stories ... diversified first" |
+| field page | "What this cannot tell you", a provenance line counting stories, sources and the provider |
+| company bets | a "says so itself" tag and "Read from what they say about themselves" |
+| day index | "written from N stories across M sources", "independent of N read" |
+
+Each was added deliberately as honesty about a sample. Together they made
+reports that spent a large share of their words describing the feed list. The
+citations under every claim already say where it came from, and the
+`data | contested | forecast` marker already says how much weight it carries, so
+none of the prose needs to.
+
+### What changed
+
+**`src/analysis/marketonly.ts` — `aboutTheMarket(text)`.** Two passes. A
+passing mention is removed and the sentence kept: "the agent announcements *in
+this archive* were claims about intelligence"; "*The first-party announcement
+states that* the model provides deeper reasoning"; "InfoQ *— the only independent
+source in today's set —* reports". A sentence that is only about the evidence is
+dropped: "Six of today's seven stories are first-party". Every pattern names the
+archive, the corpus or the sampling explicitly, so "Agent Registry", "customer
+stories", "first-party analytics" and "an independent audit of AI controls"
+survive — the tests hold both lists.
+
+**Filtered at write time, whichever model writes.** `validateStrategy` passes
+every line of prose through it, which covers the provider chain and
+`scripts/read-period.ts` alike; a claim left with no text is dropped by the
+existing filters. `analyseFieldBriefing` does the same to the headline, summary,
+theme bodies, watch list and gaps. `limits` stays in the stored shape so old rows
+load, and is always empty.
+
+**The prompts.** `field_strategy` v3 no longer asks for `limits` and gains rule 6,
+*write about the market, never about your evidence*, with the rewrite it wants
+("In March the pitch was capability", not "the earlier stories in this archive
+were about capability"). `field_briefing` v4 gains the same rule, and `gaps` is
+now "what is still undecided in the market — prices, dates, licences,
+availability" instead of "what these stories could not tell you".
+
+**The pages.** Every block in the table above is gone. The field page's caveat
+block is now **Still undecided**, showing `gaps` only. A period too narrow to read
+says "No reading for this year." without the publisher arithmetic.
+
+**The stored reports.** The nineteen period readings were written by this
+operator, so they were corrected by hand rather than by deletion — 113 phrase
+rewrites that keep each claim ("In September 2026 Shopify announced leaving React
+Native for native" in place of "this archive's September 2026 reading records
+..."), and the four venture-desk tensions and the 2021 "three companies' blogs"
+tension removed. The field briefings were cleaned by
+`scripts/scrub-report-meta.ts`, reviewed as a dry run first; that review is what
+added the lead-in rule, because the first version dropped "The first-party
+announcement states that the model provides deeper reasoning" whole and lost the
+fact with the attribution.
+
+```
+node --experimental-strip-types scripts/scrub-report-meta.ts          # dry run
+node --experimental-strip-types scripts/scrub-report-meta.ts --apply  # write
+```
+
+It is idempotent, touches prose only — citations, confidence and measured figures
+are left as they were — and a second run reports nothing to change.
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.

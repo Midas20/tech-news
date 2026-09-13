@@ -26,6 +26,7 @@ import { q } from '../ui/db.ts';
 import { withHistory, historyPacket, historySpan } from './context.ts';
 import { gatherOutside, outsidePacket, type Outside } from './outside.ts';
 import { corpusPacket, figuresPacket } from './briefing.ts';
+import { aboutTheMarket } from './marketonly.ts';
 import type { PublicFigure } from './public.ts';
 
 export const STRATEGY_VERSION = 'strategy-v1';
@@ -254,7 +255,11 @@ export function validateStrategy(
       // A claim citing the same story three times cites one story.
       .filter((n, i, a) => a.indexOf(n) === i);
 
-  const text = (v: unknown): string => String(v ?? '').trim();
+  // Every line of prose passes through `aboutTheMarket`, so a sentence about
+  // the sources is removed whichever model wrote it and whatever the prompt
+  // said. A claim left empty by that is dropped by the filters below, which is
+  // right: a claim that was only about the evidence was not a claim.
+  const text = (v: unknown): string => aboutTheMarket(String(v ?? '').trim());
 
   const direction = (Array.isArray(raw.direction) ? raw.direction : [])
     .map((d) => {
@@ -355,8 +360,11 @@ export function validateStrategy(
     })
     .filter((o) => o.what && o.evidence.length > 0);
 
+  // `limits` is kept in the shape so stored readings still load, and is never
+  // filled: it was the paragraph about the evidence, and it is no longer asked
+  // for or shown.
   return { read: text(raw.read), shift, work, direction, positioning, tensions,
-    openings, limits: text(raw.limits) };
+    openings, limits: '' };
 }
 
 /**

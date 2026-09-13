@@ -255,21 +255,18 @@ describe('the page leads with the reading', () => {
 
   it('says when there is no reading, rather than showing nothing', () => {
     expect(page).toContain('No strategic reading for this field today');
-    expect(page).toMatch(/not a\s*\n?\s*statement that nothing changed/);
   });
 
-  it('marks a first-party bet, on the card and again on its own page', () => {
-    // The tag is on the index and the sentence explaining it is on the detail
-    // page, which is where a reader has stopped to weigh the claim.
-    expect(page).toMatch(/says so itself/);
-    expect(page).toMatch(/Read from what they say\s+about themselves/);
+  // "You have to say about new market and market change in report, not source
+  // of report" -- 2026-09-13. The "says so itself" tag, the "Read from what
+  // they say about themselves" caveat and the provenance block that counted
+  // the earlier stories were all sentences about the evidence.
+  it('says nothing about where a company bet was read from', () => {
+    expect(page).not.toMatch(/says so itself/);
+    expect(page).not.toMatch(/Read from what they say\s+about themselves/);
   });
 
-  it('shows how far back the reading was drawn', () => {
-    // Moved out of the reading block and into the single caveat block, with the
-    // rest of the provenance -- the scattered notes were the reason the page
-    // read as messy.
-    expect(page).toMatch(/The reading was set against/);
-    expect(page).toMatch(/b\.strategy\.history\.n/);
+  it('does not print how far back the reading was drawn', () => {
+    expect(page).not.toMatch(/The reading was set against/);
   });
 });

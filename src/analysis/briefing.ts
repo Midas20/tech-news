@@ -30,6 +30,7 @@
 import type { Db } from '../db/client.ts';
 import { q } from '../ui/db.ts';
 import { llmCall, type LlmContext } from '../llm/router.ts';
+import { aboutTheMarket } from './marketonly.ts';
 import { FIELDS, fieldLabel } from '../vocab/fields.ts';
 import {
   fieldCorpus, provenance, subjectsOf, corpusPacket,
@@ -327,11 +328,13 @@ export async function briefField(
   return { status: 'written', briefing: {
     field,
     label: fieldLabel(field),
-    headline: String(res.value.headline ?? '').trim(),
-    summary: String(res.value.summary ?? '').trim(),
-    themes,
-    watch: (res.value.watch ?? []).map(String).filter(Boolean),
-    gaps: String(res.value.gaps ?? '').trim(),
+    // THE SAME FILTER THE READING USES. A briefing is about the market, and a
+    // sentence about its own sources is removed here rather than printed.
+    headline: aboutTheMarket(String(res.value.headline ?? '').trim()),
+    summary: aboutTheMarket(String(res.value.summary ?? '').trim()),
+    themes: themes.map((t) => ({ ...t, body: aboutTheMarket(t.body) })),
+    watch: (res.value.watch ?? []).map((w) => aboutTheMarket(String(w))).filter(Boolean),
+    gaps: aboutTheMarket(String(res.value.gaps ?? '').trim()),
     provider: res.provider,
     corpus,
     figures,

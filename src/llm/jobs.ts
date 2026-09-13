@@ -290,7 +290,12 @@ export const JOBS: Record<string, JobSpec> = {
     // the job, and a reader learns nothing from a category they did not already
     // know from the section heading. The rules now demand a subject and a verb,
     // and show four of v2's own titles as what not to write.
-    promptVersion: 'v3',
+    //
+    // v4 KEEPS THE PROSE ON THE MARKET. "You have to say about new market and
+    // market change in report, not source of report" (2026-09-13). `gaps` was
+    // "what these stories could not tell you", which asked for a sentence about
+    // the stories; it is now what the market has not yet decided.
+    promptVersion: 'v4',
     maxTokens: 4000,
     system: [
       'You are a technology analyst. You have been given the actual text of recent',
@@ -319,13 +324,20 @@ export const JOBS: Record<string, JobSpec> = {
       '   name the date they were measured. If that block is empty, state no size,',
       '   adoption or popularity figure at all.',
       '',
-      '5. SEPARATE WHAT SOMEBODY DID FROM WHAT SOMEBODY SAYS. A story marked',
-      '   first-party is the subject describing itself: authoritative about what',
-      '   shipped, worthless as evidence that anyone wanted it. Say which you have.',
+      '5. SEPARATE WHAT SOMEBODY DID FROM WHAT SOMEBODY SAYS. A company describing',
+      '   its own product tells you what it shipped, not that anyone wanted it.',
+      '   Write "Vercel launched X", never "Vercel says customers love X".',
       '',
-      '6. SAY WHAT IS ABSENT. If the stories do not settle a question a reader would',
-      '   obviously ask, put that in "gaps". "The text does not say whether this',
-      '   shipped to general availability" is a genuine finding.',
+      '6. WRITE ABOUT THE MARKET, NEVER ABOUT THE STORIES. Never mention the',
+      '   stories, sources, publishers, feeds, this archive, the corpus, the',
+      '   sample, citations, first-party or independent coverage, or this',
+      '   briefing. The citations already carry where each fact came from; the',
+      '   prose carries what happened.',
+      '',
+      '7. SAY WHAT IS STILL UNDECIDED IN THE MARKET. Put in "gaps" the questions',
+      '   a buyer or a contractor would ask that nobody has answered yet: a price',
+      '   not published, a date not set, a licence not stated. "Pricing for the',
+      '   GA release has not been published" is a genuine finding.',
       '',
       'WHAT YOU ARE WRITING: news. Not a summary of news, not a taxonomy of it.',
       'Each item reports a thing that happened, or a thing several unrelated',
@@ -378,7 +390,8 @@ export const JOBS: Record<string, JobSpec> = {
       'themes: 3 to 5 news items, each titled as above, each with evidence as story',
       '  numbers from the list.',
       'watch: 2 to 4 short lines on what to watch next and why, each tied to a story.',
-      'gaps: one or two sentences on what these stories could not tell you.',
+      'gaps: one or two sentences on what is still undecided in the market --',
+      '  prices, dates, licences, availability. Never about the stories themselves.',
     ].join('\n'),
     schema: {
       type: 'object',
@@ -488,7 +501,13 @@ export const JOBS: Record<string, JobSpec> = {
     // v2 names `openings[].what` in the prose, which v1 required and never
     // described. See the note on that line: it cost two of five fields their
     // entire reading on 2026-09-10.
-    promptVersion: 'v2',
+    //
+    // v3 DROPS `limits`. It asked for three or four sentences on what the
+    // evidence could not show, and every answer was about the evidence: "Every
+    // one of today's eleven stories is first-party", "Thirty developer-community
+    // sources were added to this registry today". Rejected on 2026-09-13 -- a
+    // report says what the market did, not what the archive read.
+    promptVersion: 'v3',
     maxTokens: 8000,
     system: [
       'You are a strategy analyst reading a technology archive. You have TODAY\'S',
@@ -524,11 +543,10 @@ export const JOBS: Record<string, JobSpec> = {
       '',
       '3. A VENDOR TALKING ABOUT ITSELF IS POSITIONING, NOT ADOPTION. A booth',
       '   schedule, a conference session, a customer-story blog and a launch post',
-      '   are all first-party. They are excellent evidence of what a company has',
-      '   decided to sell and worthless as evidence that anybody bought it. Say',
-      '   which you have. "Databricks is making auditability its wedge into',
-      '   regulated finance" is supportable from its own marketing; "banks are',
-      '   adopting it" is not.',
+      '   are a company describing itself. They show what it has decided to sell,',
+      '   not that anybody bought it, so write the claim as a bet: "Databricks is',
+      '   making auditability its wedge into regulated finance" is supportable',
+      '   from its own marketing; "banks are adopting it" is not.',
       '',
       '4. THE ONLY NUMBERS YOU MAY USE are those inside a story\'s text, attributed',
       '   to whoever published them, and the public figures block. Quote a survey',
@@ -538,6 +556,14 @@ export const JOBS: Record<string, JobSpec> = {
       '5. NAME THINGS. A product, a company, a version, a price, a named customer.',
       '   Abstraction without a name attached is where analysis turns into',
       '   horoscope.',
+      '',
+      '6. WRITE ABOUT THE MARKET, NEVER ABOUT YOUR EVIDENCE. Every sentence is',
+      '   about companies, products, prices, deadlines, skills and work. Never',
+      '   mention the stories, sources, publishers, feeds, this archive, the',
+      '   corpus, the sample, citations, first-party or independent coverage,',
+      '   which sources were added, or this reading. "The earlier stories in this',
+      '   archive were about capability" is written "In March the pitch was',
+      '   capability". The citations already say where each fact came from.',
       '',
       'YOU ARE NOT LIMITED TO THIS ARCHIVE, and you are asked not to be.',
       '',
@@ -592,8 +618,6 @@ export const JOBS: Record<string, JobSpec> = {
       '  OPENING     something the stories show is now possible, needed or',
       '              unclaimed -- a gap between what is being sold and what the',
       '              evidence says is solved. Be concrete about who would do it.',
-      '  LIMITS      what this evidence cannot settle, and what would change your',
-      '              reading. A named falsifier is worth more than a hedge.',
       '',
       'WHO IS READING THIS. One person, working remotely, deciding what to learn,',
       'what to build and what contract to chase. They are not an investor and not',
@@ -623,8 +647,8 @@ export const JOBS: Record<string, JobSpec> = {
       'Be concrete and be honest about difficulty. "Learn AI" is not work. "Teams',
       'on Atlassian Data Center must migrate before support ends and the vendor is',
       'selling webinars rather than a migration tool" is work. If the stories',
-      'support none of this today, return an empty array and say so in `limits` --',
-      'inventing an opportunity costs the reader a week of their life.',
+      'support none of this today, return an empty array -- inventing an',
+      'opportunity costs the reader a week of their life.',
       '',
       'WHERE THE EVIDENCE ARGUES WITH ITSELF, SAY SO. Two sources pointing',
       'different ways is a finding, not a problem to be smoothed over -- and a',
@@ -647,8 +671,7 @@ export const JOBS: Record<string, JobSpec> = {
       '"falsifier":"..."}],',
       '"positioning":[{"who":"...","bet":"...","evidence":[1],"firstParty":true}],',
       '"tensions":[{"what":"...","sides":"...","evidence":[1]}],',
-      '"openings":[{"what":"...","why":"...","who":"...","evidence":[1]}],',
-      '"limits":"..."}',
+      '"openings":[{"what":"...","why":"...","who":"...","evidence":[1]}]}',
       '',
       'read: one sentence, under 240 characters -- the single most useful thing a',
       '  strategist should take from today in this field. Not a summary of the',
@@ -699,8 +722,6 @@ export const JOBS: Record<string, JobSpec> = {
       'openings: 2 to 4. `what` names the gap itself in one line -- the thing',
       '  nobody is selling. `who` names the kind of party that could take it, and',
       '  `why` says what specifically is unserved -- not that a market is large.',
-      'limits: three or four sentences. What the evidence cannot show, which claim',
-      '  here is weakest, and what would settle it.',
       '',
       'Be substantial. A reader who wanted the headlines has them above this; what',
       'they want here is the part that takes a paragraph to say properly. But',
@@ -709,7 +730,7 @@ export const JOBS: Record<string, JobSpec> = {
     ].join('\n'),
     schema: {
       type: 'object',
-      required: ['read', 'direction', 'positioning', 'openings', 'limits'],
+      required: ['read', 'direction', 'positioning', 'openings'],
       properties: {
         read: { type: 'string', maxLength: 400 },
         shift: {
@@ -791,7 +812,6 @@ export const JOBS: Record<string, JobSpec> = {
             },
           },
         },
-        limits: { type: 'string', maxLength: 1400 },
       },
     },
   },

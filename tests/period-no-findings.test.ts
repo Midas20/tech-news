@@ -297,12 +297,14 @@ describe('a period with no reading of its own', () => {
     expect(strip(out).trim()).toBe('Not read yet.');
   });
 
-  it('still explains the one case that never resolves itself', () => {
-    // Too few publishers is permanent and is not what a reader would assume,
-    // so it keeps its sentence. Everything else here fixes itself.
-    const page = readFileSync(
-      new URL('../src/ui/period.ts', import.meta.url), 'utf8');
-    expect(page).toMatch(/it is the\s+sources rather than the/);
+  it('says a narrow period has no reading, without counting its publishers', () => {
+    // It used to explain the publisher arithmetic. A report page says nothing
+    // about its sources (2026-09-13), so it says only that there is no reading.
+    const out = strip(notRead(report(
+      { briefings: 0, withReading: 0, firstEver: '2026-09-09',
+        stories: 389, sources: 8, topPct: 93 }), 'year'));
+    expect(out).toContain('No reading for this year.');
+    expect(out).not.toMatch(/publisher|sources rather than/i);
   });
 });
 
@@ -573,9 +575,16 @@ describe('a reading with every field populated', () => {
     expect(html).toContain('nobody has rerun it');
   });
 
-  it('marks a company bet read from that company', () => {
-    expect(strip(html)).toContain('Read from what they say about themselves.');
-    expect(strip(html)).toContain('none at all that anybody bought it');
+  it('prints a company bet without a note about where it was read from', () => {
+    expect(html).toContain('Per task, not per application.');
+    expect(strip(html)).not.toContain('Read from what they say about themselves.');
+  });
+
+  it('prints nothing about the evidence behind the reading as a whole', () => {
+    const s = strip(html);
+    expect(s).not.toContain('A reading of 44 publishers.');
+    expect(s).not.toContain('What this cannot settle');
+    expect(s).not.toMatch(/Read from 120 stories/);
   });
 
   it('does not report a comparison that was never attempted', () => {

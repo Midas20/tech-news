@@ -583,11 +583,7 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
       <h2 class="sect">What each company appears to be betting on</h2>
       <div class="mv-items">${s.positioning.map((p) => claim(p.who, p.bet, [],
     p.evidence, false, {
-      tag: `${mark(p.confidence)}${p.firstParty
-        ? ' <span class="mv-tag watch">says so itself</span>' : ''}`,
-      after: p.firstParty ? `<div class="mv-caveat"><p><b>Read from what they
-        say about themselves.</b> Good evidence of what they have decided to
-        sell, and none at all that anybody bought it.</p></div>` : '',
+      tag: mark(p.confidence),
     })).join('')}</div>`,
 
     // THE TENSIONS, WHICH THIS PAGE HAS NEVER RENDERED. Every stored reading
@@ -607,38 +603,17 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
       facts: facts('Who could take it', o.who) })).join('')}</div>`,
   ].filter(Boolean).join('');
 
-  // WHOSE PERIOD THIS IS, ABOVE THE READING RATHER THAN IN ITS FOOTNOTES.
+  // THE READING AND NOTHING ABOUT HOW IT WAS READ.
   //
-  // These years were refused outright until 2026-09-10 on exactly this number.
-  // Refusing was wrong -- a narrow corpus makes a reading partial, not false,
-  // and partial is what `limits` is for -- but the number is real and burying it
-  // under the analysis would be the other half of the same mistake. A reader who
-  // sees "2019" as a heading will assume the year; this is what stops them.
-  const narrow = (r.sourcesRead !== null && r.sourcesRead < 12)
-    || (r.topShare !== null && r.topShare > 60);
-
+  // This block used to open with "This is a reading of 44 publishers, not of
+  // the year", close with the reading's `limits` paragraph and a line counting the
+  // stories behind it, and mark every company bet "says so itself". Rejected on
+  // 2026-09-13: "You have to say about new market and market change in report,
+  // not source of report." The confidence marker on each claim already says how
+  // much weight it carries, and the stories under it say where it came from.
   return `
-    ${!narrow ? '' : `<div class="mv-caveat">
-      <p><b>This is a reading of ${r.sourcesRead} publishers, not of the
-        ${escapeHtml(SPAN_LABEL[span])}.</b> ${r.topShare}% of the
-        ${r.storiesRead} stories behind it come from the three largest, because
-        that is what this archive holds for the period &mdash; blogs with deep
-        archives a backfill could walk. Everything below describes what those
-        publishers did. It is not a survey of the industry and the difference
-        matters most exactly where the two would disagree.</p>
-    </div>`}
     ${s.read ? `<p class="mv-lede">${escapeHtml(s.read)}</p>` : ''}
-    ${sections}
-    ${s.limits ? `<p class="note"><b>What this cannot settle.</b>
-      ${escapeHtml(s.limits)}</p>` : ''}
-    <p class="note">Read from ${r.storiesRead} stories published in this
-      ${escapeHtml(SPAN_LABEL[span])}${r.historyRead
-  ? `, against ${r.historyRead} earlier ${r.historyRead === 1 ? 'story' : 'stories'}
-      on the same subjects${r.historyFrom
-    ? ` going back to ${escapeHtml(niceDay(r.historyFrom))}` : ''}` : ''}${
-  r.provider ? `, by ${escapeHtml(r.provider)}` : ''}. The stories were
-      diversified first, so no publisher and no project can speak for the
-      ${escapeHtml(SPAN_LABEL[span])}.</p>`;
+    ${sections}`;
 }
 
 /**
@@ -667,17 +642,12 @@ export function notRead(r: PeriodReport, span: Span): string {
       ${c.stories === 1 ? 'story' : 'stories'} inside it.</p>`;
   }
 
-  // THE ONE CASE WORTH A SENTENCE OF EXPLANATION, because it is permanent and
-  // because it is not what a reader would assume. Everything else here resolves
-  // itself; this one never does, and the reason is the sources rather than the
-  // period.
+  // TOO NARROW TO READ, SAID WITHOUT THE PUBLISHER ARITHMETIC. It used to
+  // count the publishers and the top-three share; that is a sentence about the
+  // sources, and a report page says nothing about its sources (2026-09-13).
   if (c.sources < 12 || c.topPct > 60) {
-    return `<p class="note"><b>No reading for this ${label}, and it is the
-      sources rather than the ${label}.</b> Its ${NUM2.format(c.stories)}
-      stories come from ${c.sources}
-      ${c.sources === 1 ? 'publisher' : 'publishers'}, ${c.topPct}% of them from
-      the three largest &mdash; a reading drawn from that would be those
-      publishers&rsquo; ${label} presented as the industry&rsquo;s.</p>`;
+    return `<p class="note"><b>No reading for this ${label}.</b> Too little of
+      the market is on record for it to be read.</p>`;
   }
 
   // NOTHING ABOUT THE JOB. A reader does not have a scheduler and cannot act on
