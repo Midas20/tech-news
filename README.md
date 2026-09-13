@@ -10271,6 +10271,88 @@ and carries no citation index -- the pairing rule is about our own stories and i
 unchanged. A claim resting on a measured figure marks itself `data` and names
 the publisher in its own reasoning, so a reader can go and check it.
 
+## All nineteen readings, rewritten against the widened corpus
+
+"Read all reports and upgrade all report with the project's purpose" (2026-09-12).
+
+Every stored period reading -- five months, eight weeks, six years -- was
+rewritten through `--from` by an operator session, against dumps taken after the
+release-feed fix, the planned-maintenance rule and `poolFor`. Each one leads
+with the measured `labour` and `downloads` figures the dump now carries, marks
+every claim `data`, `contested` or `forecast`, and says in `limits` what the
+instruments cannot see for that span.
+
+| span | stories read before | after |
+| --- | --- | --- |
+| May 2026 | 72 | 161 |
+| Jun 2026 | 99 | 201 |
+| Jul 2026 | 120 | 274 |
+| Aug 2026 | 120 | 543 |
+| Sep 2026 | 120 | 600 |
+| weeks 20 Jul -> 7 Sep | 63-120 | 91-300 |
+| years 2021 -> 2026 | 120 | 156-600 |
+
+### What the measured series says, across the whole record
+
+The year readings are where the one instrument that reaches back pays off.
+Indeed Hiring Lab, US, first week against last week of each year:
+
+| year | software postings | tech vs controls | remote share of software postings | AI share of all postings |
+| --- | --- | --- | --- | --- |
+| 2021 | 90.9 -> 213.7 | +31 pts | 24.3% -> 40.5% | 1.98% -> 3.04% |
+| 2022 | 211.2 -> 131.1 | -19 pts | 40.6% -> 44.1% | 3.01% -> 2.19% |
+| 2023 | 129.1 -> 72.6 | -16 pts | 44.4% -> 36.5% | 2.18% -> 1.93% |
+| 2024 | 72.4 -> 67.5 | 0 | 36.5% -> 34.2% | 1.94% -> 2.71% |
+| 2025 | 67.4 -> 67.3 | -10 pts | 34.2% -> 33.6% | 2.71% -> 4.41% |
+| 2026 to 4 Sep | 67.1 -> 75.1 | +11 pts | 33.6% -> 31.0% | 4.43% -> 6.72% |
+
+For this archive's reader the finding is the fourth column read against the
+second: software hiring is recovering in 2026 and the remote share of it has
+fallen at every year-end since its 2022 peak. The recovery is not a remote
+recovery. Every year reading says so in its own words.
+
+### A citation is only as stable as the corpus it indexes
+
+`storeReading` rebuilds the corpus at store time and resolves each index against
+it. For a closed span that is the corpus that was read. For an open one it is
+not: collection keeps running, the stratified selection shifts, and index 65 can
+quietly become a different story between the dump and the store. The validator
+cannot notice -- the index is still in range.
+
+So every reading was stored only after re-dumping and checking that each cited
+index still names the same title and publisher as the dump it was written from.
+Two cases were caught:
+
+- **Week of 7 September.** Dismissing the planned-maintenance notices removed
+  stories from that week and shifted every later index. The week was re-dumped
+  and re-read before it was written.
+- **Year 2026.** Four cited stories moved by one or two places between the read
+  and the store. They were remapped by title, stored, and the stored reading was
+  checked to contain all four titles.
+
+Nothing is stored on a mismatch; the check prints the moved indices and stops.
+
+### Corrections the readings make about each other
+
+- The August reading proposed a PostgreSQL 19 readiness review "with a release
+  date attached". PostgreSQL 19 later lost SQL/PGQ and its date. The September
+  reading records that as a correction to August rather than silently changing
+  August, because a reading that moves its own deadlines cannot be checked.
+- The SGLang download series reads 20.5 million at the end of June and 2.3
+  million at the start of July. That is a counting change, and every reading
+  that could have quoted it excludes it by name.
+- Funding and IPO stories appear in volume only from late August because venture
+  desks entered the readable corpus as the source list widened. Every reading
+  that mentions money says the difference between periods is collection, not
+  market.
+
+### Pushing
+
+The `GITHUB_TOKEN` in `.env` still has read access only. Pushes go through the
+machine's system credential manager, which does have write access; clearing the
+credential helpers to force the `.env` token is what produced the 403 recorded
+above. The earlier "push is blocked" note is superseded.
+
 ## Not built, and why
 
 - **Slack, multi-tenant install, the interactive agent** — Phases 4–6.
