@@ -283,8 +283,8 @@ export const ANALYSE_ITEMS: NavItem[] = [
  * about the data rather than about the code.
  */
 export const REPORT_ITEMS: NavItem[] = [
-  { href: '/reports', label: 'Every report', icon: 'book',
-    blurb: 'Every briefing written so far, by day and by field.' },
+  { href: '/reports', label: 'The report', icon: 'book',
+    blurb: 'The market for work, where to take it, and what changed — for any day, week, month or year.' },
   { href: '/work', label: 'Where to find work', icon: 'gem',
     blurb: 'Platforms for each kind of paid technical work, and what they carry now.' },
   // Administrators only, filtered out in rail.ts and refused at the route.

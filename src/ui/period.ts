@@ -19,8 +19,6 @@ import { crumbsFor } from './nav.ts';
 import { periodReading, type StoredPeriodReading } from '../analysis/periodread.ts';
 import type { StoredStrategy } from '../analysis/briefing.ts';
 import { fieldLabel } from '../vocab/fields.ts';
-import { workPicture } from '../analysis/workmarket.ts';
-import { workMarketBlock, workPlatforms, workSummary } from './workmarket.ts';
 import {
   periodReport, spanKeys, latestDay, periodIndex, keyFor, edgeFor, rangeFor,
   SPAN_LABEL, SPANS,
@@ -624,7 +622,6 @@ export function readingBlock(s: StoredStrategy, r: StoredPeriodReading, span: Sp
   // not source of report." The confidence marker on each claim already says how
   // much weight it carries, and the stories under it say where it came from.
   return `
-    <h2 class="sect">What the news adds</h2>
     ${s.read ? `<p class="mv-lede">${escapeHtml(s.read)}</p>` : ''}
     ${primary}
     ${sections ? `<details class="bf-more"><summary>Background: what companies shipped
@@ -745,7 +742,22 @@ function findings(all: PeriodFinding[], span: Span): string {
     </article>`).join('')}</div>`;
 }
 
-/** The three lists, shared by the period page and the lead card. */
+/** The daily findings, when the period has no reading of its own to replace them. */
+export function findingsBlock(r: PeriodReport, hasReading: boolean): string {
+  return hasReading || r.findings.length === 0 ? '' : findings(r.findings, r.span);
+}
+
+/**
+ * What the download curves did over the period, with no heading of its own.
+ * The combined report (src/ui/report.ts) folds it under the technology section.
+ */
+export function downloadsBlock(r: PeriodReport): string {
+  return `${r.shift ? brokenCurves(r.shift, r.span, r.movements.length) : ''}
+    ${r.movements.length > 0 ? marketBlock(r.movements, r.span)
+    : r.shift ? '' : noCurves(r.span, r.days, r.measured)}`;
+}
+
+/** The findings, the postings and the curves, for callers that want one block. */
 export function bodyOf(r: PeriodReport, hasReading: boolean): string {
   return `
     ${/* THE ANALYSIS IS THE FIRST THING ON THE PAGE, not the last.
@@ -777,7 +789,7 @@ export function bodyOf(r: PeriodReport, hasReading: boolean): string {
         with the story at each end -- and printing both meant two sections
         arguing the same month at different resolutions. When the period has
         been read, the reading is the answer. */''}
-    ${hasReading || r.findings.length === 0 ? '' : findings(r.findings, r.span)}
+    ${findingsBlock(r, hasReading)}
 
     ${/* THE MARKET, UNDER ONE HEADING, whatever the instrument managed to
         see. A break, a period too short and a period the series does not reach
@@ -794,155 +806,6 @@ export function bodyOf(r: PeriodReport, hasReading: boolean): string {
       at all: a hosted product, a database with a licence, a consultancy. Every
       number here was published by the registry and can be re-run by anybody
       against the same public API.</p>`;
-}
-
-/** The other spans, as links, so a reader can widen or narrow the same view. */
-function spanNav(span: Span, keys: Record<Span, string>): string {
-  return `<div class="bf-fields">${SPANS.map((s) => `<a class="btn${
-    s === span ? ' on' : ''}" href="/reports/${s}/${encodeURIComponent(keys[s])}">${
-    s === 'day' ? 'This day' : `This ${SPAN_LABEL[s]}`}</a>`).join('')}</div>`;
-}
-
-/**
- * The keys that cover the same instant at every span, for that nav.
- *
- * Through `keyFor`, so the week key is the Monday of the week containing the
- * date rather than the date itself. Spelling it out here was fine while a week
- * was a trailing seven days and became wrong the moment weeks became a
- * partition: "This week" would have offered the week starting on whatever day
- * the current period happened to begin.
- */
-function siblingKeys(range: { from: string }): Record<Span, string> {
-  const day = new Date(range.from).toISOString().slice(0, 10);
-  return {
-    day: keyFor('day', day), week: keyFor('week', day),
-    month: keyFor('month', day), year: keyFor('year', day),
-  };
-}
-
-export async function renderPeriodReport(span: Span, key: string): Promise<string> {
-  const range = rangeFor(span, key);
-  const [r, reading, work, platforms] = await Promise.all([
-    periodReport(span, key).catch(() => null),
-    span === 'day' ? Promise.resolve(null)
-      : periodReading(span, key).catch(() => null),
-    range ? workPicture(range).catch(() => null) : Promise.resolve(null),
-    workPlatforms(),
-  ]);
-  const crumbs = crumbsFor('/reports', 'Reports');
-
-  if (!r) {
-    return wrap(`${pageHead('Report', `No ${SPAN_LABEL[span]} at “${key}”`, { crumbs })}
-      ${empty('That is not a period this archive can report on. A day and a week '
-        + 'are named YYYY-MM-DD, a month YYYY-MM, and a year YYYY.', 'book')}`);
-  }
-
-  // A suppressed curve block is content: the page has something to say even
-  // when there is no curve, so it must not fall through to "nothing here".
-  //
-  // COUNTED OVER WHAT IS RENDERED, not over what was fetched. This used to
-  // include launches, market moves and new names, none of which the page shows
-  // any more -- so a period with forty funding stories and no curve would have
-  // claimed to be full while displaying nothing.
-  const nothing = !r.shift && r.movements.length === 0
-    && (reading !== null || r.findings.length === 0);
-
-  return wrap(`
-    ${pageHead(`${r.range.label}`,
-    `What this ${SPAN_LABEL[span]} changed, read against what came before it`,
-    { crumbs })}
-
-    ${spanNav(span, siblingKeys(r.range))}
-
-    ${/* THE MARKET FOR WORK, FIRST. Which kinds of work grew, appeared or
-        shrank, how crowded each is, and where to take it -- counted from
-        public hiring posts. Everything below it is about technology. */
-      work ? workMarketBlock(work, span, platforms) : ''}
-
-    ${verdictBlock(r)}
-
-    ${/* THE PERIOD'S OWN READING, FIRST. Everything below it is the evidence
-        and the measurements; this is the report. It is absent until the period
-        has been read -- the `period-reading` job walks the recent spans -- and
-        the page below stands on its own when it is. */
-      reading ? readingBlock(reading.strategy as StoredStrategy, reading, span)
-        : notRead(r, span)}
-
-    ${/* THE CAVEATS WERE A QUARTER OF THIS PAGE. Measured 2026-09-10 on
-        /reports/month/2026-06: 27% of the rendered text was explanation of what
-        the page is, against 4% for what the readings found. Prose defending a
-        page is not the page. Each of these still says its one thing; none of
-        them says it twice. */''}
-    <p class="note">${reading
-    ? '<b>The reading above was written from the stories cited under it and '
-      + 'nothing else.</b> The figures below it were not written at all: they '
-      + 'are download counts published by the package registries themselves.'
-    : '<b>No model wrote any of this.</b> The figures are download counts '
-      + 'published by the package registries; the claims are quoted from the '
-      + 'daily readings that argued them.'}</p>
-
-    ${nothing
-    ? empty(`No public curve could be drawn across this ${SPAN_LABEL[span]}. `
-      + 'That is a statement about which packages this archive tracks and how '
-      + 'long the period is, not about the industry.', 'sparkle')
-    : bodyOf(r, reading !== null)}
-
-    <p class="note"><b>What this cannot tell you.</b> Nothing here is counted:
-      what this archive catches is a fact about its feed list, so no total on
-      this page becomes a trend. A quiet ${SPAN_LABEL[span]} may be a quiet
-      ${SPAN_LABEL[span]} or a ${SPAN_LABEL[span]} this archive was not
-      collecting, and it cannot tell you which.</p>`);
-}
-
-/**
- * The lead card at the top of /reports.
- *
- * "at the top of list, you have to display report that summary all day's news
- * and about new market and things like tool, platform and so on."
- *
- * The reports index led with fourteen field links and then a list of days, so
- * the first thing on the page was navigation and the second was an archive. A
- * reader opening /reports wants to know what happened, and the answer to that
- * is not per-field: a launch belongs to whichever field its words matched, and
- * a funding round belongs to none of them.
- */
-export async function leadCard(): Promise<string> {
-  const day = await latestDay().catch(() => new Date().toISOString().slice(0, 10));
-  // THE MARKET FOR WORK LEADS THE REPORTS INDEX (2026-09-13), ahead of the
-  // day's launches: this month's thread against the same month a year earlier.
-  const monthRange = rangeFor('month', day.slice(0, 7));
-  const [r, work] = await Promise.all([
-    periodReport('day', day).catch(() => null),
-    monthRange ? workPicture(monthRange).catch(() => null) : Promise.resolve(null),
-  ]);
-  const workLead = work && monthRange ? workSummary(work, monthRange.label, day.slice(0, 7)) : '';
-  if (!r) return workLead;
-  const today = new Date().toISOString().slice(0, 10);
-
-  const counts: string[] = [];
-  if (r.names.length) counts.push(`${r.names.length} new name${r.names.length === 1 ? '' : 's'}`);
-  if (r.market.length) counts.push(`${r.market.length} market move${r.market.length === 1 ? '' : 's'}`);
-  if (r.launches.length) counts.push(`${r.launches.length} launch${r.launches.length === 1 ? '' : 'es'}`);
-  if (r.movements.length) counts.push(`${r.movements.length} public curve${r.movements.length === 1 ? '' : 's'}`);
-
-  return `
-    ${workLead}
-    <h2 class="sect">${day === today ? 'Today' : escapeHtml(r.range.label)},
-      across every field</h2>
-    <p class="note">What appeared rather than what happened inside a category
-      &mdash; launches, funding and acquisitions, and names this archive had
-      never seen. ${counts.length === 0
-    ? 'Nothing was classified as new.'
-    : `${escapeHtml(counts.join(', '))}.`}${day === today ? ''
-    : ' <span class="muted">The most recent day this archive holds stories for; '
-      + 'the archive works in UTC, so the calendar day turns over before the '
-      + 'morning’s collection has run.</span>'}</p>
-    <div class="bf-fields">
-      <a class="btn" href="/reports/day/${day}">The whole day</a>
-      <a class="btn" href="/reports/week/${day}">This week</a>
-      <a class="btn" href="/reports/month/${day.slice(0, 7)}">This month</a>
-      <a class="btn" href="/reports/year/${day.slice(0, 4)}">This year</a>
-    </div>`;
 }
 
 /**
@@ -1017,25 +880,3 @@ export async function renderPeriodIndex(): Promise<string> {
       + 'collection would be.')}`);
 }
 
-/** The month and year keys a reader can open, for the index. */
-export async function periodLinks(): Promise<string> {
-  const [months, years] = await Promise.all([
-    spanKeys('month', undefined, 12).catch(() => []),
-    spanKeys('year', undefined, 20).catch(() => []),
-  ]);
-  if (months.length === 0 && years.length === 0) return '';
-  const btns = (span: Span, ks: Array<{ key: string; label: string }>) =>
-    ks.map((k) => `<a class="btn" href="/reports/${span}/${encodeURIComponent(k.key)}">${
-      escapeHtml(k.label)}</a>`).join('');
-  return `
-    ${months.length === 0 ? '' : `
-      <h2 class="sect">By month</h2>
-      <p class="note">Every calendar month this archive holds stories for.</p>
-      <div class="bf-fields">${btns('month', months)}</div>`}
-    ${years.length === 0 ? '' : `
-      <h2 class="sect">By year</h2>
-      <p class="note">The whole year, composed from everything collected in it.
-        The earliest years hold back-catalogue items that arrived with old
-        publication dates, so they are thinner than a year of collection.</p>
-      <div class="bf-fields">${btns('year', years)}</div>`}`;
-}

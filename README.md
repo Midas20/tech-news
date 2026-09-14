@@ -39,10 +39,12 @@ The reader is also on the edge: **https://newstrack-site.market-research.workers
 `app_user`.
 
 Both require an account. Sign in at `/login`, or create one at `/signup` with a
-username and password; email is optional. The seeded administrator is `admin`
-with the password `Password@026`, which should be changed. A reader sees the
-whole archive and can set two things — their focus fields and their theme, both
-on `/me`. Everything that changes what everybody sees is an administrator's.
+username and password; email is optional. The seeded administrator is `admin`;
+its password is `ADMIN_PASSWORD` in `.env`, read at startup to create the account
+when the database holds no administrator. No password is written in the code. A
+reader sees the archive and can set two things — their focus fields and their
+theme, both on `/me`. The reports, and everything that changes what everybody
+sees, are an administrator's.
 
 And **https://newstrack-poller.market-research.workers.dev** — the pipeline as a
 Worker, holding the current revision and **armed with no cron triggers**. A warm
@@ -7983,8 +7985,8 @@ authorisation. The token stays for headless access.
 
 The default administrator is created at startup, only when the table holds no
 admin at all — so it cannot resurrect an account somebody changed, and running
-it twice does nothing. Username `admin`, password `Password@026`, and it should
-be changed.
+it twice does nothing. Username `admin`; the password comes from `ADMIN_PASSWORD`
+in `.env`, and the literal that used to be written here and in the code is gone.
 
 ## Four faults, each of which looked like something else
 
@@ -10631,6 +10633,82 @@ any thread under 45 days old because threads gain posts for weeks; `work-boards`
 twice a day, inside the strictest of the boards' terms. Listings unseen for 400
 days are deleted; the counts are kept. `scripts/read-period.ts --dump` now
 includes the work picture, so a written reading can cite it.
+
+## Every report on one page, and only for administrators
+
+Asked for on 2026-09-13: "all reports are combined by logic in a report page,
+and upgrade style, some style is very messy so user can't review info easily" —
+then "report page is visible to only admin".
+
+### Six places became one
+
+A reader looking for work had six pages to choose between: `/reports` (buttons,
+with the work market in four lines at the top), `/reports/<span>/<key>` (the
+period report), `/reports/<day>` (a day's field briefings), `/work` (platforms),
+each field's briefing, and three more walls of month, year and field buttons.
+Each answered part of the question and none said which part.
+
+`src/ui/report.ts` renders one page for any day, week, month or year, and every
+report route serves it: `/reports` opens it on the latest month (the hiring
+threads it counts are monthly), `/reports/<span>/<key>` on any period, and
+`/reports/<YYYY-MM-DD>` on a day. It reads top to bottom as an answer:
+
+| Section | What it answers |
+|---|---|
+| The market for work | Roles, job seekers per role, remote and contract shares against a year earlier, as five tiles; then three lists — growing or new, shrinking, and where the competition is |
+| Kinds of work | Every kind of work: share of roles now and a year earlier on one bar scale, change in points, share of seekers, competition, remote share |
+| Skills | The skills whose share of roles moved most |
+| Where to take the work | A card for each kind of work that is new, growing or short of candidates, with its platforms as chips; every kind folded below; what the remote boards carry and the open crypto bounties |
+| Hiring across the economy | Postings by technology sector, 100 = February 2020, and technology against the other sectors |
+| What changed in technology | The period's reading (work the news points to, openings; company moves folded); what developers install more and less, folded |
+| Field briefings | The newest briefing each field has in the period, one card each |
+| Every report | Months, years, recent days and each field over time |
+
+A day/week/month/year switcher and previous/next links move the same page
+through time, and a sticky contents bar lists only the sections the period has.
+A section with nothing to show is left out rather than drawn empty.
+
+### What was messy, precisely
+
+Three CSS faults made the tables hard to read on every report page, and none was
+a matter of taste:
+
+- **Row labels rendered as column headers.** The global `th` rule — sticky,
+  sunken, 10px, uppercase — matched `<th scope="row">` too, so "AI and LLM
+  engineering" looked like a heading and sat a line above its own numbers.
+- **Rows fell out of their tables.** `.mv-curve .muted{display:block}` was meant
+  for a note under a value and also matched `<tr class="muted">`. A table row
+  with `display:block` drops its cells out of the grid, which is why the QA, IT
+  support, game development and crypto rows printed as a run of numbers beside
+  their label. The rule now matches only inside a cell.
+- **Every section heading was UPPERCASE SERIF.** Two `h2.sect` rules both
+  applied — one set the capitals, the other the typeface. The later one now
+  sets the whole look.
+
+Platform lists that wrapped one link per line are chips now. The report's own
+styles are scoped under `.rp`, so nothing else on the site changes with them.
+Colour is semantic only: green helps a person looking for work, amber does not,
+blue marks something new.
+
+### Administrators only
+
+`isReportPath()` in `src/ui/auth.ts` names every report surface — `/reports` and
+everything under it, `/work`, `/market`, `/trends/report`, and each field's
+briefing with its dated and per-item pages — and `mayView` refuses all of them
+to a reader. A field's own river (`/field/<slug>`) is reading and stays open;
+the test is on the path segment, so `/field/reporting` is not taken for a
+report. The top bar drops the Reports tab for a reader, so nobody is offered a
+tab that answers 403.
+
+### The administrator's password left the code
+
+`ensureDefaultAdmin` used to create `admin` with a password written into
+`src/ui/auth.ts`, the desktop build's first-run text and this README — a known
+value in the repository's history. It now reads `ADMIN_PASSWORD` from `.env`
+(8+ characters) and creates no administrator without one; startup logs which.
+`.env.example` carries the empty key. The existing `admin` account's hash was
+re-written from the new value. Sessions are signed cookies rather than rows, so
+a browser already signed in stays signed in until its cookie expires.
 
 ## Not built, and why
 

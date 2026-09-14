@@ -342,25 +342,24 @@ export async function renderRail(
       return { href, label, sub: true, active: state.path === href };
     };
     const periodItems: RailItem[] = [
-      at('day', 'That day'), at('week', 'That week'),
-      at('month', 'That month'), at('year', 'That year'),
+      at('day', 'Latest day'), at('week', 'Latest week'),
+      at('month', 'Latest month'), at('year', 'Latest year'),
       { href: '/reports/periods', label: 'Every period', sub: true,
         active: state.path === '/reports/periods' },
     ];
 
+    // THE SAME PAGE ALONG EACH AXIS. Every row below opens the one combined
+    // report (src/ui/report.ts) over a different span, day or field, so the
+    // notes say what the axis is and nothing about how the page was made.
     return [
       railGroup('Reports', items.map((i) => toItem(state, i))),
       railGroup('Over a period', periodItems, {
-        note: 'What appeared, what the public numbers did, and what the daily '
-          + 'readings found. Composed from what is already written — no model, '
-          + 'so these exist on a day every provider is rate-limited.' }),
-      railGroup('Recent', dayItems, {
+        note: 'The same report over a day, a week, a month or a year.' }),
+      railGroup('Recent days', dayItems, {
         limit: 10,
-        note: days.length === 0
-          ? 'No report has been written yet.'
-          : 'One report a morning, over the stories that arrived since the last.' }),
+        note: days.length === 0 ? 'No report has been written yet.' : '' }),
       railGroup('By field', fieldItems, { limit: 8,
-        note: 'The latest briefing for one field, with its earlier ones under it.' }),
+        note: 'One field’s briefings over time.' }),
     ].join('');
   }
 
@@ -529,9 +528,12 @@ export async function statusBadge(): Promise<string> {
 }
 
 /** The primary section tabs in the top bar. */
-export function topNav(path: string): string {
+export function topNav(path: string, role: string | null = null): string {
   const current = sectionFor(path);
-  return `<nav class="nav">${SECTIONS.map((s) =>
+  // Reports are an administrator's (src/ui/auth.ts isReportPath), so a reader
+  // is not offered a tab that answers 403.
+  const visible = SECTIONS.filter((s) => s.id !== 'reports' || role === 'admin');
+  return `<nav class="nav">${visible.map((s) =>
     `<a href="${s.home}" class="${s.id === current.id ? 'on' : ''}" title="${s.blurb}">
       ${icon(s.icon, 14)}<span>${s.label}</span></a>`).join('')}</nav>`;
 }

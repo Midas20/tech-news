@@ -177,6 +177,10 @@ export function firstRunConfig(port = DEFAULT_PORT): string {
     '# connection, which bypasses row-level security by design.',
     'ADMIN_TOKEN=',
     '',
+    '# The password for the "admin" account (8+ characters). Set it before the',
+    '# first start: the account is created with it, and not created without it.',
+    'ADMIN_PASSWORD=',
+    '',
   ].join('\n');
 }
 

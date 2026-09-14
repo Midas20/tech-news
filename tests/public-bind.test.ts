@@ -119,6 +119,16 @@ describe('what may be reached without signing in', () => {
     expect(mayView('user', '/')).toBe(true);
     expect(mayView('user', '/sources/intel')).toBe(true);
     expect(mayView('admin', '/admin')).toBe(true);
+    // "report page is visible to only admin" (2026-09-13): every report
+    // surface, while a field's own river stays readable.
+    for (const p of ['/reports', '/reports/month/2026-09', '/reports/2026-09-13',
+      '/reports/periods', '/work', '/market', '/trends/report', '/field/ai/report',
+      '/field/ai/report/2026-09-13', '/field/ai/report/2026-09-13/work/1']) {
+      expect(mayView('user', p), p).toBe(false);
+      expect(mayView('admin', p), p).toBe(true);
+    }
+    expect(mayView('user', '/field/ai')).toBe(true);
+    expect(mayView('user', '/field/reporting')).toBe(true);
   });
 });
 

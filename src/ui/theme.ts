@@ -1687,7 +1687,11 @@ ul.reasons a{color:var(--link)}
 .mv-list{margin:0 0 var(--s-4);padding-left:var(--s-4)}
 .mv-list li{margin:0 0 var(--s-2);font-size:var(--t-13);line-height:1.6;max-width:80ch}
 h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
-  border-bottom:1px solid var(--line);font:600 var(--t-17)/1.2 var(--serif);color:var(--ink)}
+  border-bottom:1px solid var(--line);font:600 var(--t-17)/1.3 var(--sans);
+  letter-spacing:-.01em;text-transform:none;color:var(--ink);text-wrap:balance}
+/* The rule above and the uppercase one near the top of this file both matched
+   every h2.sect, so every section heading rendered as UPPERCASE SERIF -- the
+   capitals of one and the typeface of the other. This one wins, whole. */
 
 /* THE READING. These four classes were used by the strategy section and never
    defined, which is why it rendered as a wall of unstyled headings with the
@@ -1805,7 +1809,19 @@ h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
   vertical-align:baseline;color:var(--ink-2)}
 .mv-curve td:first-child{color:var(--ink);font-weight:500}
 .mv-curve .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.mv-curve .muted{display:block;font:400 var(--t-11)/1.5 var(--sans);color:var(--ink-4)}
+/* A note under a value, never a row. This was .mv-curve .muted, which also
+   matched tr.muted -- and display:block on a table row pulls its cells out of
+   the table, which is why the thin rows of the kinds-of-work table rendered as
+   a run of numbers beside their label. */
+.mv-curve td .muted,.mv-curve th .muted{display:block;font:400 var(--t-11)/1.5 var(--sans);color:var(--ink-4)}
+.mv-curve tr.muted>*{color:var(--ink-4)}
+/* ROW LABELS ARE NOT COLUMN HEADERS. The global th rule is for header rows:
+   sticky, sunken, uppercase, 10px. Applied to th scope=row it made every row
+   label look like a heading and sit a line above its own values. */
+.mv-curve tbody th{position:static;z-index:auto;background:none;
+  padding:var(--s-2) var(--s-3) var(--s-2) 0;border-bottom:1px solid var(--line);
+  font:500 var(--t-13)/1.45 var(--sans);letter-spacing:0;text-transform:none;
+  color:var(--ink);white-space:normal;vertical-align:top}
 .mv-curve .up{color:var(--good,#1a7f37);font-weight:600}
 .mv-curve .down{color:var(--bad,#b3261e);font-weight:600}
 
@@ -1939,7 +1955,7 @@ h2.sect{margin:var(--s-6) 0 var(--s-3);padding-bottom:var(--s-2);
 .bf-days a{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--s-1) var(--s-3);
   text-decoration:none}
 .bf-when{flex:0 0 auto;min-width:11ch;display:inline-flex;align-items:center;gap:6px;
-  font:600 var(--t-11)/1.4 var(--mono);letter-spacing:.02em;color:var(--ink-4)}
+  font:600 var(--t-12)/1.4 var(--sans);color:var(--ink-3)}
 .bf-days a:hover .bf-when{color:var(--ink-2)}
 .bf-what{flex:1 1 22ch;font:400 var(--t-13)/1.45 var(--serif);color:var(--ink)}
 .bf-days a:hover .bf-what{text-decoration:underline;text-underline-offset:2px}
@@ -2104,6 +2120,205 @@ main:has(.reading) .wrap{max-width:1320px}
 .pr-end ul{margin:0;padding:0;list-style:none;display:grid;gap:var(--s-2)}
 .pr-end li{font:400 var(--t-13)/1.45 var(--sans);min-width:0}
 .pr-end p{margin:0;font:400 var(--t-13)/1.45 var(--sans)}
+
+/* ---------- THE REPORT ----------
+   One page for every report (src/ui/report.ts), asked for on 2026-09-13: "all
+   reports are combined by logic in a report page, and upgrade style, some style
+   is very messy so user can't review info easily".
+
+   Built to be scanned before it is read. Each section opens with its answer in
+   a form the eye takes in without reading: tiles for the five figures, three
+   lists for what grew, shrank and is short of candidates, a pill for every
+   status, a bar for every share. Colour is semantic only -- green helps a person
+   looking for work, amber does not, blue marks something new -- and never
+   decoration. Everything is scoped under .rp so no other page changes. */
+.rp{max-width:1200px}
+.rp-mast{display:grid;gap:var(--s-2);padding:var(--s-5) 0 var(--s-4)}
+.rp-kicker{font:600 var(--t-11)/1.4 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--brand)}
+.rp-title{margin:0;font:600 var(--t-27)/1.15 var(--serif);letter-spacing:-.01em;color:var(--ink);text-wrap:balance}
+.rp-dek{margin:0;max-width:70ch;font:400 var(--t-14)/1.6 var(--sans);color:var(--ink-3)}
+.rp-controls{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-2) var(--s-3);margin-top:var(--s-2)}
+.rp-seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:var(--r-2);background:var(--surface)}
+.rp-seg a{padding:5px 14px;border-radius:5px;font:500 var(--t-12)/1.3 var(--sans);color:var(--ink-3)}
+.rp-seg a:hover{color:var(--ink);background:var(--surface-2)}
+.rp-seg a.on{color:var(--ink);background:var(--brand-soft);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brand) 45%,transparent)}
+.rp-step{display:inline-flex;flex-wrap:wrap;gap:var(--s-2)}
+.rp-step a,.rp-step span{padding:6px 12px;border:1px solid var(--line);border-radius:var(--r-2);
+  background:var(--surface);font:500 var(--t-12)/1.3 var(--sans);color:var(--ink-2)}
+.rp-step a:hover{border-color:var(--line-strong);color:var(--ink)}
+.rp-step span{color:var(--ink-4);opacity:.55}
+
+.rp-toc{position:sticky;top:var(--top-h);z-index:20;display:flex;gap:2px;overflow-x:auto;
+  margin:0 0 var(--s-5);padding:var(--s-2) 0;background:var(--bg);border-bottom:1px solid var(--line);
+  scrollbar-width:none}
+.rp-toc::-webkit-scrollbar{display:none}
+.rp-toc a{flex:none;padding:6px 10px;border-radius:var(--r-2);white-space:nowrap;
+  font:500 var(--t-12)/1.3 var(--sans);color:var(--ink-3)}
+.rp-toc a:hover{color:var(--ink);background:var(--surface-2)}
+
+.rp-section{margin:0 0 var(--s-7);scroll-margin-top:calc(var(--top-h) + 60px)}
+.rp-section-head{display:grid;gap:4px;margin:0 0 var(--s-4)}
+.rp-section-head h2{margin:0;font:600 var(--t-21)/1.25 var(--sans);letter-spacing:-.015em;color:var(--ink);text-wrap:balance}
+.rp-section-head p{margin:0;max-width:74ch;font:400 var(--t-13)/1.55 var(--sans);color:var(--ink-3)}
+.rp h3.rp-h3{margin:var(--s-5) 0 var(--s-3);font:600 var(--t-15)/1.3 var(--sans);color:var(--ink)}
+.rp-lede{margin:0 0 var(--s-4);max-width:66ch;font:400 var(--t-17)/1.55 var(--serif);color:var(--ink-2)}
+.rp-lede b{color:var(--ink);font-weight:600}
+.rp-note{margin:var(--s-3) 0 0;font:400 var(--t-12)/1.55 var(--sans);color:var(--ink-4)}
+.rp-note a,.rp-callout a{color:var(--link)}
+.rp-empty{margin:0;padding:var(--s-4);border:1px dashed var(--line);border-radius:var(--r-3);
+  font:400 var(--t-13)/1.5 var(--sans);color:var(--ink-3)}
+.rp-callout{margin:var(--s-3) 0 0;padding:var(--s-3) var(--s-4);border-radius:var(--r-2);
+  background:var(--surface-2);font:400 var(--t-13)/1.55 var(--sans);color:var(--ink-2)}
+.rp-callout b{color:var(--ink);font-weight:600}
+
+/* Five figures, each with the year-earlier move beside it. */
+.rp-tiles{display:grid;gap:var(--s-3);grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));margin:0 0 var(--s-4)}
+.rp-tile{display:grid;gap:4px;align-content:start;padding:var(--s-3) var(--s-4);
+  border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface)}
+.rp-tile-label{font:500 var(--t-12)/1.35 var(--sans);color:var(--ink-3)}
+.rp-tile-value{font:600 var(--t-27)/1.1 var(--sans);letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--ink)}
+.rp-tile-delta{display:flex;flex-wrap:wrap;gap:2px 6px;font:400 var(--t-12)/1.4 var(--sans);
+  color:var(--ink-4);font-variant-numeric:tabular-nums}
+.rp-tile-delta b{font-weight:600}
+.rp .good b,.rp .good{color:var(--ok)}
+.rp .bad b,.rp .bad{color:var(--warn)}
+.rp .flat b{color:var(--ink-2)}
+
+/* What grew, what shrank, where the competition is. */
+.rp-signals{display:grid;gap:var(--s-3);grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
+.rp-signal{padding:var(--s-3) var(--s-4) var(--s-1);border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface)}
+.rp-signal h3{display:flex;align-items:center;gap:8px;margin:0 0 var(--s-1);
+  font:600 var(--t-13)/1.3 var(--sans);color:var(--ink)}
+.rp-signal h3::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--ink-4)}
+.rp-signal.up h3::before{background:var(--ok)}
+.rp-signal.down h3::before{background:var(--warn)}
+.rp-signal.comp h3::before{background:var(--brand)}
+.rp-signal ul{margin:0;padding:0;list-style:none}
+.rp-signal li{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;padding:8px 0;
+  border-top:1px solid var(--line);font:400 var(--t-13)/1.4 var(--sans)}
+.rp-signal li:first-child{border-top:0}
+.rp-sig-name{font-weight:500;color:var(--ink)}
+.rp-sig-kind{font:600 var(--t-10)/1.2 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-4)}
+.rp-sig-val{margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--ink-3)}
+.rp-sig-val b{color:var(--ink);font-weight:600}
+.rp-sig-none{color:var(--ink-4)}
+
+.rp-pill{display:inline-flex;align-items:center;padding:1px 8px;border:1px solid var(--line);
+  border-radius:var(--r-full);font:600 var(--t-10)/1.6 var(--sans);letter-spacing:.03em;
+  white-space:nowrap;vertical-align:1px;color:var(--ink-3)}
+.rp-pill.st-new{color:var(--brand);border-color:color-mix(in srgb,var(--brand) 50%,transparent);background:var(--brand-soft)}
+.rp-pill.st-growing,.rp-pill.good{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent);
+  background:color-mix(in srgb,var(--ok) 10%,transparent)}
+.rp-pill.st-shrinking,.rp-pill.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent);
+  background:color-mix(in srgb,var(--warn) 10%,transparent)}
+.rp-pill.st-steady,.rp-pill.flat{color:var(--ink-3)}
+
+/* Tables: row labels read as labels, numbers line up, one scale per bar column. */
+.rp-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface)}
+.rp-table{width:100%;border-collapse:collapse;font:400 var(--t-13)/1.45 var(--sans)}
+.rp-table th,.rp-table td{padding:9px var(--s-3);border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+.rp-table thead th{position:static;background:var(--surface-2);font:600 var(--t-11)/1.3 var(--sans);
+  letter-spacing:.01em;text-transform:none;color:var(--ink-3);white-space:nowrap}
+.rp-table tbody th{position:static;z-index:auto;background:none;min-width:16ch;
+  font:500 var(--t-13)/1.4 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink);white-space:normal}
+.rp-table tbody th .rp-pill{margin-left:6px}
+.rp-table tbody tr:last-child>*{border-bottom:0}
+.rp-table tbody tr:hover{background:var(--surface-2)}
+.rp-table .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.rp-table .num b{font-weight:600;color:var(--ink)}
+.rp-table td.up{color:var(--ok);font-weight:600}
+.rp-table td.down{color:var(--warn);font-weight:600}
+.rp-table tr.thin>*{color:var(--ink-4)}
+.rp-table tr.thin .num b{color:var(--ink-3)}
+.rp-table a{color:var(--link)}
+.rp-table .rp-chips{gap:4px}
+.rp-barcol{width:28%;min-width:150px}
+.rp-bar{position:relative;display:block;height:8px;border-radius:var(--r-full);
+  background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line)}
+.rp-bar-now{position:absolute;top:0;bottom:0;left:0;border-radius:inherit;background:var(--brand)}
+.rp-bar-was{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;border-radius:1px;background:var(--ink)}
+.rp-bar-mark{position:absolute;top:-4px;bottom:-4px;width:0;margin-left:-.5px;border-left:1px dashed var(--ink-4)}
+.rp-legend{display:flex;flex-wrap:wrap;gap:var(--s-4);margin:var(--s-2) 0 0;font:400 var(--t-11)/1.4 var(--sans);color:var(--ink-4)}
+.rp-legend span{display:inline-flex;align-items:center;gap:6px}
+.rp-legend i{display:inline-block;width:14px;height:8px;border-radius:var(--r-full);background:var(--brand)}
+.rp-legend i.was{width:2px;height:12px;border-radius:1px;background:var(--ink)}
+.rp-legend i.mark{width:0;height:12px;border-radius:0;background:none;border-left:1px dashed var(--ink-4)}
+
+/* Kinds of work worth going after, and platforms. */
+.rp-cards{display:grid;gap:var(--s-3);grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr))}
+.rp-card{display:grid;gap:var(--s-3);align-content:start;padding:var(--s-4);
+  border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface)}
+.rp-card-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.rp-card-head h3{margin:0 4px 0 0;font:600 var(--t-15)/1.3 var(--sans);color:var(--ink)}
+.rp-card-head h3 a{color:var(--ink)}
+.rp-card-head h3 a:hover{color:var(--link)}
+.rp-card-what{margin:0;font:400 var(--t-13)/1.55 var(--sans);color:var(--ink-3)}
+.rp-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s-2);margin:0;
+  padding:var(--s-3) 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.rp-stats dt{font:500 var(--t-11)/1.3 var(--sans);color:var(--ink-4)}
+.rp-stats dd{margin:3px 0 0;font:600 var(--t-15)/1.2 var(--sans);font-variant-numeric:tabular-nums;color:var(--ink)}
+.rp-stats small{display:block;margin-top:2px;font:400 var(--t-11)/1.3 var(--sans);color:var(--ink-4)}
+.rp-where-label{display:block;margin:0 0 6px;font:500 var(--t-11)/1.3 var(--sans);color:var(--ink-4)}
+.rp-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+.rp-chip{display:inline-flex;align-items:baseline;gap:6px;padding:4px 10px;border:1px solid var(--line);
+  border-radius:var(--r-full);background:var(--surface-2);font:500 var(--t-12)/1.35 var(--sans);color:var(--ink)}
+a.rp-chip{color:var(--ink)}
+a.rp-chip:hover{border-color:var(--line-strong);background:var(--raised)}
+.rp-chip small{font:400 var(--t-11)/1.3 var(--sans);color:var(--ink-4)}
+.rp-chip.on{border-color:color-mix(in srgb,var(--brand) 55%,transparent);background:var(--brand-soft)}
+
+.rp-fold{margin:var(--s-4) 0 0;border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface)}
+.rp-fold>summary{display:flex;align-items:center;gap:10px;padding:var(--s-3) var(--s-4);cursor:pointer;
+  list-style:none;font:500 var(--t-13)/1.3 var(--sans);color:var(--ink-2)}
+.rp-fold>summary::-webkit-details-marker{display:none}
+.rp-fold>summary::before{content:"";flex:none;width:6px;height:6px;margin-left:2px;
+  border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+.rp-fold[open]>summary::before{transform:rotate(45deg)}
+.rp-fold>summary:hover{color:var(--ink)}
+.rp-fold-body{padding:0 var(--s-4) var(--s-4)}
+
+/* A field's newest briefing in the period. */
+.rp-fields{display:grid;gap:var(--s-3);grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr))}
+.rp-field{display:grid;gap:6px;align-content:start;padding:var(--s-3) var(--s-4);
+  border:1px solid var(--line);border-radius:var(--r-3);background:var(--surface);transition:border-color .12s,background .12s}
+.rp-field:hover{border-color:var(--line-strong);background:var(--surface-2)}
+.rp-field-top{display:flex;align-items:center;gap:6px;font:600 var(--t-12)/1.3 var(--sans);color:var(--ink-3)}
+.rp-field-top time{margin-left:auto;font-weight:400;font-variant-numeric:tabular-nums;color:var(--ink-4)}
+.rp-field-head{font:500 var(--t-14)/1.4 var(--sans);color:var(--ink);text-wrap:pretty}
+.rp-field-more{font:400 var(--t-11)/1.3 var(--sans);color:var(--ink-4)}
+
+.rp-archive{display:grid;gap:var(--s-5);grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
+.rp-archive h3{margin:0 0 var(--s-2);font:600 var(--t-12)/1.3 var(--sans);color:var(--ink-3)}
+.rp-daylist{margin:0;padding:0;list-style:none}
+.rp-daylist a{display:grid;grid-template-columns:7ch minmax(0,1fr) auto;gap:var(--s-2);align-items:baseline;
+  padding:7px 0;border-top:1px solid var(--line);font:400 var(--t-13)/1.35 var(--sans);color:var(--ink-2)}
+.rp-daylist li:first-child a{border-top:0}
+.rp-daylist time{font-variant-numeric:tabular-nums;color:var(--ink-4)}
+.rp-daylist span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rp-daylist a:hover span,.rp-daylist a[aria-current] span{color:var(--ink)}
+.rp-daylist .n{font-size:var(--t-11);color:var(--ink-4)}
+
+/* The period reading, set inside a report section rather than as a page. */
+.rp-section h2.sect{margin:var(--s-5) 0 var(--s-3);padding:0;border:0;
+  font:600 var(--t-15)/1.3 var(--sans);letter-spacing:0;text-transform:none;color:var(--ink)}
+.rp-section h3.sect{margin:var(--s-4) 0 var(--s-2);font:600 var(--t-14)/1.3 var(--sans);color:var(--ink)}
+.rp-section .mv-lede{font-size:var(--t-17);color:var(--ink-2)}
+.rp-section .mv-items{grid-template-columns:repeat(auto-fill,minmax(min(100%,440px),1fr))}
+.rp-section .pr-card{border-radius:var(--r-3);background:var(--surface)}
+.rp-section .bf-more{margin:var(--s-4) 0 0;border:1px solid var(--line);border-radius:var(--r-3);
+  background:var(--surface);padding:0 var(--s-4)}
+.rp-section .bf-more>summary{padding:var(--s-3) 0;font-size:var(--t-13)}
+.rp-section .rp-fold-body>h3.sect:first-child{margin-top:0}
+
+@media (max-width:720px){
+  .rp-title{font-size:var(--t-21)}
+  .rp-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .rp-sig-val{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){
+  .rp-fold>summary::before,.rp-field{transition:none}
+}
 `;
 
 /**

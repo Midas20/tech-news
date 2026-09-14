@@ -69,7 +69,9 @@ if (ROLE === 'all' || ROLE === 'web') {
   try {
     const outcome = await ensureDefaultAdmin(q);
     if (outcome === 'created') {
-      console.log('auth   created the default administrator "admin" — change its password');
+      console.log('auth   created the administrator "admin" with the password in ADMIN_PASSWORD');
+    } else if (outcome === 'no-password') {
+      console.error('auth   no administrator exists and ADMIN_PASSWORD is not set (8+ characters) — none was created');
     }
   } catch (err) {
     console.error(`auth   could not seed an administrator: ${

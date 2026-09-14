@@ -1088,6 +1088,43 @@ export async function reportIndex(
   }));
 }
 
+/** A field's most recent briefing inside a period, for the combined report. */
+export interface PeriodBriefing {
+  field: string;
+  label: string;
+  day: string;
+  headline: string;
+  themes: number;
+  /** How many days this field was briefed inside the period. */
+  days: number;
+}
+
+/**
+ * The latest briefing each field has inside a period, in reading order.
+ *
+ * The combined report shows one card per field rather than one per day: a month
+ * holds thirty days of briefings and a reader wants the newest word on each
+ * subject, with the rest one click into that field's history.
+ */
+export async function briefingsIn(
+  range: { from: string; to: string }, query: Query = q,
+): Promise<PeriodBriefing[]> {
+  const rows = await query<{
+    field: string; day: string; headline: string; themes: number; days: string;
+  }>(
+    `SELECT DISTINCT ON (field) field, day::text AS day, headline, themes,
+            count(*) OVER (PARTITION BY field)::text AS days
+       FROM field_briefings
+      WHERE day >= ($1::timestamptz AT TIME ZONE 'UTC')::date
+        AND day <  ($2::timestamptz AT TIME ZONE 'UTC')::date
+      ORDER BY field, day DESC`, [range.from, range.to]);
+  const order = new Map(FIELDS.map((f, i) => [f.slug, i]));
+  return rows
+    .map((r) => ({ field: r.field, label: fieldLabel(r.field), day: r.day,
+      headline: r.headline, themes: Number(r.themes), days: Number(r.days) }))
+    .sort((a, b) => (order.get(a.field) ?? 99) - (order.get(b.field) ?? 99));
+}
+
 /** One day, whole: the composed title and every field under it. */
 export interface StoredArchive extends Omit<ReportDay, 'briefings'> {
   briefings: StoredField[];

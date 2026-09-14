@@ -19,6 +19,7 @@ import {
   rangeFor, edgeFor, movementOver, isSpan, keyFor, weekStart,
   detectCohortBreak, SPAN_DAYS,
 } from '../src/analysis/period.ts';
+import { stepKey } from '../src/ui/report.ts';
 
 const period = readFileSync(
   new URL('../src/analysis/period.ts', import.meta.url), 'utf8');
@@ -28,6 +29,8 @@ const index = readFileSync(
   new URL('../src/ui/briefing.ts', import.meta.url), 'utf8');
 const server = readFileSync(
   new URL('../src/ui/server.ts', import.meta.url), 'utf8');
+const report = readFileSync(
+  new URL('../src/ui/report.ts', import.meta.url), 'utf8');
 
 describe('a period is a calendar period, not a rolling window', () => {
   it('reads a year as that whole calendar year', () => {
@@ -190,11 +193,11 @@ describe('no model writes a period report', () => {
     expect(period).toMatch(/NO MODEL WRITES ANY OF THIS/);
     expect(period).toMatch(/A YEAR DOES NOT FIT IN A PROMPT/);
     expect(period).toMatch(/THE PROVIDERS ARE NOT THERE/);
-    // The rule, not the sentence. This prose was cut down on 2026-09-10 when
-    // the caveats measured 27% of the month page against 4% for the findings
-    // -- "unnecessary info is more than necessary info". Each guarantee still
-    // has to be stated; none of them has to be stated at length.
-    expect(page).toMatch(/No model wrote any of this/i);
+    // The rule stays in the module. The sentence left the page on 2026-09-13,
+    // when every report became one page that says nothing about how it was
+    // made: "You have to say about new market and market change in report,
+    // not source of report."
+    expect(report).not.toMatch(/No model wrote any of this/i);
   });
 
   it('quotes the daily readings rather than re-summarising them', () => {
@@ -208,8 +211,9 @@ describe('no model writes a period report', () => {
 
   it('never totals a list into a trend', () => {
     expect(period).toMatch(/WHY NO STORY COUNTS ANYWHERE/);
-    expect(page).toMatch(/Nothing here is counted/i);
-    expect(page).toMatch(/no\s+total\s+on\s+this\s+page\s+becomes\s+a\s+trend/i);
+    // The combined report uses the period index for navigation only: it links
+    // months and years and never prints how many stories one of them held.
+    expect(report).not.toMatch(/\.stories\b/);
   });
 
   it('says the only figures come from outside', () => {
@@ -224,31 +228,51 @@ describe('no model writes a period report', () => {
   });
 });
 
-describe('the reports index leads with what appeared', () => {
-  it('puts the lead card above the field navigation', () => {
-    const leadAt = index.indexOf('${lead}');
-    const fieldsAt = index.indexOf('Follow one field');
-    expect(leadAt).toBeGreaterThan(0);
-    expect(fieldsAt).toBeGreaterThan(0);
-    expect(leadAt).toBeLessThan(fieldsAt);
+describe('every report is one page', () => {
+  // "all reports are combined by logic in a report page" (2026-09-13). The
+  // index, the period pages and the day listings were three renderers; a
+  // reader had to know which one answered their question.
+  it('serves the index, every period and every day from one renderer', () => {
+    expect(server).toMatch(/renderReportHome\(\)/);
+    expect(server).toMatch(/renderReport\(head, rest\.slice\(slash \+ 1\)\)/);
+    expect(server).toMatch(/renderReport\('day', day\)/);
+    expect(index).not.toMatch(/export async function renderReportIndex/);
+    expect(page).not.toMatch(/export async function renderPeriodReport/);
   });
 
-  it('offers month and year links from the index', () => {
-    expect(index).toMatch(/\$\{periods\}/);
-    expect(page).toMatch(/export async function periodLinks/);
+  it('leads with the market for work and where to take it, before technology', () => {
+    const at = (id: string) => report.indexOf(`id: '${id}'`);
+    for (const id of ['work', 'kinds', 'where', 'technology', 'fields', 'archive']) {
+      expect(at(id), id).toBeGreaterThan(0);
+    }
+    expect(at('work')).toBeLessThan(at('kinds'));
+    expect(at('kinds')).toBeLessThan(at('where'));
+    expect(at('where')).toBeLessThan(at('technology'));
+    expect(at('technology')).toBeLessThan(at('fields'));
+    expect(at('fields')).toBeLessThan(at('archive'));
   });
 
-  it('fails open, so a broken summary cannot take the day list with it', () => {
-    expect(index).toMatch(/leadCard\(\)\.catch\(\(\) => ''\)/);
-    expect(index).toMatch(/periodLinks\(\)\.catch\(\(\) => ''\)/);
+  it('fails open, so one broken query cannot take the page with it', () => {
+    expect(report).toMatch(/periodReport\(span, key\)\.catch/);
+    expect(report).toMatch(/workPicture\(range\)\.catch/);
+    expect(report).toMatch(/briefingsIn\(range\)\.catch/);
+    expect(report).toMatch(/reportIndex\(8\)\.catch/);
   });
 
-  it('leads with the latest day that HAS stories, not the calendar day', () => {
+  it('opens on the latest day that HAS stories, not the calendar day', () => {
     // The archive works in UTC, so for several hours every morning the
-    // calendar day holds a handful of overnight items and a "today" summary
-    // would read as a broken page.
+    // calendar day holds a handful of overnight items.
     expect(period).toMatch(/export async function latestDay/);
-    expect(page).toMatch(/await latestDay\(\)/);
+    expect(report).toMatch(/await latestDay\(\)/);
+  });
+
+  it('steps to the neighbouring period at every span', () => {
+    expect(stepKey('month', '2026-01', -1)).toBe('2025-12');
+    expect(stepKey('month', '2026-12', 1)).toBe('2027-01');
+    expect(stepKey('year', '2026', -1)).toBe('2025');
+    // Any date names its ISO week, so a step lands on the next Monday.
+    expect(stepKey('week', '2026-09-09', 1)).toBe('2026-09-14');
+    expect(stepKey('day', '2026-03-01', -1)).toBe('2026-02-28');
   });
 });
 

@@ -29,13 +29,14 @@ import { q } from './db.ts';
 import { renderOverview } from './overview.ts';
 import { renderTrends, renderTrend } from './trends.ts';
 import {
-  renderArchiveReport, renderFieldBriefing, renderReportIndex, renderReportDay,
+  renderArchiveReport, renderFieldBriefing,
   reportDay, renderReportItem, isItemKind,
 } from './briefing.ts';
 import { renderRail, statusBadge, topNav, railCounts } from './rail.ts';
 import { renderSources } from './sources.ts';
 import { renderWhatsNew } from './whatsnew.ts';
-import { renderPeriodReport, renderPeriodIndex } from './period.ts';
+import { renderPeriodIndex } from './period.ts';
+import { renderReport, renderReportHome } from './report.ts';
 import { renderMarket } from './market.ts';
 import { renderWorkPage } from './workmarket.ts';
 import { isSpan, keyFor } from '../analysis/period.ts';
@@ -457,7 +458,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
         body: wrap(`${pageHead('Not for this account',
           'That surface belongs to an administrator. Your focus fields and theme are on '
           + '<a href="/me">your account page</a>.')}`),
-        nav: topNav(path), rail: '', theme: account.theme, here: path,
+        nav: topNav(path, role), rail: '', theme: account.theme, here: path,
       }));
     }
 
@@ -756,7 +757,7 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
     const render = (title: string, body: string, code = 200, railOverride?: string) => {
       send(req, res, code, 'text/html; charset=utf-8', page({
         title, rail: railOverride ?? rail, body, status,
-        nav: topNav(path),
+        nav: topNav(path, role),
         // THE ACCOUNT'S THEME, not the installation's. app_settings holds one
         // value for everybody, which was fine for a single operator on
         // loopback and wrong the moment two people sign in and one of them
@@ -888,8 +889,11 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
       return render(`What's new in ${field}`, await renderEmerging(field));
     }
 
+    // ONE REPORT PAGE (2026-09-13): "all reports are combined by logic in a
+    // report page". /reports is the latest month of it; every period below is
+    // the same page over a different span.
     if (path === '/reports') {
-      return render('Reports', await renderReportIndex());
+      return render('Report', await renderReportHome());
     }
     // One day, listed. `reportDay` returns null for anything that is not a
     // calendar date, and the renderer says so rather than falling back to the
@@ -916,11 +920,11 @@ export async function handle(req: IncomingMessage, res: ServerResponse): Promise
       const head = slash === -1 ? '' : rest.slice(0, slash);
       if (isSpan(head)) {
         return render(`Report ${rest.slice(slash + 1)}`,
-          await renderPeriodReport(head, rest.slice(slash + 1)));
+          await renderReport(head, rest.slice(slash + 1)));
       }
       const day = reportDay(rest);
       if (!day) return missing({ path });
-      return render(`Report ${day}`, await renderReportDay(day));
+      return render(`Report ${day}`, await renderReport('day', day));
     }
     // THE ONE REPORT THAT IS NOT ABOUT A FIELD. Above /fields deliberately:
     // it is the answer to "what is new", and every other report can only

@@ -221,13 +221,16 @@ describe('the report block', () => {
     expect(html).toContain('261 companies posted roles');
     // Shares of ten or more are shown whole; a decimal on 52.5% is precision
     // the thread cannot support.
-    expect(html).toContain('53% of roles are remote');
+    expect(html).toMatch(/Roles that are remote<\/div>\s*<div class="rp-tile-value">53%/);
   });
 
   it('names what grew, what shrank and what is short of candidates', () => {
-    expect(html).toMatch(/<b>Growing:<\/b> Security/);
-    expect(html).toMatch(/<b>Shrinking:<\/b> Frontend and web/);
-    expect(html).toContain('Fewest candidates per role');
+    expect(html).toMatch(/Growing or new<\/h3><ul>\s*<li>\s*<span class="rp-sig-name">Security/);
+    expect(html).toMatch(/Shrinking<\/h3><ul>\s*<li>\s*<span class="rp-sig-name">Frontend and web/);
+    expect(html).toMatch(/Competition<\/h3><ul>\s*<li>\s*<span class="rp-sig-name">Security<\/span>\s*<span class="rp-sig-kind">few candidates/);
+    // A row label is a label: never the sticky uppercase header style, and a
+    // thin row is a class on the row rather than display:block on it.
+    expect(html).toMatch(/<th scope="row">Security <span class="rp-pill st-growing">growing<\/span><\/th>/);
   });
 
   it('says where to take the growing work, measured board first', () => {

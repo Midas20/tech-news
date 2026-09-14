@@ -299,11 +299,28 @@ export function mayWrite(role: Role | null, path: string): boolean {
   return SELF_SERVICE.has(path);
 }
 
+/**
+ * THE REPORTS ARE AN ADMINISTRATOR'S. "report page is visible to only admin"
+ * (2026-09-13).
+ *
+ * Every report surface, not only /reports: the combined report at every span
+ * and day, where-to-find-work, the measured market, the composed briefing, and
+ * each field's briefing with its dated and per-item pages. A field's own river
+ * (/field/<slug>) is reading, and stays open. A segment test rather than a
+ * prefix, so /field/reporting is not taken for a report.
+ */
+export function isReportPath(path: string): boolean {
+  return path === '/reports' || path.startsWith('/reports/')
+    || path === '/work' || path === '/market' || path === '/trends/report'
+    || /^\/field\/[^/]+\/report(\/|$)/.test(path);
+}
+
 /** Admin-only surfaces, checked on GET as well as on write. */
 export function mayView(role: Role | null, path: string): boolean {
   if (!role) return false;
   if (role === 'admin') return true;
   if (path.startsWith('/admin')) return false;
+  if (isReportPath(path)) return false;
   // The settings page edits installation-wide configuration. A common user has
   // /me for the parts that are theirs.
   if (path === '/settings') return false;
@@ -315,16 +332,22 @@ export function mayView(role: Role | null, path: string): boolean {
  *
  * Created once, on startup, and only when the table holds no admin at all --
  * so it cannot resurrect an account somebody deliberately changed or removed,
- * and running it twice does nothing. The password is the one that was asked
- * for; it is a known value in a public repository's history and should be
- * changed on first login, which the sign-in page says out loud.
+ * and running it twice does nothing.
+ *
+ * THE PASSWORD IS NOT IN THE CODE. It was a literal here, which made it a known
+ * value in the repository's history. "remove admin password in code ... and add
+ * it to .env file" (2026-09-13): it is now ADMIN_PASSWORD, and with no value
+ * set no administrator is created -- refusing is the direction that fails
+ * safe, and startup says so.
  */
 export async function ensureDefaultAdmin(
   query: (sql: string, params?: unknown[]) => Promise<unknown[]>,
-): Promise<'created' | 'exists'> {
+  password: string | undefined = process.env.ADMIN_PASSWORD,
+): Promise<'created' | 'exists' | 'no-password'> {
   const existing = await query(`SELECT 1 FROM accounts WHERE role = 'admin' LIMIT 1`);
   if (existing.length) return 'exists';
-  const hash = await hashPassword('Password@026');
+  if (!password || password.length < 8) return 'no-password';
+  const hash = await hashPassword(password);
   await query(
     `INSERT INTO accounts (username, password_hash, role, fields, theme)
      VALUES ('admin', $1, 'admin', '{}', 'dark')
